@@ -462,7 +462,7 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                                     if (wasRegister) {
                                         Toast.makeText(context, viewModel.t("مرحباً بك في عالم المجرة الفسيح! 🌌 تم التسجيل والمزامنة مع Supabase بنجاح.", "Welcome to the vast galaxy! 🌌 Successfully registered and synced with Supabase."), Toast.LENGTH_LONG).show()
                                     } else {
-                                        Toast.makeText(context, viewModel.t("تم تسجيل الدخول بنجاح! مرحباً بعودتك إلى المجرة. 🚀", "Logged in successfully! Welcome back to Majarah. 🚀"), Toast.LENGTH_LONG).show()
+                                        Toast.makeText(context, viewModel.t("تم تسجيل الدخول بنجاح! مرحباً بعودتك إلى المجرة. 🚀", "Logged in successfully! Welcome back to Almajra. 🚀"), Toast.LENGTH_LONG).show()
                                     }
                                 } else {
                                     if (wasRegister) {
@@ -477,7 +477,7 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                         },
                         onSkipAsGuest = {
                             viewModel.enterAsGuest()
-                            Toast.makeText(context, viewModel.t("تتصفح حالياً كزائر في مجرة التسوق 🌌", "Browsing as guest in Majarah Shopping 🌌"), Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, viewModel.t("تتصفح حالياً كزائر في مجرة التسوق 🌌", "Browsing as guest in Almajra Shopping 🌌"), Toast.LENGTH_SHORT).show()
                         },
                         onForgotPassword = {
                             showForgotPasswordDialog = true
@@ -751,7 +751,7 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                             Text(
                                 text = viewModel.t(
                                     "🌌 لقد أرسلنا رمز تأكيد (OTP) مؤلفاً من 6 أرقام إلى بريدك الإلكتروني لزيادة أمان حسابك:\n\n📧 $otpVerificationEmail\n\nيرجى التحقق من صندوق الوارد (أو البريد المهمل Spam) وإدخال الرمز هنا لبدء استخدام تطبيق مجرة السودان.",
-                                    "🌌 We have sent a 6-digit confirmation code (OTP) to your email for security:\n\n📧 $otpVerificationEmail\n\nPlease check your inbox (or Spam folder) and enter it to start exploring Majarah."
+                                    "🌌 We have sent a 6-digit confirmation code (OTP) to your email for security:\n\n📧 $otpVerificationEmail\n\nPlease check your inbox (or Spam folder) and enter it to start exploring Almajra."
                                 ),
                                 color = MediumContrastTextDark,
                                 fontSize = 14.sp,
@@ -6341,6 +6341,20 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                     var newSellerPhone by remember { mutableStateOf("") }
                     var newSellerClass by remember { mutableStateOf("تاجر ذهبي ⭐") }
                     var newSellerCommission by remember { mutableStateOf("10") } // in %
+                    var sellerSearchQuery by remember { mutableStateOf("") }
+
+                    val filteredSellers = remember(sellers, sellerSearchQuery) {
+                        if (sellerSearchQuery.isBlank()) {
+                            sellers
+                        } else {
+                            sellers.filter {
+                                it.name.contains(sellerSearchQuery, ignoreCase = true) ||
+                                it.email.contains(sellerSearchQuery, ignoreCase = true) ||
+                                (it.phone ?: "").contains(sellerSearchQuery, ignoreCase = true) ||
+                                it.classification.contains(sellerSearchQuery, ignoreCase = true)
+                            }
+                        }
+                    }
 
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -6505,6 +6519,56 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                             )
                         }
 
+                        // Search Bar for Sellers
+                        item {
+                            OutlinedTextField(
+                                value = sellerSearchQuery,
+                                onValueChange = { sellerSearchQuery = it },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("seller_search_bar"),
+                                placeholder = {
+                                    Text(
+                                        "ابحث باسم التاجر أو البريد أو الهاتف أو التصنيف...",
+                                        color = MediumContrastTextDark,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textAlign = TextAlign.Right
+                                    )
+                                },
+                                trailingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Search,
+                                        contentDescription = null,
+                                        tint = CosmicSecondary
+                                    )
+                                },
+                                leadingIcon = {
+                                    if (sellerSearchQuery.isNotEmpty()) {
+                                        IconButton(onClick = { sellerSearchQuery = "" }) {
+                                            Icon(
+                                                imageVector = Icons.Default.Clear,
+                                                contentDescription = "مسح البحث",
+                                                tint = Color.White.copy(alpha = 0.7f),
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+                                },
+                                singleLine = true,
+                                shape = RoundedCornerShape(24.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = CosmicSecondary,
+                                    unfocusedBorderColor = CosmicSurfaceVariant,
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedContainerColor = CosmicSurface,
+                                    unfocusedContainerColor = CosmicSurface
+                                ),
+                                textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Right)
+                            )
+                        }
+
                         if (sellers.isEmpty()) {
                             item {
                                 Card(
@@ -6520,8 +6584,23 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                     )
                                 }
                             }
+                        } else if (filteredSellers.isEmpty()) {
+                            item {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = CosmicSurface.copy(0.3f))
+                                ) {
+                                    Text(
+                                        "لم يتم العثور على أي تجار يطابقون البحث الحالي! 🔍",
+                                        color = CosmicSecondary,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
                         } else {
-                            items(sellers) { seller ->
+                            items(filteredSellers) { seller ->
                                 // Calculate sales stats for this seller
                                 val sellerProducts = allProducts.filter { it.sellerEmail.trim().lowercase() == seller.email.trim().lowercase() }
                                 val sellerProductIds = sellerProducts.map { it.id }.toSet()
