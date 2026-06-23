@@ -28,7 +28,8 @@ class MajarahRepository(
     private val cartDao: CartDao,
     private val orderDao: OrderDao,
     private val profileDao: ProfileDao,
-    private val courierDao: com.example.data.db.CourierDao
+    private val courierDao: com.example.data.db.CourierDao,
+    private val sellerDao: com.example.data.db.SellerDao
 ) {
     private val _dbStatus = MutableStateFlow("جاري الاتصال بـ Supabase...")
     val dbStatus: StateFlow<String> = _dbStatus.asStateFlow()
@@ -407,7 +408,9 @@ class MajarahRepository(
                             rating = it.rating,
                             imageResName = it.imageResName,
                             isFavorite = it.isFavorite,
-                            stock = it.stock
+                            stock = it.stock,
+                            sellerEmail = it.sellerEmail,
+                            isApproved = it.isApproved
                         )
                     }
                     com.example.data.network.SupabaseClient.api.insertProducts(supabaseSeed)
@@ -435,7 +438,9 @@ class MajarahRepository(
                         rating = it.rating ?: 4.5f,
                         imageResName = it.imageResName ?: "mat",
                         isFavorite = it.isFavorite ?: false,
-                        stock = it.stock ?: 10
+                        stock = it.stock ?: 10,
+                        sellerEmail = it.sellerEmail ?: "",
+                        isApproved = it.isApproved ?: true
                     )
                 }
                 productDao.insertProducts(roomProducts)
@@ -531,6 +536,62 @@ class MajarahRepository(
                 dbErr.printStackTrace()
             }
         }
+
+        // Also Prepopulate & Sync Sellers
+        try {
+            val remoteSellers = com.example.data.network.SupabaseClient.api.getSellers()
+            if (remoteSellers.isEmpty()) {
+                val seedSellers = listOf(
+                    com.example.data.db.SellerEntity(name = "عماد الدين للتجارة", email = "emad@example.com", phone = "0912111111", classification = "تاجر ذهبي ⭐", commissionRate = 0.10),
+                    com.example.data.db.SellerEntity(name = "سوق أم درمان الرقمي", email = "sudan_seller@example.com", phone = "0922222222", classification = "متميز 🌟", commissionRate = 0.08)
+                )
+                if (sellerDao.getSellersCount() == 0) {
+                    sellerDao.insertSellers(seedSellers)
+                }
+                
+                // Try upload to Supabase
+                try {
+                    val supabaseSellers = seedSellers.map {
+                        com.example.data.network.SupabaseSeller(
+                            name = it.name,
+                            email = it.email,
+                            phone = it.phone,
+                            classification = it.classification,
+                            commissionRate = it.commissionRate,
+                            createdAt = it.createdAt
+                        )
+                    }
+                    com.example.data.network.SupabaseClient.api.insertSellers(supabaseSellers)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            } else {
+                val roomSellers = remoteSellers.map {
+                    com.example.data.db.SellerEntity(
+                        id = it.id ?: 0,
+                        name = it.name ?: "بائع مجهول",
+                        email = it.email ?: "",
+                        phone = it.phone ?: "",
+                        classification = it.classification ?: "تاجر ذهبي ⭐",
+                        commissionRate = it.commissionRate ?: 0.10,
+                        createdAt = it.createdAt ?: System.currentTimeMillis()
+                    )
+                }
+                sellerDao.insertSellers(roomSellers)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            try {
+                if (sellerDao.getSellersCount() == 0) {
+                    sellerDao.insertSellers(listOf(
+                        com.example.data.db.SellerEntity(name = "عماد الدين للتجارة", email = "emad@example.com", phone = "0912111111", classification = "تاجر ذهبي ⭐", commissionRate = 0.10),
+                        com.example.data.db.SellerEntity(name = "سوق أم درمان الرقمي", email = "sudan_seller@example.com", phone = "0922222222", classification = "متميز 🌟", commissionRate = 0.08)
+                    ))
+                }
+            } catch (dbErr: Exception) {
+                dbErr.printStackTrace()
+            }
+        }
     }
 
     // Sync and fetch all customer orders from Supabase database to let the manager view and coordinate them
@@ -554,13 +615,7 @@ class MajarahRepository(
                     deliveryFee = it.deliveryFee ?: 0.0
                 )
             }
-            if (roomOrders.isNotEmpty()) {
-                val remoteOrderIds = roomOrders.map { it.orderId }.distinct()
-                orderDao.deleteOrdersNotIn(remoteOrderIds)
-                orderDao.insertOrders(roomOrders)
-            } else {
-                orderDao.clearOrderHistory()
-            }
+            orderDao.syncOrdersTransaction(roomOrders)
             null
         } catch (e: Exception) {
             e.printStackTrace()
@@ -613,14 +668,15 @@ class MajarahRepository(
         customerName: String,
         customerPhone: String,
         customerAddress: String,
-        items: List<CartItemWithProduct>
+        items: List<CartItemWithProduct>,
+        discountFactor: Double = 1.0
     ): String? {
         val orders = items.map { item ->
             OrderEntity(
                 orderId = orderId,
                 productId = item.product.id,
                 productName = item.product.name,
-                priceAtOrder = item.product.price,
+                priceAtOrder = item.product.price * discountFactor,
                 quantity = item.quantity,
                 orderDate = System.currentTimeMillis(),
                 statusArabic = "جاري التجهيز للتوصيل 📦",
@@ -694,7 +750,9 @@ class MajarahRepository(
                 rating = product.rating,
                 imageResName = product.imageResName,
                 isFavorite = product.isFavorite,
-                stock = product.stock
+                stock = product.stock,
+                sellerEmail = product.sellerEmail,
+                isApproved = product.isApproved
             )
             com.example.data.network.SupabaseClient.api.insertProducts(listOf(supProduct))
             null
@@ -717,7 +775,9 @@ class MajarahRepository(
                 rating = product.rating,
                 imageResName = product.imageResName,
                 isFavorite = product.isFavorite,
-                stock = product.stock
+                stock = product.stock,
+                sellerEmail = product.sellerEmail,
+                isApproved = product.isApproved
             )
             com.example.data.network.SupabaseClient.api.updateProduct("eq.${product.id}", supProduct)
             null
@@ -892,4 +952,46 @@ class MajarahRepository(
         }
     }
 
+    val allSellers: Flow<List<com.example.data.db.SellerEntity>> = sellerDao.getAllSellers()
+
+    suspend fun insertSeller(seller: com.example.data.db.SellerEntity): String? {
+        return try {
+            sellerDao.insertSeller(seller)
+            try {
+                com.example.data.network.SupabaseClient.api.insertSellers(
+                    listOf(com.example.data.network.SupabaseSeller(
+                        name = seller.name,
+                        email = seller.email,
+                        phone = seller.phone,
+                        classification = seller.classification,
+                        commissionRate = seller.commissionRate,
+                        createdAt = seller.createdAt
+                    ))
+                )
+            } catch (supErr: Exception) {
+                supErr.printStackTrace()
+                Log.e("MajarahRepository", "Failed to upload seller remotely: ${supErr.message}")
+            }
+            null
+        } catch (e: Exception) {
+            e.printStackTrace()
+            e.message
+        }
+    }
+
+    suspend fun deleteSeller(sellerId: Int): String? {
+        return try {
+            sellerDao.deleteSeller(sellerId)
+            try {
+                com.example.data.network.SupabaseClient.api.deleteSeller("eq.$sellerId")
+            } catch (supErr: Exception) {
+                supErr.printStackTrace()
+                Log.e("MajarahRepository", "Failed to delete seller remotely: ${supErr.message}")
+            }
+            null
+        } catch (e: Exception) {
+            e.printStackTrace()
+            e.message
+        }
+    }
 }

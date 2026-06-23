@@ -6,8 +6,8 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [ProductEntity::class, CartEntity::class, OrderEntity::class, ProfileEntity::class, CourierEntity::class],
-    version = 5,
+    entities = [ProductEntity::class, CartEntity::class, OrderEntity::class, ProfileEntity::class, CourierEntity::class, SellerEntity::class],
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -16,6 +16,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun orderDao(): OrderDao
     abstract fun profileDao(): ProfileDao
     abstract fun courierDao(): CourierDao
+    abstract fun sellerDao(): SellerDao
 
     companion object {
         @Volatile

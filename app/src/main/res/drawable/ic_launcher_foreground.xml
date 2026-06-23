@@ -3,6 +3,6 @@
     <item
         android:width="66dp"
         android:height="66dp"
-        android:drawable="@drawable/ic_majarah_logo_new_1781996328806"
+        android:drawable="@drawable/img_majarah_universe_logo_1782084799100"
         android:gravity="center" />
 </layer-list>

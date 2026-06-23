@@ -14,5 +14,7 @@ data class ProductEntity(
     val rating: Float,
     val imageResName: String, // code to display elegant custom icons dynamically
     val isFavorite: Boolean = false,
-    val stock: Int = 10
+    val stock: Int = 10,
+    val sellerEmail: String = "",
+    val isApproved: Boolean = true
 )

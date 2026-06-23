@@ -83,6 +83,17 @@ interface OrderDao {
 
     @Query("DELETE FROM orders")
     suspend fun clearOrderHistory()
+
+    @androidx.room.Transaction
+    suspend fun syncOrdersTransaction(orders: List<OrderEntity>) {
+        if (orders.isNotEmpty()) {
+            val remoteOrderIds = orders.map { it.orderId }.distinct()
+            deleteOrdersNotIn(remoteOrderIds)
+            insertOrders(orders)
+        } else {
+            clearOrderHistory()
+        }
+    }
 }
 
 @Dao
@@ -116,5 +127,26 @@ interface CourierDao {
 
     @Query("SELECT COUNT(*) FROM couriers")
     suspend fun getCouriersCount(): Int
+}
+
+@Dao
+interface SellerDao {
+    @Query("SELECT * FROM sellers ORDER BY id DESC")
+    fun getAllSellers(): kotlinx.coroutines.flow.Flow<List<SellerEntity>>
+
+    @Query("SELECT * FROM sellers")
+    suspend fun getAllSellersSnapshot(): List<SellerEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSeller(seller: SellerEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSellers(sellers: List<SellerEntity>)
+
+    @Query("DELETE FROM sellers WHERE id = :id")
+    suspend fun deleteSeller(id: Int)
+
+    @Query("SELECT COUNT(*) FROM sellers")
+    suspend fun getSellersCount(): Int
 }
 

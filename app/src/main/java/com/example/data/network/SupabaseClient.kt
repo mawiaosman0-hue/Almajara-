@@ -28,7 +28,9 @@ data class SupabaseProduct(
     @Json(name = "rating") val rating: Float? = null,
     @Json(name = "image_res_name") val imageResName: String? = null,
     @Json(name = "is_favorite") val isFavorite: Boolean? = false,
-    @Json(name = "stock") val stock: Int? = 10
+    @Json(name = "stock") val stock: Int? = 10,
+    @Json(name = "seller_email") val sellerEmail: String? = "",
+    @Json(name = "is_approved") val isApproved: Boolean? = true
 )
 
 @JsonClass(generateAdapter = true)
@@ -55,6 +57,17 @@ data class SupabaseCourier(
     @Json(name = "phone") val phone: String? = null,
     @Json(name = "state_info") val stateInfo: String? = null,
     @Json(name = "status") val status: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class SupabaseSeller(
+    @Json(name = "id") val id: Int? = null,
+    @Json(name = "name") val name: String? = null,
+    @Json(name = "email") val email: String? = null,
+    @Json(name = "phone") val phone: String? = null,
+    @Json(name = "classification") val classification: String? = null,
+    @Json(name = "commission_rate") val commissionRate: Double? = null,
+    @Json(name = "created_at") val createdAt: Long? = null
 )
 
 
@@ -194,6 +207,27 @@ interface SupabaseApi {
         @Query("phone") phoneFilter: String,
         @Body courier: SupabaseCourier
     ): List<SupabaseCourier>
+
+    @GET("rest/v1/sellers")
+    suspend fun getSellers(
+        @Query("select") select: String = "*"
+    ): List<SupabaseSeller>
+
+    @POST("rest/v1/sellers")
+    suspend fun insertSellers(
+        @Body sellers: List<SupabaseSeller>
+    ): List<SupabaseSeller>
+
+    @retrofit2.http.DELETE("rest/v1/sellers")
+    suspend fun deleteSeller(
+        @Query("id") idFilter: String
+    )
+
+    @retrofit2.http.PATCH("rest/v1/sellers")
+    suspend fun updateSeller(
+        @Query("email") emailFilter: String,
+        @Body seller: SupabaseSeller
+    ): List<SupabaseSeller>
 }
 
 object SupabaseClient {
