@@ -254,21 +254,15 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
             
             // Check for saved local profile session
             var profiles = database.profileDao().getAllProfiles()
-            if (profiles.isEmpty()) {
-                // Prepopulate with requested admin profile
-                val adminProfile = com.example.data.db.ProfileEntity(
-                    id = "mawiaosman-admin-uuid",
-                    name = "معاوية عثمان أحمد ياسين",
-                    phone = "0910074223",
-                    email = "mawiaosman0@gmail.com",
-                    password = "admin",
-                    createdAt = System.currentTimeMillis()
-                )
-                database.profileDao().insertProfile(adminProfile)
-                profiles = listOf(adminProfile)
-            }
             
-            if (profiles.isNotEmpty()) {
+            // Always start with Login screen for new users
+            // Users must explicitly log in or register
+            if (profiles.isEmpty()) {
+                // No saved session - show login screen
+                _currentScreen.value = Screen.Login
+                _isLoggedIn.value = false
+            } else {
+                // User has a saved session - restore it
                 val p = profiles.first()
                 activeProfile.value = p
                 checkoutName.value = p.name
