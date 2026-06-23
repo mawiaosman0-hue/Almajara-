@@ -125,6 +125,12 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
 
     val registerNameState by viewModel.loginName.collectAsStateWithLifecycle()
 
+    val showOtpVerification by viewModel.showOtpVerification.collectAsStateWithLifecycle()
+    val otpVerificationEmail by viewModel.otpVerificationEmail.collectAsStateWithLifecycle()
+    val otpCode by viewModel.otpCode.collectAsStateWithLifecycle()
+    var otpErrorMsg by remember { mutableStateOf<String?>(null) }
+    var isVerifyingOtp by remember { mutableStateOf(false) }
+
     var registrationErrorDialogMessage by remember { mutableStateOf<String?>(null) }
 
     var showSupabaseSettingsDialog by remember { mutableStateOf(false) }
@@ -707,6 +713,125 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                             colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black)
                         ) {
                             Text("حسناً وفهمت", fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    containerColor = CosmicSurface,
+                    shape = RoundedCornerShape(16.dp)
+                )
+            }
+
+            // OTP Email verification Alert Dialog
+            if (showOtpVerification) {
+                AlertDialog(
+                    onDismissRequest = { viewModel.showOtpVerification.value = false },
+                    title = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Lock,
+                                contentDescription = "قفل التحقق",
+                                tint = CosmicSecondary,
+                                modifier = Modifier.size(28.dp)
+                            )
+                            Text(
+                                text = viewModel.t("تأكيد حسابك 🛡️", "Verify Your Account 🛡️"),
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp
+                            )
+                        }
+                    },
+                    text = {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(14.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = viewModel.t(
+                                    "🌌 لقد أرسلنا رمز تأكيد (OTP) مؤلفاً من 6 أرقام إلى بريدك الإلكتروني لزيادة أمان حسابك:\n\n📧 $otpVerificationEmail\n\nيرجى التحقق من صندوق الوارد (أو البريد المهمل Spam) وإدخال الرمز هنا لبدء استخدام تطبيق مجرة السودان.",
+                                    "🌌 We have sent a 6-digit confirmation code (OTP) to your email for security:\n\n📧 $otpVerificationEmail\n\nPlease check your inbox (or Spam folder) and enter it to start exploring Majarah."
+                                ),
+                                color = MediumContrastTextDark,
+                                fontSize = 14.sp,
+                                textAlign = TextAlign.Right,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            OutlinedTextField(
+                                value = otpCode,
+                                onValueChange = { viewModel.otpCode.value = it },
+                                label = { Text(viewModel.t("رمز التأكيد (OTP)", "Confirmation Code")) },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Email,
+                                        contentDescription = null,
+                                        tint = CosmicSecondary
+                                    )
+                                },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = CosmicSecondary,
+                                    unfocusedBorderColor = MediumContrastTextDark,
+                                    focusedLabelColor = CosmicSecondary,
+                                    unfocusedLabelColor = MediumContrastTextDark
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("otp_code_input"),
+                                singleLine = true,
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                                )
+                            )
+
+                            if (otpErrorMsg != null) {
+                                Text(
+                                    text = otpErrorMsg!!,
+                                    color = Color.Red,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                isVerifyingOtp = true
+                                otpErrorMsg = null
+                                viewModel.verifyEmailAndFinishLogin(
+                                    onSuccess = {
+                                        isVerifyingOtp = false
+                                        Toast.makeText(context, viewModel.t("✨ تم تفعيل وتأكيد حسابك بنجاح! طيران كوني سعيد. 🚀", "Account successfully activated! Happy cosmic travel. 🚀"), Toast.LENGTH_LONG).show()
+                                    },
+                                    onError = { err ->
+                                        isVerifyingOtp = false
+                                        val transErr = viewModel.translateError(err) ?: err
+                                        otpErrorMsg = transErr
+                                    }
+                                )
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                            enabled = otpCode.trim().isNotEmpty() && !isVerifyingOtp,
+                            modifier = Modifier.testTag("otp_confirm_button")
+                        ) {
+                            if (isVerifyingOtp) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.Black)
+                            } else {
+                                Text(viewModel.t("تأكيد وتفعيل الحساب", "Verify & Activate"), fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = { viewModel.showOtpVerification.value = false }
+                        ) {
+                            Text(viewModel.t("إلغاء", "Cancel"), color = CosmicSecondary)
                         }
                     },
                     containerColor = CosmicSurface,

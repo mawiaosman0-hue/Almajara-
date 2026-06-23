@@ -77,6 +77,25 @@ class MajarahRepository(
         }
     }
 
+    // Verify signup OTP / email token sent by Supabase Auth
+    suspend fun verifyEmailOTP(email: String, token: String): String? {
+        return try {
+            val verifyReq = com.example.data.network.SupabaseVerifyOTPRequest(
+                type = "signup",
+                email = email.trim(),
+                token = token.trim()
+            )
+            val response = com.example.data.network.SupabaseClient.api.verifyOTP(verifyReq)
+            Log.d("MajarahRepository", "Email verified successfully with Supabase: ${response.user?.id}")
+            null
+        } catch (e: Exception) {
+            e.printStackTrace()
+            val parsedError = com.example.data.network.SupabaseClient.parseError(e)
+            Log.e("MajarahRepository", "Failed to verify email OTP: $parsedError")
+            parsedError
+        }
+    }
+
     // Login with Supabase Auth credentials or local data
     suspend fun loginUserProfile(emailOrPhone: String, password: String): Pair<ProfileEntity?, String?> {
         var resolvedEmail = emailOrPhone.trim()

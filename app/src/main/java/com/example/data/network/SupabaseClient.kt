@@ -111,6 +111,13 @@ data class SupabaseTokenResponse(
     @Json(name = "user") val user: SupabaseUser? = null
 )
 
+@JsonClass(generateAdapter = true)
+data class SupabaseVerifyOTPRequest(
+    @Json(name = "type") val type: String = "signup",
+    @Json(name = "email") val email: String,
+    @Json(name = "token") val token: String
+)
+
 interface SupabaseApi {
     @POST("auth/v1/signup")
     suspend fun signUp(
@@ -120,6 +127,11 @@ interface SupabaseApi {
     @POST("auth/v1/token?grant_type=password")
     suspend fun signIn(
         @Body request: SupabaseSignInRequest
+    ): SupabaseTokenResponse
+
+    @POST("auth/v1/verify")
+    suspend fun verifyOTP(
+        @Body request: SupabaseVerifyOTPRequest
     ): SupabaseTokenResponse
 
     @GET("rest/v1/products")

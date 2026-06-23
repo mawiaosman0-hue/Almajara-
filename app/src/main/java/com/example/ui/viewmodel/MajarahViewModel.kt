@@ -96,6 +96,9 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
     val loginName = MutableStateFlow("")
     val loginPhone = MutableStateFlow("")
     val isRegisterMode = MutableStateFlow(false)
+    val showOtpVerification = MutableStateFlow(false)
+    val otpVerificationEmail = MutableStateFlow("")
+    val otpCode = MutableStateFlow("")
 
     // Current Search Query State
     private val _searchQuery = MutableStateFlow("")
@@ -225,27 +228,8 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                 // Register
                 error = repository.registerUserProfile(name, phone, email, password)
                 if (error == null) {
-                    val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
-                    sharedPrefs.edit().putBoolean("is_logged_in_state", true).apply()
-
-                    val profiles = database.profileDao().getAllProfiles()
-                    val p = profiles.firstOrNull()
-                    activeProfile.value = p
-                    _isLoggedIn.value = true
-                    checkoutName.value = name
-                    checkoutPhone.value = phone
-
-                    val cleanP = phone.trim().replace("+", "").replace(" ", "")
-                    val matchesCourier = repository.allCouriers.stateIn(viewModelScope).value.any { c ->
-                        c.phone.trim().replace("+", "").replace(" ", "") == cleanP || c.phone.trim() == phone.trim()
-                    }
-                    if (email.trim().lowercase() == "mawiaosman0@gmail.com") {
-                        _currentScreen.value = Screen.Admin
-                    } else if (matchesCourier) {
-                        _currentScreen.value = Screen.Courier
-                    } else {
-                        _currentScreen.value = Screen.Home
-                    }
+                    otpVerificationEmail.value = email
+                    showOtpVerification.value = true
                 }
             } else {
                 // Sign In
@@ -276,9 +260,63 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                     } else {
                         _currentScreen.value = Screen.Home
                     }
+                } else if (error != null && (error.contains("Email not confirmed", ignoreCase = true) || error.contains("تأكيد", ignoreCase = true))) {
+                    otpVerificationEmail.value = email
+                    showOtpVerification.value = true
                 }
             }
             onSuccess(error)
+        }
+    }
+
+    fun verifyEmailAndFinishLogin(onSuccess: () -> Unit, onError: (String) -> Unit) {
+        val email = otpVerificationEmail.value.trim()
+        val code = otpCode.value.trim()
+        val name = loginName.value.trim()
+        val phone = loginPhone.value.trim()
+        val password = loginPassword.value.trim()
+
+        viewModelScope.launch {
+            val error = repository.verifyEmailOTP(email, code)
+            if (error == null) {
+                // Verification successful! Activate profile and login
+                val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
+                sharedPrefs.edit().putBoolean("is_logged_in_state", true).apply()
+
+                val profiles = database.profileDao().getAllProfiles()
+                var p = profiles.firstOrNull { it.email.trim().lowercase() == email.lowercase() }
+                if (p == null) {
+                    p = com.example.data.db.ProfileEntity(
+                        id = java.util.UUID.randomUUID().toString(),
+                        name = if (name.isBlank()) "عميل المجرة ✨" else name,
+                        phone = phone,
+                        email = email,
+                        password = password,
+                        createdAt = System.currentTimeMillis()
+                    )
+                    database.profileDao().insertProfile(p)
+                }
+                activeProfile.value = p
+                _isLoggedIn.value = true
+                checkoutName.value = p.name
+                checkoutPhone.value = p.phone
+
+                showOtpVerification.value = false
+                val cleanP = p.phone.trim().replace("+", "").replace(" ", "")
+                val matchesCourier = repository.allCouriers.stateIn(viewModelScope).value.any { c ->
+                    c.phone.trim().replace("+", "").replace(" ", "") == cleanP || c.phone.trim() == p.phone.trim()
+                }
+                if (email.trim().lowercase() == "mawiaosman0@gmail.com") {
+                    _currentScreen.value = Screen.Admin
+                } else if (matchesCourier) {
+                    _currentScreen.value = Screen.Courier
+                } else {
+                    _currentScreen.value = Screen.Home
+                }
+                onSuccess()
+            } else {
+                onError(error)
+            }
         }
     }
 
