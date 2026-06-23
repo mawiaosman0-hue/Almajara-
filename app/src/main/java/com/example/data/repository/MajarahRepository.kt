@@ -612,7 +612,7 @@ class MajarahRepository(
                     customerAddress = it.customerAddress ?: "العنوان",
                     courierName = it.courierName ?: "",
                     courierPhone = it.courierPhone ?: "",
-                    deliveryFee = it.deliveryFee ?: 0.0
+                    deliveryFee = if ((it.deliveryFee ?: 0.0) <= 0.0) 5000.0 else it.deliveryFee!!
                 )
             }
             orderDao.syncOrdersTransaction(roomOrders)

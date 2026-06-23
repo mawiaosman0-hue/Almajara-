@@ -1110,7 +1110,18 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
--- 5. إعداد دالة ومراقب لتلقائي ربط Supabase Auth مع جدول البروفايل (عند الرغبة):
+-- 5. إنشاء جدول البائعين (sellers)
+CREATE TABLE IF NOT EXISTS public.sellers (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    phone TEXT,
+    classification TEXT DEFAULT 'تاجر ذهبي ⭐',
+    commission_rate DOUBLE PRECISION DEFAULT 0.10,
+    created_at BIGINT
+);
+
+-- 6. إعداد دالة ومراقب لتلقائي ربط Supabase Auth مع جدول البروفايل (عند الرغبة):
 -- CREATE OR REPLACE FUNCTION public.handle_new_user()
 -- RETURNS trigger AS $$
 -- BEGIN
@@ -1125,11 +1136,12 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 --   AFTER INSERT ON auth.users
 --   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- 6. تفعيل RLS أو السماح بالقراءة والكتابة لغرض التطوير والتجربة بالسودان
+-- 7. تفعيل RLS أو السماح بالقراءة والكتابة لغرض التطوير والتجربة بالسودان
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.couriers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sellers ENABLE ROW LEVEL SECURITY;
 
 -- حذف السياسات القديمة إن وجدت لتجنب تكرار الخطأ في Supabase
 DROP POLICY IF EXISTS "Allow select products" ON public.products;
@@ -1143,6 +1155,9 @@ DROP POLICY IF EXISTS "Allow update profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Allow select couriers" ON public.couriers;
 DROP POLICY IF EXISTS "Allow insert couriers" ON public.couriers;
 DROP POLICY IF EXISTS "Allow delete couriers" ON public.couriers;
+DROP POLICY IF EXISTS "Allow select sellers" ON public.sellers;
+DROP POLICY IF EXISTS "Allow insert sellers" ON public.sellers;
+DROP POLICY IF EXISTS "Allow delete sellers" ON public.sellers;
 
 -- إنشاء سياسات الوصول الكونية الجديدة لجميع المستخدمين لضمان عدم حدوث أخطاء RLS
 CREATE POLICY "Allow select products" ON public.products FOR SELECT USING (true);
@@ -1159,6 +1174,10 @@ CREATE POLICY "Allow update profiles" ON public.profiles FOR UPDATE USING (true)
 CREATE POLICY "Allow select couriers" ON public.couriers FOR SELECT USING (true);
 CREATE POLICY "Allow insert couriers" ON public.couriers FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow delete couriers" ON public.couriers FOR DELETE USING (true);
+
+CREATE POLICY "Allow select sellers" ON public.sellers FOR SELECT USING (true);
+CREATE POLICY "Allow insert sellers" ON public.sellers FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow delete sellers" ON public.sellers FOR DELETE USING (true);
                                     """.trimIndent()
                                     
                                     Button(
@@ -2428,8 +2447,9 @@ fun HistoryScreenBody(
                 
                 val dateStr = java.text.SimpleDateFormat("yyyy/MM/dd HH:mm", java.util.Locale.US).format(java.util.Date(orderDateMillis))
                 val totalItemsSum = orderItems.sumOf { it.priceAtOrder * it.quantity }
-                val deliveryPrice = firstItem?.deliveryFee ?: 5000.0
-                val grandTotal = totalItemsSum + deliveryPrice
+                val showDeliveryPrice = orderStatus.contains("تسليم المندوب") || orderStatus.contains("تسليم لمندوب") || isDelivered
+                val deliveryPrice = if ((firstItem?.deliveryFee ?: 0.0) <= 0.0) 5000.0 else firstItem!!.deliveryFee
+                val grandTotal = if (showDeliveryPrice) (totalItemsSum + deliveryPrice) else totalItemsSum
                 
                 val context = androidx.compose.ui.platform.LocalContext.current
                 val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
@@ -2668,10 +2688,10 @@ fun HistoryScreenBody(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "${formatPrice(deliveryPrice)} ج.س",
-                                color = Color.White,
+                                text = if (showDeliveryPrice) "${formatPrice(deliveryPrice)} ج.س" else viewModel.t("يحدد عند تسليم المندوب 🚴", "To be determined upon delivery 🚴"),
+                                color = if (showDeliveryPrice) Color.White else CosmicSecondary,
                                 fontSize = 12.sp,
-                                fontWeight = FontWeight.Normal
+                                fontWeight = if (showDeliveryPrice) FontWeight.Normal else FontWeight.Bold
                             )
                             Text("رسوم التوصيل:", color = MediumContrastTextDark, fontSize = 12.sp)
                         }
@@ -2689,13 +2709,14 @@ fun HistoryScreenBody(
                                 fontSize = 14.sp
                             )
                             Text(
-                                text = "المبلغ الإجمالي الكلي:",
+                                text = if (showDeliveryPrice) "المبلغ الإجمالي الكلي:" else "المبلغ الإجمالي للمشتريات (غير شامل التوصيل):",
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 12.sp
                             )
                         }
 
+                        val courierAccepted = courierName.isNotBlank()
                         if (!courierAccepted) {
                             Text(
                                 text = "⏳ جاري تعيين كابتن التوصيل لتسليم الشحنة لعنوانكم...",
@@ -2750,8 +2771,13 @@ fun HistoryScreenBody(
                                         textBuilder.append("- ${item.productName} (العدد: ${item.quantity}) - ${formatPrice(item.priceAtOrder * item.quantity)} ج.س\n")
                                     }
                                     textBuilder.append("-----------------------------\n")
-                                    textBuilder.append("🚚 رسوم التوصيل المقدرة: ${formatPrice(deliveryPrice)} ج.س\n")
-                                    textBuilder.append("💰 الإجمالي المستحق: ${formatPrice(grandTotal)} ج.س \n")
+                                    if (showDeliveryPrice) {
+                                        textBuilder.append("🚚 رسوم التوصيل المقدرة: ${formatPrice(deliveryPrice)} ج.س\n")
+                                        textBuilder.append("💰 الإجمالي المستحق: ${formatPrice(grandTotal)} ج.س \n")
+                                    } else {
+                                        textBuilder.append("🚚 رسوم التوصيل: (تحدد وتظهر بعد تسليم المندوب) 🚴\n")
+                                        textBuilder.append("💰 إجمالي المشتريات: ${formatPrice(grandTotal)} ج.س (لا يشمل رسوم التوصيل حتى الآن)\n")
+                                    }
                                     textBuilder.append("✨ حالة الطلب الحالية: $orderStatus\n")
                                     if (courierName.isNotBlank()) {
                                         textBuilder.append("🚴 المندوب المعين للتوصيل: $courierName ($courierPhone)\n")
@@ -3029,6 +3055,9 @@ fun LoginScreenBody(
     viewModel: MajarahViewModel
 ) {
     var passwordVisible by remember { mutableStateOf(false) }
+    var isGoogleFlowActive by remember { mutableStateOf(false) }
+    var googleEmailState by remember { mutableStateOf("mawiaosman0@gmail.com") }
+    var showGoogleDialog by remember { mutableStateOf(false) }
 
     val logoScale = remember { Animatable(0.2f) }
     val logoAlpha = remember { Animatable(0f) }
@@ -3234,7 +3263,59 @@ fun LoginScreenBody(
                         }
                     }
 
-                    if (isRegister) {
+                    if (isGoogleFlowActive) {
+                        item {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = CosmicDeepSpace),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color.Green.copy(0.5f)),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(24.dp)
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(Color.White),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text("G", color = Color(0xFF4285F4), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = viewModel.t("متصل عبر حساب Google بنجاح 🟢", "Connected via Google successfully 🟢"),
+                                            color = Color.Green,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = googleEmailState,
+                                        color = Color.White.copy(0.7f),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = viewModel.t("يرجى إكمال الاسم ورقم الهاتف وتعيين كلمة مرور لتفعيل حسابك بالمجرة:", "Please enter your name, phone number, and a password to complete registration:"),
+                                        color = Color.White.copy(0.9f),
+                                        fontSize = 11.sp,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (isRegister || isGoogleFlowActive) {
                         item {
                             OutlinedTextField(
                                 value = name,
@@ -3281,29 +3362,31 @@ fun LoginScreenBody(
                         }
                     }
 
-                    item {
-                        val isInputtingPhone = email.any { it.isDigit() }
-                        val leadingIconToUse = if (isInputtingPhone) Icons.Default.Phone else Icons.Default.Email
-                        OutlinedTextField(
-                            value = email,
-                            onValueChange = onEmailChange,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("login_email_input"),
-                            placeholder = { Text(viewModel.t("البريد الإلكتروني أو رقم الهاتف 🌌", "Email or Phone Number 🌌"), color = MediumContrastTextDark, fontSize = 13.sp) },
-                            leadingIcon = { Icon(leadingIconToUse, null, tint = CosmicSecondary) },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = CosmicSecondary,
-                                unfocusedBorderColor = CosmicSurfaceVariant,
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedContainerColor = CosmicDeepSpace,
-                                unfocusedContainerColor = CosmicDeepSpace
+                    if (!isGoogleFlowActive) {
+                        item {
+                            val isInputtingPhone = email.any { it.isDigit() }
+                            val leadingIconToUse = if (isInputtingPhone) Icons.Default.Phone else Icons.Default.Email
+                            OutlinedTextField(
+                                value = email,
+                                onValueChange = onEmailChange,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("login_email_input"),
+                                placeholder = { Text(viewModel.t("البريد الإلكتروني أو رقم الهاتف 🌌", "Email or Phone Number 🌌"), color = MediumContrastTextDark, fontSize = 13.sp) },
+                                leadingIcon = { Icon(leadingIconToUse, null, tint = CosmicSecondary) },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = CosmicSecondary,
+                                    unfocusedBorderColor = CosmicSurfaceVariant,
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedContainerColor = CosmicDeepSpace,
+                                    unfocusedContainerColor = CosmicDeepSpace
+                                )
                             )
-                        )
+                        }
                     }
 
                     item {
@@ -3358,14 +3441,24 @@ fun LoginScreenBody(
                     }
 
                     item {
-                        val formValid = if (isRegister) {
+                        val formValid = if (isGoogleFlowActive) {
+                            name.isNotBlank() && phone.isNotBlank() && password.length >= 6
+                        } else if (isRegister) {
                             name.isNotBlank() && phone.isNotBlank() && email.isNotBlank() && password.length >= 6
                         } else {
                             email.isNotBlank() && password.length >= 4
                         }
 
                         Button(
-                            onClick = onSubmit,
+                            onClick = {
+                                if (isGoogleFlowActive) {
+                                    viewModel.isRegisterMode.value = true
+                                    onEmailChange(googleEmailState)
+                                    onSubmit()
+                                } else {
+                                    onSubmit()
+                                }
+                            },
                             enabled = formValid,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -3380,7 +3473,13 @@ fun LoginScreenBody(
                             )
                         ) {
                             Text(
-                                text = if (isRegister) viewModel.t("تأكيد والانضمام للمجرة", "Confirm and Join Majarah") else viewModel.t("تسجيل الدخول الآمن", "Secure Log In"),
+                                text = if (isGoogleFlowActive) {
+                                    viewModel.t("إكمال التفعيل والانضمام للمجرة 🚀", "Complete Activation & Join Majarah 🚀")
+                                } else if (isRegister) {
+                                    viewModel.t("تأكيد والانضمام للمجرة", "Confirm and Join Majarah")
+                                } else {
+                                    viewModel.t("تسجيل الدخول الآمن", "Secure Log In")
+                                },
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp
                             )
@@ -3393,40 +3492,228 @@ fun LoginScreenBody(
                         }
                     }
 
-                    item {
-                        TextButton(onClick = onToggleMode) {
-                            Text(
-                                text = if (isRegister) 
-                                    viewModel.t("لديك حساب مسبق؟ قم بتسجيل الدخول", "Already have an account? Log in") 
-                                else 
-                                    viewModel.t("ليس لديك حساب؟ انضم للمجرة وسجل الآن", "Don't have an account? Join Majarah and register now"),
-                                color = CosmicSecondary,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 12.sp,
-                                textAlign = TextAlign.Center
-                            )
+                    if (isGoogleFlowActive) {
+                        item {
+                            OutlinedButton(
+                                onClick = {
+                                    isGoogleFlowActive = false
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(44.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color.Red.copy(alpha = 0.5f)),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
+                            ) {
+                                Text(viewModel.t("إلغاء والعودة للدخول العادي ❌", "Cancel & Go Back ❌"), fontWeight = FontWeight.Medium, fontSize = 12.sp)
+                            }
                         }
                     }
 
-                    item {
-                        Divider(color = CosmicSurfaceVariant, modifier = Modifier.padding(vertical = 4.dp))
+                    if (!isGoogleFlowActive) {
+                        item {
+                            TextButton(onClick = onToggleMode) {
+                                Text(
+                                    text = if (isRegister) 
+                                        viewModel.t("لديك حساب مسبق؟ قم بتسجيل الدخول", "Already have an account? Log in") 
+                                    else 
+                                        viewModel.t("ليس لديك حساب؟ انضم للمجرة وسجل الآن", "Don't have an account? Join Majarah and register now"),
+                                    color = CosmicSecondary,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 12.sp,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+
+                        item {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                androidx.compose.material3.HorizontalDivider(modifier = Modifier.weight(1f), color = CosmicSurfaceVariant.copy(0.5f))
+                                Text(
+                                    text = viewModel.t(" أو المتابعة السريعة عبر ", " Or quick continue via "),
+                                    color = MediumContrastTextDark,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(horizontal = 8.dp)
+                                )
+                                androidx.compose.material3.HorizontalDivider(modifier = Modifier.weight(1f), color = CosmicSurfaceVariant.copy(0.5f))
+                            }
+                        }
+
+                        item {
+                            OutlinedButton(
+                                onClick = {
+                                    showGoogleDialog = true
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    containerColor = Color.White,
+                                    contentColor = Color.Black
+                                )
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(20.dp)
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(Color.White),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("G", color = Color(0xFF4285F4), fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = viewModel.t("المتابعة باستخدام Google 🌠", "Continue with Google 🌠"),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = Color.Black
+                                    )
+                                }
+                            }
+                        }
+
+                        item {
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+
+                        item {
+                            OutlinedButton(
+                                onClick = onSkipAsGuest,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(44.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, CosmicSecondary.copy(alpha = 0.5f)),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = CosmicSecondary)
+                            ) {
+                                Text(viewModel.t("تخطي والدخول كزائر 🌌", "Skip and Enter as Guest 🌌"), fontWeight = FontWeight.Medium, fontSize = 12.sp)
+                            }
+                        }
                     }
 
-                    item {
-                        OutlinedButton(
-                            onClick = onSkipAsGuest,
+
+                }
+            }
+        }
+
+        if (showGoogleDialog) {
+            androidx.compose.ui.window.Dialog(onDismissRequest = { showGoogleDialog = false }) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, CosmicSurfaceVariant)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = viewModel.t("تسجيل الدخول بواسطة Google 🌠", "Sign In with Google 🌠"),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            color = Color.White
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = viewModel.t("اختر حساباً للمتابعة إلى مجرة السودان:", "Choose an account to continue to Majarah Sudan:"),
+                            fontSize = 11.sp,
+                            color = MediumContrastTextDark,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        // Mawia Osman Google account Button
+                        Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(44.dp),
+                                .clickable {
+                                    googleEmailState = "mawiaosman0@gmail.com"
+                                    onEmailChange("mawiaosman0@gmail.com")
+                                    onNameChange("Mawia Osman")
+                                    isGoogleFlowActive = true
+                                    showGoogleDialog = false
+                                },
                             shape = RoundedCornerShape(12.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, CosmicSecondary.copy(alpha = 0.5f)),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = CosmicSecondary)
+                            colors = CardDefaults.cardColors(containerColor = CosmicDeepSpace),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, CosmicSurfaceVariant)
                         ) {
-                            Text(viewModel.t("تخطي والدخول كزائر 🌌", "Skip and Enter as Guest 🌌"), fontWeight = FontWeight.Medium, fontSize = 12.sp)
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(RoundedCornerShape(18.dp))
+                                        .background(CosmicSecondary),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("M", color = Color.Black, fontWeight = FontWeight.Bold)
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text("Mawia Osman", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Text("mawiaosman0@gmail.com", color = MediumContrastTextDark, fontSize = 11.sp)
+                                }
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        // Add another account
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    googleEmailState = "guest.customer@gmail.com"
+                                    onEmailChange("guest.customer@gmail.com")
+                                    onNameChange("عميل المجرة")
+                                    isGoogleFlowActive = true
+                                    showGoogleDialog = false
+                                },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = CosmicDeepSpace),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, CosmicSurfaceVariant)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(RoundedCornerShape(18.dp))
+                                        .background(Color.White.copy(0.1f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.Person, null, tint = Color.White)
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(viewModel.t("حساب تجريبي آخر", "Another Demo Account"), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Text("guest.customer@gmail.com", color = MediumContrastTextDark, fontSize = 11.sp)
+                                }
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(20.dp))
+                        
+                        TextButton(onClick = { showGoogleDialog = false }) {
+                            Text(viewModel.t("إلغاء ❌", "Cancel ❌"), color = Color.Red, fontWeight = FontWeight.Bold)
                         }
                     }
-
-
                 }
             }
         }
@@ -5569,7 +5856,12 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                                                     }
                                                                     
                                                                     // Deliver Action button
-                                                                    val isDelivered = parentOrder?.statusArabic?.contains("تمام") == true
+                                                                    val isDelivered = parentOrder?.statusArabic?.let { status ->
+                                                                        (status.contains("تمام") || 
+                                                                        status.contains("تم توصيل") || 
+                                                                        status.contains("تم التسليم")) && 
+                                                                        !status.contains("تم تسليم المندوب")
+                                                                    } == true
                                                                     Button(
                                                                         onClick = {
                                                                             if (!isDelivered) {
@@ -5883,6 +6175,17 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                     state_info TEXT NOT NULL,
                                     status TEXT NOT NULL,
                                     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                                );
+
+                                -- 4. إنشاء جدول البائعين (sellers)
+                                CREATE TABLE IF NOT EXISTS public.sellers (
+                                    id SERIAL PRIMARY KEY,
+                                    name TEXT NOT NULL,
+                                    email TEXT UNIQUE NOT NULL,
+                                    phone TEXT,
+                                    classification TEXT DEFAULT 'تاجر ذهبي ⭐',
+                                    commission_rate DOUBLE PRECISION DEFAULT 0.10,
+                                    created_at BIGINT
                                 );
                                 """.trimIndent()
 
@@ -7363,6 +7666,20 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                         ex.printStackTrace()
                     }
                 }
+                // Vibrate the phone to notify the courier
+                try {
+                    val vibrator = context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+                    if (vibrator != null) {
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                            vibrator.vibrate(android.os.VibrationEffect.createOneShot(1000, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+                        } else {
+                            @Suppress("DEPRECATION")
+                            vibrator.vibrate(1000)
+                        }
+                    }
+                } catch (eVib: Exception) {
+                    eVib.printStackTrace()
+                }
                 // Trigger pop up
                 newTaskAlertOrderId = newlyAssigned
                 // Switch tab to Active
@@ -7420,6 +7737,7 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
             confirmButton = {
                 Button(
                     onClick = {
+                        courierOrdersTab = 0
                         scrollToOrderId = alertOrderId
                         newTaskAlertOrderId = null
                     },
@@ -7703,10 +8021,12 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                 // Apply Tab-based sorting filtration
                 val filteredGroupedOrders = groupedOrders.filter { (_, itemsList) ->
                     val statusText = itemsList.firstOrNull()?.statusArabic ?: ""
+                    val isActuallyCompleted = (statusText.contains("تمام") || statusText.contains("تم توصيل") || statusText.contains("تم التسليم")) && !statusText.contains("تم تسليم المندوب")
+                    val isCancelled = statusText.contains("ملغي")
                     when (courierOrdersTab) {
-                        0 -> !statusText.contains("تمام") && !statusText.contains("تم توصيل") && !statusText.contains("ملغي") && !statusText.contains("تم التسليم")
-                        1 -> statusText.contains("تمام") || statusText.contains("تم توصيل") || statusText.contains("تم التسليم")
-                        2 -> statusText.contains("ملغي")
+                        0 -> !isActuallyCompleted && !isCancelled
+                        1 -> isActuallyCompleted
+                        2 -> isCancelled
                         else -> true
                     }
                 }
@@ -7757,10 +8077,11 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                             val parent = itemsList.firstOrNull()
                             val totalPrice = itemsList.sumOf { it.priceAtOrder * it.quantity }
                             val isCompleted = parent?.statusArabic?.let { status ->
-                                status.contains("تمام") || 
+                                (status.contains("تمام") || 
                                 status.contains("تم توصيل") || 
                                 status.contains("تم التوصيل") || 
-                                status.contains("تم التسليم")
+                                status.contains("تم التسليم")) && 
+                                !status.contains("تم تسليم المندوب")
                             } == true
 
                             Card(
@@ -7819,7 +8140,7 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            text = "المبلغ الإجمالي: ${viewModel.formatPrice(totalPrice)} SDG",
+                                            text = "قيمة المشتريات: ${viewModel.formatPrice(totalPrice)} SDG\nسعر التوصيل 🚚: ${viewModel.formatPrice(parent?.deliveryFee ?: 0.0)} SDG\nالمجموع الكلي للتحصيل 💰: ${viewModel.formatPrice(totalPrice + (parent?.deliveryFee ?: 0.0))} SDG",
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = CosmicSecondary
@@ -7875,7 +8196,7 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                                                     } else {
                                                         rawPhone
                                                     }
-                                                    val msg = "🌌 مرحباً يا ${parent.customerName}! معكم المندوب ${myCourierInfo.name} من تطبيق مجرة السودان. أنا متكفل بتسليم طلبيتكم الآن رقم (#${orderId.take(5)}) وقيمتها ${viewModel.formatPrice(totalPrice)} SDG. هل أنتم متواجدون لتسليمها؟"
+                                                    val msg = "🌌 مرحباً يا ${parent.customerName}! معكم المندوب ${myCourierInfo.name} من تطبيق مجرة السودان. أنا متكفل بتسليم طلبيتكم الآن رقم (#${orderId.take(5)}) وقيمة المشتريات ${viewModel.formatPrice(totalPrice)} SDG + سعر التوصيل ${viewModel.formatPrice(parent?.deliveryFee ?: 0.0)} SDG (الإجمالي الكلي للتحصيل: ${viewModel.formatPrice(totalPrice + (parent?.deliveryFee ?: 0.0))} SDG). هل أنتم متواجدون لتسليمها؟"
                                                     val url = "https://api.whatsapp.com/send?phone=$cleanPhone&text=${android.net.Uri.encode(msg)}"
                                                     Toast.makeText(context, "جاري فتح واتساب للزبون...", Toast.LENGTH_SHORT).show()
                                                     try {

@@ -1,5 +1,5 @@
 {
-  "name": "المجرة الكونية للتسوق",
+  "name": "Almajra",
   "description": "تطبيق المجرة للتسوق الإلكتروني - تجربة تسوق احترافية ومبتكرة مصممة للسوق السوداني وتدعم العملة بالجنيه السوداني (SDG) مع قاعدة بيانات متكاملة.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

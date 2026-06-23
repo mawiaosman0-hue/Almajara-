@@ -225,6 +225,9 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                 // Register
                 error = repository.registerUserProfile(name, phone, email, password)
                 if (error == null) {
+                    val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
+                    sharedPrefs.edit().putBoolean("is_logged_in_state", true).apply()
+
                     val profiles = database.profileDao().getAllProfiles()
                     val p = profiles.firstOrNull()
                     activeProfile.value = p
@@ -249,6 +252,9 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                 val result = repository.loginUserProfile(email, password)
                 error = result.second
                 if (error == null) {
+                    val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
+                    sharedPrefs.edit().putBoolean("is_logged_in_state", true).apply()
+
                     val p = result.first
                     activeProfile.value = p
                     _isLoggedIn.value = true
@@ -281,6 +287,8 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
         activeProfile.value = null
         checkoutName.value = ""
         checkoutPhone.value = ""
+        val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
+        sharedPrefs.edit().putBoolean("is_logged_in_state", false).apply()
         _currentScreen.value = Screen.Home
     }
 
@@ -298,6 +306,9 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
 
     fun performLogout() {
         viewModelScope.launch {
+            val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
+            sharedPrefs.edit().putBoolean("is_logged_in_state", false).apply()
+
             database.profileDao().clearProfiles()
             activeProfile.value = null
             _isLoggedIn.value = false
@@ -351,7 +362,10 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
             // Wait for 2.5 seconds to show the beautiful animated Cosmic Splash screen
             delay(2500)
             
-            if (profiles.isNotEmpty()) {
+            val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
+            val isUserLoggedIn = sharedPrefs.getBoolean("is_logged_in_state", false)
+            
+            if (isUserLoggedIn && profiles.isNotEmpty()) {
                 val p = profiles.first()
                 activeProfile.value = p
                 checkoutName.value = p.name
