@@ -188,6 +188,12 @@ interface SupabaseApi {
     ): List<SupabaseProfile>
 
     @GET("rest/v1/profiles")
+    suspend fun getProfilesByEmail(
+        @Query("select") select: String = "*",
+        @Query("email") emailFilter: String
+    ): List<SupabaseProfile>
+
+    @GET("rest/v1/profiles")
     suspend fun getProfilesWithFilter(
         @Query("select") select: String = "*",
         @Query("id") idFilter: String

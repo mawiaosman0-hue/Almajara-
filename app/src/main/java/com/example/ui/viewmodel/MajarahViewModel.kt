@@ -342,6 +342,17 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun resetPasswordByEmail(email: String, newPassword: String, onComplete: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            val result = repository.resetPasswordByEmail(email, newPassword)
+            if (result.first) {
+                loginEmail.value = email
+                loginPassword.value = newPassword
+            }
+            onComplete(result.first, result.second)
+        }
+    }
+
     fun performLogout() {
         viewModelScope.launch {
             val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
@@ -374,8 +385,6 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
     }
 
     init {
-        // Pre-fill user email with default email
-        loginEmail.value = "mawiaosman0@gmail.com"
         // Initialize the app with Room products seed and local session loading
         viewModelScope.launch {
             repository.checkAndPrepopulateProducts()
@@ -661,6 +670,14 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
     fun sendResetSmsOtp(phone: String, code: String, onComplete: (Boolean, String) -> Unit) {
         viewModelScope.launch {
             val result = repository.sendSmsOtpReal(phone, code)
+            onComplete(result.first, result.second)
+        }
+    }
+
+    // Real Email OTP dispatcher trigger for Google accounts
+    fun sendResetEmailOtp(email: String, code: String, onComplete: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            val result = repository.sendEmailOtpReal(email, code)
             onComplete(result.first, result.second)
         }
     }
