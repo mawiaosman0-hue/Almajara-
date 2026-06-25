@@ -156,9 +156,31 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
             products.filter { it.isFavorite }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Past Orders History
-    val orderHistory: StateFlow<List<OrderEntity>> = repository.orderHistory
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    // Past Orders History - Filters so each standard customer only sees their own orders
+    val orderHistory: StateFlow<List<OrderEntity>> = combine(
+        repository.orderHistory,
+        activeProfile,
+        isAdmin,
+        isCourier,
+        isSeller
+    ) { orders, profile, admin, courier, seller ->
+        if (admin || courier || seller) {
+            orders
+        } else if (profile != null) {
+            val profilePhone = profile.phone.trim().replace("+", "").replace(" ", "")
+            val profileName = profile.name.trim().lowercase()
+            orders.filter { order ->
+                val orderPhone = order.customerPhone.trim().replace("+", "").replace(" ", "")
+                val orderName = order.customerName.trim().lowercase()
+                orderPhone == profilePhone || 
+                (orderPhone.isNotEmpty() && profilePhone.contains(orderPhone)) ||
+                (profilePhone.isNotEmpty() && orderPhone.contains(profilePhone)) ||
+                orderName == profileName
+            }
+        } else {
+            emptyList()
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // database connection live status from repository
     val dbStatus: StateFlow<String> = repository.dbStatus
