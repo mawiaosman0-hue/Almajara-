@@ -4893,6 +4893,10 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
         }
     }
 
+    val pendingProductsCount = remember(allProducts) {
+        allProducts.count { !it.isApproved }
+    }
+
     if (activeDetailDialog != null) {
         val detailType = activeDetailDialog!!
         AlertDialog(
@@ -5250,6 +5254,55 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
     var prodStock by remember { mutableStateOf("15") }
     var prodImageRes by remember { mutableStateOf("laptop") }
     
+    var adminSelectedImageBase64 by remember { mutableStateOf<String?>(null) }
+
+    // Camera Launcher
+    val adminCameraLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (bitmap != null) {
+            val base64 = try {
+                val outputStream = java.io.ByteArrayOutputStream()
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 75, outputStream)
+                val byteArray = outputStream.toByteArray()
+                android.util.Base64.encodeToString(byteArray, android.util.Base64.DEFAULT)
+            } catch (e: Exception) {
+                null
+            }
+            if (base64 != null) {
+                adminSelectedImageBase64 = base64
+                Toast.makeText(context, "تم التقاط الصورة بنجاح! 📸", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    // Gallery Launcher
+    val adminGalleryLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            val base64 = try {
+                val bitmap = if (android.os.Build.VERSION.SDK_INT >= 29) {
+                    val source = android.graphics.ImageDecoder.createSource(context.contentResolver, uri)
+                    android.graphics.ImageDecoder.decodeBitmap(source)
+                } else {
+                    @Suppress("DEPRECATION")
+                    android.provider.MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+                }
+                val outputStream = java.io.ByteArrayOutputStream()
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 75, outputStream)
+                val byteArray = outputStream.toByteArray()
+                android.util.Base64.encodeToString(byteArray, android.util.Base64.DEFAULT)
+            } catch (e: Exception) {
+                null
+            }
+            if (base64 != null) {
+                adminSelectedImageBase64 = base64
+                Toast.makeText(context, "تم اختيار الصورة من المعرض بنجاح! 🖼️", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+    
     // Status update logic
     var isSubmitting by remember { mutableStateOf(false) }
 
@@ -5318,8 +5371,9 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                 "إضافة ➕" to 1,
                 "المنتجات🛍️" to 2,
                 (if (pendingCourierOrdersCount > 0) "الطلبات 📦 ($pendingCourierOrdersCount)" else "الطلبات📦") to 3,
+                "المناديب🚴" to 4,
                 "البائعين🧑‍💼" to 6,
-                "طلبات البائعين⏳" to 8,
+                (if (pendingProductsCount > 0) "طلبات البائعين⏳ ($pendingProductsCount)" else "طلبات البائعين⏳") to 8,
                 "المخزون📦" to 7,
                 "مفاتيح الربط🔑" to 5
             )
@@ -5587,6 +5641,67 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                         }
 
                         item {
+                            Text("صورة المنتج الحقيقية (المعرض أو الكاميرا) 📸:", color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Right)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                                border = BorderStroke(1.dp, CosmicSecondary.copy(alpha = 0.3f))
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    if (adminSelectedImageBase64 != null) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(100.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .border(1.dp, CosmicSecondary, RoundedCornerShape(8.dp)),
+                                            contentAlignment = Alignment.TopStart
+                                        ) {
+                                            ProductImagePlaceholder(adminSelectedImageBase64!!, modifier = Modifier.fillMaxSize())
+                                            IconButton(
+                                                onClick = { adminSelectedImageBase64 = null },
+                                                modifier = Modifier.size(24.dp).background(Color.Black.copy(0.6f), RoundedCornerShape(12.dp))
+                                            ) {
+                                                Icon(Icons.Default.Close, contentDescription = "حذف الصورة", tint = Color.Red, modifier = Modifier.size(14.dp))
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                    }
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Button(
+                                            onClick = { adminCameraLauncher.launch(null) },
+                                            colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant, contentColor = Color.White),
+                                            modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("الكاميرا 📸", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        }
+
+                                        Button(
+                                            onClick = { adminGalleryLauncher.launch("image/*") },
+                                            colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant, contentColor = Color.White),
+                                            modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Icon(Icons.Default.PhotoLibrary, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("المعرض 🖼️", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        item {
                             Text("اختر تصنيف القسم للمنتج:", color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Right)
                             val cats = listOf(
                                 Triple("electronics", "كوكب الإلكترونيات", "electronics"),
@@ -5641,7 +5756,7 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                         category = prodCategory,
                                         categoryArabic = prodCategoryArabic,
                                         rating = 4.8f,
-                                        imageResName = prodImageRes,
+                                        imageResName = adminSelectedImageBase64 ?: prodImageRes,
                                         isFavorite = false,
                                         stock = prodStock.toInt()
                                     )
@@ -5653,9 +5768,11 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                             prodDescription = ""
                                             prodPrice = ""
                                             prodStock = "15"
+                                            adminSelectedImageBase64 = null
                                             activeTab = 2 // Move to products list
                                         } else {
                                             Toast.makeText(context, "تم حفظ المنتج محلياً! ⚠️ فشل المزامنة الخارجية: $err", Toast.LENGTH_LONG).show()
+                                            adminSelectedImageBase64 = null
                                             activeTab = 2
                                         }
                                     }
@@ -6234,6 +6351,20 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                     var newCourierPhone by remember { mutableStateOf("") }
                     var newCourierState by remember { mutableStateOf("ولاية بورتسودان") }
                     var newCourierStatus by remember { mutableStateOf("نشط ومتوفر 🟢") }
+                    var selectedStatusFilter by remember { mutableStateOf("الكل") }
+                    var selectedCourierForDetails by remember { mutableStateOf<com.example.data.db.CourierEntity?>(null) }
+
+                    val totalCouriersCount = allCouriers.size
+                    val activeCouriersCount = allCouriers.count { it.status.contains("نشط") || it.status.contains("🟢") }
+                    val missionCouriersCount = allCouriers.count { it.status.contains("مهمة") || it.status.contains("🟡") }
+                    val unavailableCouriersCount = allCouriers.count { it.status.contains("غير متوفر") || it.status.contains("🔴") || it.status.contains("غير نشط") }
+
+                    val filteredCouriers = when (selectedStatusFilter) {
+                        "نشط ومتوفر 🟢" -> allCouriers.filter { it.status.contains("نشط") || it.status.contains("🟢") }
+                        "في مهمة توصيل 🟡" -> allCouriers.filter { it.status.contains("مهمة") || it.status.contains("🟡") }
+                        "غير متوفر 🔴" -> allCouriers.filter { it.status.contains("غير متوفر") || it.status.contains("🔴") || it.status.contains("غير نشط") }
+                        else -> allCouriers
+                    }
 
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -6248,6 +6379,76 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                 textAlign = TextAlign.Right,
                                 modifier = Modifier.fillMaxWidth()
                             )
+                        }
+
+                        // STATISTICS / CLASSIFICATION ROW
+                        item {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    text = "إحصائيات وتصنيف المناديب الفوري 📊",
+                                    color = CosmicSecondary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Right,
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    // Total Chip
+                                    val totalSelected = selectedStatusFilter == "الكل"
+                                    Card(
+                                        modifier = Modifier.weight(1f).clickable { selectedStatusFilter = "الكل" },
+                                        colors = CardDefaults.cardColors(containerColor = if (totalSelected) CosmicSecondary else CosmicSurfaceVariant.copy(0.3f)),
+                                        border = BorderStroke(1.dp, if (totalSelected) CosmicSecondary else Color.Transparent)
+                                    ) {
+                                        Column(modifier = Modifier.padding(8.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text("الكل 🚴", fontSize = 10.sp, color = if (totalSelected) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                            Text("$totalCouriersCount", fontSize = 14.sp, color = if (totalSelected) Color.Black else CosmicSecondary, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+
+                                    // Active Chip
+                                    val activeSelected = selectedStatusFilter == "نشط ومتوفر 🟢"
+                                    Card(
+                                        modifier = Modifier.weight(1.2f).clickable { selectedStatusFilter = "نشط ومتوفر 🟢" },
+                                        colors = CardDefaults.cardColors(containerColor = if (activeSelected) Color(0xFF2ECC71) else CosmicSurfaceVariant.copy(0.3f)),
+                                        border = BorderStroke(1.dp, if (activeSelected) Color(0xFF2ECC71) else Color.Transparent)
+                                    ) {
+                                        Column(modifier = Modifier.padding(8.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text("نشط 🟢", fontSize = 10.sp, color = if (activeSelected) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                            Text("$activeCouriersCount", fontSize = 14.sp, color = if (activeSelected) Color.Black else Color(0xFF2ECC71), fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+
+                                    // Mission Chip
+                                    val missionSelected = selectedStatusFilter == "في مهمة توصيل 🟡"
+                                    Card(
+                                        modifier = Modifier.weight(1.2f).clickable { selectedStatusFilter = "في مهمة توصيل 🟡" },
+                                        colors = CardDefaults.cardColors(containerColor = if (missionSelected) Color(0xFFF1C40F) else CosmicSurfaceVariant.copy(0.3f)),
+                                        border = BorderStroke(1.dp, if (missionSelected) Color(0xFFF1C40F) else Color.Transparent)
+                                    ) {
+                                        Column(modifier = Modifier.padding(8.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text("في مهمة 🟡", fontSize = 10.sp, color = if (missionSelected) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                            Text("$missionCouriersCount", fontSize = 14.sp, color = if (missionSelected) Color.Black else Color(0xFFF1C40F), fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+
+                                    // Unavailable Chip
+                                    val unselected = selectedStatusFilter == "غير متوفر 🔴"
+                                    Card(
+                                        modifier = Modifier.weight(1.2f).clickable { selectedStatusFilter = "غير متوفر 🔴" },
+                                        colors = CardColors(containerColor = if (unselected) Color(0xFFE74C3C) else CosmicSurfaceVariant.copy(0.3f), contentColor = Color.White, disabledContainerColor = Color.Transparent, disabledContentColor = Color.Transparent),
+                                        border = BorderStroke(1.dp, if (unselected) Color(0xFFE74C3C) else Color.Transparent)
+                                    ) {
+                                        Column(modifier = Modifier.padding(8.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text("غير متوفر 🔴", fontSize = 10.sp, color = if (unselected) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                                            Text("$unavailableCouriersCount", fontSize = 14.sp, color = if (unselected) Color.Black else Color(0xFFE74C3C), fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
                         }
 
                         item {
@@ -6357,17 +6558,17 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                             }
                         }
 
-                        if (allCouriers.isEmpty()) {
+                        if (filteredCouriers.isEmpty()) {
                             item {
                                 Box(
                                     modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text("لا توجد مناديب شحن مسجلة بقاعدة البيانات حالياً 🚴", color = MediumContrastTextDark, fontSize = 12.sp)
+                                    Text(if (allCouriers.isEmpty()) "لا توجد مناديب شحن مسجلة بقاعدة البيانات حالياً 🚴" else "لا توجد مناديب تطابق هذا التصنيف حالياً 🚴", color = MediumContrastTextDark, fontSize = 12.sp)
                                 }
                             }
                         } else {
-                            items(allCouriers) { courier ->
+                            items(filteredCouriers) { courier ->
                                 var isTasksExpanded by remember { mutableStateOf(false) }
                                 val courierOrders = allOrders.filter { 
                                     it.courierName.trim().equals(courier.name.trim(), ignoreCase = true) || 
@@ -6376,7 +6577,9 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                 val ordersCount = courierOrders.size
 
                                 Card(
-                                    modifier = Modifier.fillMaxWidth().animateContentSize(),
+                                    modifier = Modifier.fillMaxWidth().animateContentSize().clickable {
+                                        selectedCourierForDetails = courier
+                                    },
                                     colors = CardDefaults.cardColors(containerColor = CosmicSurface),
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
@@ -7046,6 +7249,144 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                 }
                             }
                         }
+                    }
+
+                    if (selectedCourierForDetails != null) {
+                        val courier = selectedCourierForDetails!!
+                        val courierOrders = allOrders.filter { 
+                            it.courierName.trim().equals(courier.name.trim(), ignoreCase = true) || 
+                            it.courierPhone.trim().replace("+", "").replace(" ", "") == courier.phone.trim().replace("+", "").replace(" ", "")
+                        }.groupBy { it.orderId }
+
+                        AlertDialog(
+                            onDismissRequest = { selectedCourierForDetails = null },
+                            title = {
+                                Text(
+                                    "تفاصيل كابتن التوصيل الكوني 🚴",
+                                    color = CosmicSecondary,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp,
+                                    textAlign = TextAlign.Right,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            },
+                            text = {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                                    horizontalAlignment = Alignment.End
+                                ) {
+                                    // Basic Courier Details
+                                    Card(
+                                        colors = CardDefaults.cardColors(containerColor = CosmicSurfaceVariant.copy(alpha = 0.5f)),
+                                        modifier = Modifier.fillMaxWidth(),
+                                        border = BorderStroke(1.dp, CosmicSecondary.copy(alpha = 0.2f))
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                                            horizontalAlignment = Alignment.End
+                                        ) {
+                                            Text(courier.name, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp)
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Row(
+                                                modifier = Modifier.clickable {
+                                                    try {
+                                                        val intent = android.content.Intent(android.content.Intent.ACTION_DIAL, android.net.Uri.parse("tel:${courier.phone}"))
+                                                        context.startActivity(intent)
+                                                    } catch (e: Exception) {
+                                                        Toast.makeText(context, "لا يمكن إجراء المكالمة الآن", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                },
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(courier.phone, fontSize = 12.sp, color = CosmicSecondary, fontWeight = FontWeight.Bold)
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Icon(Icons.Default.Phone, contentDescription = "اتصال", tint = CosmicSecondary, modifier = Modifier.size(16.dp))
+                                            }
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text("مناطق التغطية: ${courier.stateInfo}", fontSize = 12.sp, color = Color.White.copy(0.7f))
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            val statusColor = when {
+                                                courier.status.contains("متوفر") || courier.status.contains("🟢") -> Color.Green
+                                                courier.status.contains("مهمة") || courier.status.contains("🟡") -> CosmicTertiary
+                                                else -> Color.Red
+                                            }
+                                            Text("حالة المندوب الحالية: ${courier.status}", fontSize = 12.sp, color = statusColor, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(14.dp))
+
+                                    // Tasks/Orders List
+                                    Text(
+                                        "الطلبات والمهام المسندة (${courierOrders.size}) 📋",
+                                        fontWeight = FontWeight.Bold,
+                                        color = CosmicSecondary,
+                                        fontSize = 13.sp,
+                                        modifier = Modifier.padding(bottom = 6.dp)
+                                    )
+
+                                    if (courierOrders.isEmpty()) {
+                                        Text(
+                                            "لا توجد طلبيات نشطة مسندة لهذا المندوب حالياً 🚴",
+                                            fontSize = 11.sp,
+                                            color = Color.White.copy(0.5f),
+                                            textAlign = TextAlign.Right,
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)
+                                        )
+                                    } else {
+                                        courierOrders.entries.forEach { (orderId, itemsList) ->
+                                            val firstOrder = itemsList.firstOrNull()
+                                            val custName = firstOrder?.customerName ?: "عميل كوني"
+                                            val custPhone = firstOrder?.customerPhone ?: ""
+                                            val custAddress = firstOrder?.customerAddress ?: "ولاية بورتسودان"
+                                            val orderStatus = firstOrder?.statusArabic ?: "قيد التوصيل"
+                                            val subtotal = itemsList.sumOf { it.priceAtOrder * it.quantity }
+                                            val delFee = firstOrder?.deliveryFee ?: 0.0
+                                            val totalAmount = subtotal + delFee
+
+                                            Card(
+                                                colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                                                border = BorderStroke(1.dp, CosmicSecondary.copy(alpha = 0.1f))
+                                            ) {
+                                                Column(
+                                                    modifier = Modifier.padding(10.dp).fillMaxWidth(),
+                                                    horizontalAlignment = Alignment.End
+                                                ) {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Text("#${orderId.takeLast(6)}", fontSize = 11.sp, color = CosmicSecondary, fontWeight = FontWeight.Bold)
+                                                        Text(orderStatus, fontSize = 11.sp, color = CosmicSecondary, fontWeight = FontWeight.Bold)
+                                                    }
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Text("العميل: $custName", fontSize = 12.sp, color = Color.White)
+                                                    Text("الهاتف: $custPhone", fontSize = 11.sp, color = Color.White.copy(0.7f), modifier = Modifier.clickable {
+                                                        try {
+                                                            val intent = android.content.Intent(android.content.Intent.ACTION_DIAL, android.net.Uri.parse("tel:$custPhone"))
+                                                            context.startActivity(intent)
+                                                        } catch (e: Exception) {}
+                                                    })
+                                                    Text("العنوان: $custAddress", fontSize = 11.sp, color = Color.White.copy(0.7f))
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Text("إجمالي الفاتورة: ${"%,.0f".format(totalAmount)} جنيه سوداني", fontSize = 12.sp, color = CosmicSecondary, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                Button(
+                                    onClick = { selectedCourierForDetails = null },
+                                    colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black)
+                                ) {
+                                    Text("إغلاق التفاصيل ❌", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        )
                     }
                 }
                 5 -> {

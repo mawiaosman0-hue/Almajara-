@@ -72,8 +72,36 @@ class MajarahRepository(
         } catch (e: Exception) {
             e.printStackTrace()
             val parsedError = com.example.data.network.SupabaseClient.parseError(e)
-            Log.e("MajarahRepository", "Failed to register or upload profile to Supabase: $parsedError")
-            parsedError
+            Log.e("MajarahRepository", "Failed Supabase Auth signUp, trying direct profiles insert: $parsedError")
+            
+            try {
+                // Generates fallback UUID and registers profile directly in database tables
+                val userUuid = java.util.UUID.randomUUID().toString()
+                val createdAtMs = System.currentTimeMillis()
+                val profile = ProfileEntity(
+                    id = userUuid,
+                    name = name,
+                    phone = phone,
+                    email = email,
+                    password = password,
+                    createdAt = createdAtMs
+                )
+                profileDao.insertProfile(profile)
+                
+                val supabaseProfile = com.example.data.network.SupabaseProfile(
+                    id = userUuid,
+                    name = name,
+                    phone = phone,
+                    email = email,
+                    createdAt = com.example.data.network.SupabaseClient.formatEpochToIso(createdAtMs)
+                )
+                com.example.data.network.SupabaseClient.api.insertProfiles(listOf(supabaseProfile))
+                Log.d("MajarahRepository", "Profile fallback synced with Supabase directly with ID: $userUuid")
+                null // Return null (success)
+            } catch (fallbackErr: Exception) {
+                fallbackErr.printStackTrace()
+                "فشل التسجيل بالكامل: $parsedError\nتفاصيل إضافية: ${fallbackErr.localizedMessage}"
+            }
         }
     }
 
@@ -713,8 +741,11 @@ class MajarahRepository(
         customerPhone: String,
         customerAddress: String,
         items: List<CartItemWithProduct>,
-        discountFactor: Double = 1.0
+        discountFactor: Double = 1.0,
+        paymentMethod: String = ""
     ): String? {
+        val baseStatus = "جاري التجهيز للتوصيل 📦"
+        val finalStatus = if (paymentMethod.isNotBlank()) "$baseStatus ($paymentMethod)" else baseStatus
         val orders = items.map { item ->
             OrderEntity(
                 orderId = orderId,
@@ -723,7 +754,7 @@ class MajarahRepository(
                 priceAtOrder = item.product.price * discountFactor,
                 quantity = item.quantity,
                 orderDate = System.currentTimeMillis(),
-                statusArabic = "جاري التجهيز للتوصيل 📦",
+                statusArabic = finalStatus,
                 customerName = customerName,
                 customerPhone = customerPhone,
                 customerAddress = customerAddress,
@@ -835,10 +866,11 @@ class MajarahRepository(
 
     suspend fun insertCourier(courier: com.example.data.db.CourierEntity): String? {
         return try {
-            courierDao.insertCourier(courier)
+            val insertedId = courierDao.insertCourier(courier)
             try {
                 com.example.data.network.SupabaseClient.api.insertCouriers(
                     listOf(com.example.data.network.SupabaseCourier(
+                        id = insertedId.toInt(),
                         name = courier.name,
                         phone = courier.phone,
                         stateInfo = courier.stateInfo,
@@ -1161,10 +1193,11 @@ class MajarahRepository(
 
     suspend fun insertSeller(seller: com.example.data.db.SellerEntity): String? {
         return try {
-            sellerDao.insertSeller(seller)
+            val insertedId = sellerDao.insertSeller(seller)
             try {
                 com.example.data.network.SupabaseClient.api.insertSellers(
                     listOf(com.example.data.network.SupabaseSeller(
+                        id = insertedId.toInt(),
                         name = seller.name,
                         email = seller.email,
                         phone = seller.phone,

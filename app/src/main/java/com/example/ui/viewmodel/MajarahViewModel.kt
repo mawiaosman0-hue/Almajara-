@@ -73,6 +73,8 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
     val isSeller: StateFlow<Boolean> = combine(activeProfile, _isLoggedIn, repository.allSellers) { profile, loggedIn, sellers ->
         if (!loggedIn || profile == null) {
             false
+        } else if (profile.email.trim().lowercase() == "mawiaosman0@gmail.com") {
+            false
         } else {
             val emailClean = profile.email.trim().lowercase()
             sellers.any { s -> s.email.trim().lowercase() == emailClean }
@@ -81,6 +83,8 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
 
     val isCourier: StateFlow<Boolean> = combine(activeProfile, _isLoggedIn, repository.allCouriers) { profile, loggedIn, couriers ->
         if (!loggedIn || profile == null) {
+            false
+        } else if (profile.email.trim().lowercase() == "mawiaosman0@gmail.com") {
             false
         } else {
             val phoneClean = profile.phone.trim().replace("+", "").replace(" ", "")
@@ -707,6 +711,46 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
     fun updateOrderStatus(orderId: String, status: String, courierName: String = "", courierPhone: String = "", deliveryFee: Double? = null, onComplete: (String?) -> Unit) {
         viewModelScope.launch {
             val err = repository.updateOrderStatus(orderId, status, courierName, courierPhone, deliveryFee)
+            if (err == null) {
+                // If a courier was assigned, set their status to "في مهمة توصيل 🟡"
+                val finalName = courierName.trim()
+                val finalPhone = courierPhone.trim()
+                if (finalPhone.isNotEmpty() || finalName.isNotEmpty()) {
+                    val matchingCourier = allCouriers.value.find { c ->
+                        (finalName.isNotEmpty() && c.name.trim().equals(finalName, ignoreCase = true)) ||
+                        (finalPhone.isNotEmpty() && c.phone.trim().replace("+", "").replace(" ", "") == finalPhone.replace("+", "").replace(" ", ""))
+                    }
+                    if (matchingCourier != null && !matchingCourier.status.contains("مهمة")) {
+                        repository.updateCourier(matchingCourier.copy(status = "في مهمة توصيل 🟡"))
+                    }
+                }
+                
+                // If the status is "تم توصيل الطلب واستلام المبلغ ✅" or "الطلب ملغي ❌"
+                if (status.contains("تم توصيل") || status.contains("ملغي")) {
+                    val currentOrder = allOrdersFlow.value.find { it.orderId == orderId }
+                    val assignedCourierPhone = (currentOrder?.courierPhone ?: courierPhone).trim()
+                    val assignedCourierName = (currentOrder?.courierName ?: courierName).trim()
+                    
+                    if (assignedCourierPhone.isNotEmpty() || assignedCourierName.isNotEmpty()) {
+                        val matchingCourier = allCouriers.value.find { c ->
+                            (assignedCourierName.isNotEmpty() && c.name.trim().equals(assignedCourierName, ignoreCase = true)) ||
+                            (assignedCourierPhone.isNotEmpty() && c.phone.trim().replace("+", "").replace(" ", "") == assignedCourierPhone.replace("+", "").replace(" ", ""))
+                        }
+                        if (matchingCourier != null) {
+                            // Check if this courier has any other active/pending orders in "تم تسليم المندوب"
+                            val hasOtherActiveOrders = allOrdersFlow.value.any { o ->
+                                o.orderId != orderId &&
+                                ((assignedCourierName.isNotEmpty() && o.courierName.trim().equals(assignedCourierName, ignoreCase = true)) ||
+                                 (assignedCourierPhone.isNotEmpty() && o.courierPhone.trim().replace("+", "").replace(" ", "") == assignedCourierPhone.replace("+", "").replace(" ", ""))) &&
+                                o.statusArabic.contains("تم تسليم")
+                            }
+                            if (!hasOtherActiveOrders) {
+                                repository.updateCourier(matchingCourier.copy(status = "نشط ومتوفر 🟢"))
+                            }
+                        }
+                    }
+                }
+            }
             onComplete(err)
         }
     }

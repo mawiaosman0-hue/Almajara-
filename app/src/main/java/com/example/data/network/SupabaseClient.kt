@@ -158,7 +158,7 @@ interface SupabaseApi {
     @POST("rest/v1/products")
     suspend fun insertProducts(
         @Body products: List<SupabaseProduct>
-    ): List<SupabaseProduct>
+    ): okhttp3.ResponseBody
 
     @retrofit2.http.PATCH("rest/v1/products")
     suspend fun updateProduct(
@@ -180,7 +180,7 @@ interface SupabaseApi {
     @POST("rest/v1/orders")
     suspend fun insertOrders(
         @Body orders: List<SupabaseOrder>
-    ): List<SupabaseOrder>
+    ): okhttp3.ResponseBody
 
     @GET("rest/v1/orders")
     suspend fun getOrders(
@@ -190,7 +190,7 @@ interface SupabaseApi {
     @POST("rest/v1/profiles")
     suspend fun insertProfiles(
         @Body profiles: List<SupabaseProfile>
-    ): List<SupabaseProfile>
+    ): okhttp3.ResponseBody
 
     @GET("rest/v1/profiles")
     suspend fun getProfiles(
@@ -229,7 +229,7 @@ interface SupabaseApi {
     @POST("rest/v1/couriers")
     suspend fun insertCouriers(
         @Body couriers: List<SupabaseCourier>
-    ): List<SupabaseCourier>
+    ): okhttp3.ResponseBody
 
     @retrofit2.http.DELETE("rest/v1/couriers")
     suspend fun deleteCourier(
@@ -250,7 +250,7 @@ interface SupabaseApi {
     @POST("rest/v1/sellers")
     suspend fun insertSellers(
         @Body sellers: List<SupabaseSeller>
-    ): List<SupabaseSeller>
+    ): okhttp3.ResponseBody
 
     @retrofit2.http.DELETE("rest/v1/sellers")
     suspend fun deleteSeller(
