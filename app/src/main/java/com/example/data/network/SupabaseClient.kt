@@ -118,7 +118,23 @@ data class SupabaseVerifyOTPRequest(
     @Json(name = "token") val token: String
 )
 
+@JsonClass(generateAdapter = true)
+data class SupabaseOtpOptions(
+    @Json(name = "should_create_user") val shouldCreateUser: Boolean = true
+)
+
+@JsonClass(generateAdapter = true)
+data class SupabaseOtpRequest(
+    @Json(name = "email") val email: String,
+    @Json(name = "options") val options: SupabaseOtpOptions = SupabaseOtpOptions()
+)
+
 interface SupabaseApi {
+    @POST("auth/v1/otp")
+    suspend fun signInWithOtp(
+        @Body request: SupabaseOtpRequest
+    ): retrofit2.Response<okhttp3.ResponseBody>
+
     @POST("auth/v1/signup")
     suspend fun signUp(
         @Body request: SupabaseSignUpRequest

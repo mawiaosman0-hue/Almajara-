@@ -94,6 +94,12 @@ interface OrderDao {
             clearOrderHistory()
         }
     }
+
+    @Query("SELECT * FROM orders")
+    suspend fun getAllOrdersSnapshot(): List<OrderEntity>
+
+    @Query("SELECT * FROM orders WHERE orderId = :orderId")
+    suspend fun getOrderById(orderId: String): List<OrderEntity>
 }
 
 @Dao
