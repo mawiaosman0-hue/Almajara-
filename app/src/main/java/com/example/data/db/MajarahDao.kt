@@ -123,7 +123,7 @@ interface CourierDao {
     suspend fun getAllCouriersSnapshot(): List<CourierEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertCourier(courier: CourierEntity)
+    suspend fun insertCourier(courier: CourierEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCouriers(couriers: List<CourierEntity>)
@@ -144,7 +144,7 @@ interface SellerDao {
     suspend fun getAllSellersSnapshot(): List<SellerEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertSeller(seller: SellerEntity)
+    suspend fun insertSeller(seller: SellerEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSellers(sellers: List<SellerEntity>)

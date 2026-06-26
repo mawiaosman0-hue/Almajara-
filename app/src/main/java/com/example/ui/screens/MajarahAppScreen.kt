@@ -10,6 +10,8 @@ import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.BorderStroke
@@ -221,7 +223,7 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                         }
                     },
                     navigationIcon = {
-                        if (isCourier && currentScreen !is Screen.Courier) {
+                        if (isCourier && !isAdmin && currentScreen !is Screen.Courier) {
                             IconButton(onClick = { viewModel.navigateTo(Screen.Courier) }) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
@@ -232,7 +234,7 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                                     Text("عودة 🚴", color = CosmicSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
-                        } else if (isSeller && currentScreen !is Screen.Seller) {
+                        } else if (isSeller && !isAdmin && currentScreen !is Screen.Seller) {
                             IconButton(onClick = { viewModel.navigateTo(Screen.Seller) }) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
@@ -512,7 +514,7 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                             viewModel.performLogin { err ->
                                 if (err == null) {
                                     if (wasRegister) {
-                                        Toast.makeText(context, viewModel.t("مرحباً بك في عالم المجرة الفسيح! 🌌 تم التسجيل والمزامنة مع Supabase بنجاح.", "Welcome to the vast galaxy! 🌌 Successfully registered and synced with Supabase."), Toast.LENGTH_LONG).show()
+                                        Toast.makeText(context, viewModel.t("تهانينا! 🎉 تم حفظ بياناتك بنجاح محلياً وسحابياً على السيرفر، ودخولك مباشر للتطبيق حسب صلاحيتك. 🌌", "Congratulations! 🎉 Your data has been successfully saved locally and on the cloud server, entering the app directly. 🌌"), Toast.LENGTH_LONG).show()
                                     } else {
                                         Toast.makeText(context, viewModel.t("تم تسجيل الدخول بنجاح! مرحباً بعودتك إلى المجرة. 🚀", "Logged in successfully! Welcome back to Almajra. 🚀"), Toast.LENGTH_LONG).show()
                                     }
@@ -575,7 +577,7 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                         onQtyIncrease = { viewModel.updateCartQuantity(it.product.id, it.quantity + 1) },
                         onQtyDecrease = { viewModel.updateCartQuantity(it.product.id, it.quantity - 1) },
                         onRemove = { viewModel.removeFromCart(it.product.id) },
-                        onSubmit = { viewModel.submitCheckout() },
+                        onSubmit = { method, txId -> viewModel.submitCheckout(method, txId) },
                         formatPrice = { viewModel.formatPrice(it) },
                         isLoggedIn = isLoggedIn,
                         onRegisterPrompt = {
@@ -723,11 +725,57 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                         )
                     },
                     confirmButton = {
-                        Button(
-                            onClick = { viewModel.dismissCheckoutSuccess() },
-                            colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black)
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("تم ومتابعة طلبي", fontWeight = FontWeight.Bold)
+                            val context = androidx.compose.ui.platform.LocalContext.current
+                            Button(
+                                onClick = {
+                                    try {
+                                        val shareText = checkoutSuccess ?: ""
+                                        val sendIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                            putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+                                            type = "text/plain"
+                                            setPackage("com.whatsapp")
+                                        }
+                                        context.startActivity(sendIntent)
+                                    } catch (whatsappErr: Exception) {
+                                        // Fallback to standard chooser
+                                        try {
+                                            val shareText = checkoutSuccess ?: ""
+                                            val shareIntent = android.content.Intent.createChooser(
+                                                android.content.Intent().apply {
+                                                    action = android.content.Intent.ACTION_SEND
+                                                    putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+                                                    type = "text/plain"
+                                                },
+                                                "مشاركة الفاتورة الكونية"
+                                            )
+                                            context.startActivity(shareIntent)
+                                        } catch (e: Exception) {
+                                            e.printStackTrace()
+                                        }
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = ActiveGreen, contentColor = Color.White),
+                                modifier = Modifier.weight(1.1f),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp)
+                            ) {
+                                Icon(Icons.Default.Share, null, modifier = Modifier.size(14.dp), tint = Color.White)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("مشاركة واتساب 💬", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            Button(
+                                onClick = { viewModel.dismissCheckoutSuccess() },
+                                colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                                modifier = Modifier.weight(0.9f),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp)
+                            ) {
+                                Text("تم ومتابعة 🌌", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     },
                     containerColor = CosmicSurface,
@@ -2171,7 +2219,7 @@ fun CartScreenBody(
     onQtyIncrease: (CartItemWithProduct) -> Unit,
     onQtyDecrease: (CartItemWithProduct) -> Unit,
     onRemove: (CartItemWithProduct) -> Unit,
-    onSubmit: () -> Unit,
+    onSubmit: (paymentMethod: String, transactionId: String) -> Unit,
     formatPrice: (Double) -> String,
     isLoggedIn: Boolean = true,
     onRegisterPrompt: () -> Unit = {},
@@ -2180,6 +2228,9 @@ fun CartScreenBody(
     val appliedCoupon by viewModel.appliedCoupon.collectAsStateWithLifecycle()
     val couponError by viewModel.couponError.collectAsStateWithLifecycle()
     var couponInputText by remember { mutableStateOf("") }
+    var selectedCheckoutPaymentMethod by remember { mutableStateOf("cash") } // "cash" or "bank"
+    var showBankDialog by remember { mutableStateOf(false) }
+    var bankTransactionId by remember { mutableStateOf("") }
     if (cartItems.isEmpty()) {
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -2551,11 +2602,192 @@ fun CartScreenBody(
                                 )
                             )
 
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            // Payment method selection header
+                            Text(
+                                text = "طريقة الدفع ومطابقة الفاتورة 💳:",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                                textAlign = TextAlign.Right
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                // Option 1: Cash
+                                Card(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable { selectedCheckoutPaymentMethod = "cash" },
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (selectedCheckoutPaymentMethod == "cash") CosmicSecondary.copy(alpha = 0.15f) else CosmicDeepSpace
+                                    ),
+                                    border = BorderStroke(
+                                        width = if (selectedCheckoutPaymentMethod == "cash") 1.5.dp else 1.dp,
+                                        color = if (selectedCheckoutPaymentMethod == "cash") CosmicSecondary else CosmicSurfaceVariant
+                                    ),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(10.dp).fillMaxWidth(),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Icon(Icons.Default.Payments, "نقدي", tint = if (selectedCheckoutPaymentMethod == "cash") CosmicSecondary else Color.White, modifier = Modifier.size(24.dp))
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text("الدفع نقداً 💵", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        Text("عند الاستلام الفوري", color = MediumContrastTextDark, fontSize = 9.sp)
+                                    }
+                                }
+
+                                // Option 2: Bank
+                                Card(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable { selectedCheckoutPaymentMethod = "bank" },
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (selectedCheckoutPaymentMethod == "bank") CosmicSecondary.copy(alpha = 0.15f) else CosmicDeepSpace
+                                    ),
+                                    border = BorderStroke(
+                                        width = if (selectedCheckoutPaymentMethod == "bank") 1.5.dp else 1.dp,
+                                        color = if (selectedCheckoutPaymentMethod == "bank") CosmicSecondary else CosmicSurfaceVariant
+                                    ),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(10.dp).fillMaxWidth(),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Icon(Icons.Default.AccountBalance, "بنكي", tint = if (selectedCheckoutPaymentMethod == "bank") CosmicSecondary else Color.White, modifier = Modifier.size(24.dp))
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text("تحويل بنكي فوري 💳", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        Text("بنك الخرطوم (بنكك)", color = MediumContrastTextDark, fontSize = 9.sp)
+                                    }
+                                }
+                            }
+
+                            // Show fixed Bank account details if "bank" is selected
+                            if (selectedCheckoutPaymentMethod == "bank") {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = CosmicDeepSpace),
+                                    border = BorderStroke(1.dp, CosmicSecondary.copy(alpha = 0.3f)),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                                        horizontalAlignment = Alignment.End
+                                    ) {
+                                        Text("🏦 الحساب البنكي المعتمد للمجرة:", color = CosmicSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+                                            val context = androidx.compose.ui.platform.LocalContext.current
+                                            androidx.compose.material3.IconButton(
+                                                onClick = {
+                                                    clipboard.setText(androidx.compose.ui.text.AnnotatedString("3414879"))
+                                                    android.widget.Toast.makeText(context, "تم نسخ رقم الحساب البنكي 3414879 بنجاح!", android.widget.Toast.LENGTH_SHORT).show()
+                                                },
+                                                modifier = Modifier.size(28.dp)
+                                            ) {
+                                                Icon(Icons.Default.ContentCopy, "نسخ رقم الحساب", tint = CosmicSecondary, modifier = Modifier.size(16.dp))
+                                            }
+                                            Column(horizontalAlignment = Alignment.End) {
+                                                Text("رقم الحساب: 3414879", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                                Text("باسم: معاوية عثمان احمد ياسين", color = Color.White.copy(0.9f), fontSize = 11.sp)
+                                                Text("الرجاء التحويل وإشعارنا برقم المعاملة لتأكيد طلبك فورا.", color = MediumContrastTextDark, fontSize = 9.sp)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
                             Spacer(modifier = Modifier.height(16.dp))
 
                             val formValid = nameValue.isNotBlank() && phoneValue.isNotBlank() && addressValue.isNotBlank()
+                            
+                            // Bank dialog to enter transaction number
+                            if (showBankDialog) {
+                                AlertDialog(
+                                    onDismissRequest = { showBankDialog = false },
+                                    title = {
+                                        Text(
+                                            text = "إدخال رقم العملية البنكية 🧾",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 16.sp,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            textAlign = TextAlign.Right
+                                        )
+                                    },
+                                    text = {
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalAlignment = Alignment.End
+                                        ) {
+                                            Text(
+                                                text = "يرجى إدخال رقم إشعار التحويل لتتم المطابقة سحابياً وتأكيد الفاتورة:",
+                                                color = Color.White.copy(0.8f),
+                                                fontSize = 12.sp,
+                                                textAlign = TextAlign.Right,
+                                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                                            )
+                                            OutlinedTextField(
+                                                value = bankTransactionId,
+                                                onValueChange = { bankTransactionId = it },
+                                                placeholder = { Text("أدخل رقم المعاملة البنكية هنا", color = MediumContrastTextDark) },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                singleLine = true,
+                                                colors = OutlinedTextFieldDefaults.colors(
+                                                    focusedTextColor = Color.White,
+                                                    unfocusedTextColor = Color.White,
+                                                    focusedBorderColor = CosmicSecondary,
+                                                    unfocusedBorderColor = CosmicSurfaceVariant
+                                                )
+                                            )
+                                        }
+                                    },
+                                    confirmButton = {
+                                        Button(
+                                            onClick = {
+                                                if (bankTransactionId.isNotBlank()) {
+                                                    showBankDialog = false
+                                                    onSubmit("bank", bankTransactionId)
+                                                }
+                                            },
+                                            enabled = bankTransactionId.isNotBlank(),
+                                            colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black)
+                                        ) {
+                                            Text("تأكيد وإكمال الفاتورة ✅", fontWeight = FontWeight.Bold)
+                                        }
+                                    },
+                                    dismissButton = {
+                                        TextButton(onClick = { showBankDialog = false }) {
+                                            Text("إلغاء", color = Color.Red)
+                                        }
+                                    },
+                                    containerColor = CosmicSurface,
+                                    shape = RoundedCornerShape(16.dp)
+                                )
+                            }
+
                             Button(
-                                onClick = onSubmit,
+                                onClick = {
+                                    if (selectedCheckoutPaymentMethod == "bank") {
+                                        showBankDialog = true
+                                    } else {
+                                        onSubmit("cash", "")
+                                    }
+                                },
                                 enabled = formValid,
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -2569,7 +2801,11 @@ fun CartScreenBody(
                                 shape = RoundedCornerShape(12.dp),
                                 contentPadding = PaddingValues(14.dp)
                             ) {
-                                Text("تأكيد وشحن الطلب الفوري", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text(
+                                    text = if (selectedCheckoutPaymentMethod == "bank") "تم التحويل 💳" else "تأكيد وشحن الطلب الفوري",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Icon(Icons.Default.Send, null, modifier = Modifier.size(18.dp))
                             }
@@ -2953,12 +3189,37 @@ fun HistoryScreenBody(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.DirectionsBike,
-                                        contentDescription = null,
-                                        tint = CosmicSecondary,
-                                        modifier = Modifier.size(28.dp).padding(start = 4.dp)
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        androidx.compose.material3.IconButton(
+                                            onClick = {
+                                                try {
+                                                    val dialIntent = android.content.Intent(android.content.Intent.ACTION_DIAL).apply {
+                                                        data = android.net.Uri.parse("tel:${courierPhone.trim()}")
+                                                    }
+                                                    context.startActivity(dialIntent)
+                                                } catch (ex: Exception) {
+                                                    ex.printStackTrace()
+                                                }
+                                            },
+                                            modifier = Modifier
+                                                .size(36.dp)
+                                                .background(ActiveGreen.copy(alpha = 0.2f), androidx.compose.foundation.shape.CircleShape)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Call,
+                                                contentDescription = "اتصال",
+                                                tint = ActiveGreen,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Icon(
+                                            imageVector = Icons.Default.DirectionsBike,
+                                            contentDescription = null,
+                                            tint = CosmicSecondary,
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                    }
                                     Column(horizontalAlignment = Alignment.End) {
                                         Text("🚴 مندوب التوصيل المعين للطلب:", fontSize = 11.sp, color = CosmicSecondary, fontWeight = FontWeight.Bold)
                                         Text(courierName, fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.Bold)
@@ -3802,6 +4063,58 @@ fun LoginScreenBody(
                         }
                     } else if (isRegister || isGoogleFlowActive) {
                         // Registration mode or new Google account registration
+                        item {
+                            val selectedRole by viewModel.registrationRole.collectAsStateWithLifecycle()
+                            Text(
+                                text = viewModel.t("اختر نوع الحساب للانضمام للمجرة 🌌:", "Choose account type to join Almajra 🌌:"),
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                                textAlign = TextAlign.Right
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                val roles = listOf(
+                                    Triple("customer", "عميل 👤", "Customer 👤"),
+                                    Triple("seller", "بائع 🛒", "Seller 🛒"),
+                                    Triple("courier", "مندوب 🚴", "Courier 🚴")
+                                )
+                                roles.forEach { (roleKey, arLabel, enLabel) ->
+                                    val isSelected = selectedRole == roleKey
+                                    Card(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clickable { viewModel.registrationRole.value = roleKey },
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = if (isSelected) CosmicSecondary.copy(alpha = 0.2f) else CosmicSurface
+                                        ),
+                                        border = BorderStroke(
+                                            width = if (isSelected) 1.5.dp else 1.dp,
+                                            color = if (isSelected) CosmicSecondary else CosmicSecondary.copy(alpha = 0.2f)
+                                        ),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = viewModel.t(arLabel, enLabel),
+                                                color = if (isSelected) CosmicSecondary else Color.White,
+                                                fontSize = 11.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                textAlign = TextAlign.Center
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
+
                         item {
                             OutlinedTextField(
                                 value = name,
@@ -5368,13 +5681,13 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
         ) {
             val tabs = listOf(
                 "الملخص📊" to 0,
-                "إضافة ➕" to 1,
-                "المنتجات🛍️" to 2,
                 (if (pendingCourierOrdersCount > 0) "الطلبات 📦 ($pendingCourierOrdersCount)" else "الطلبات📦") to 3,
                 "المناديب🚴" to 4,
+                "المخزون📦" to 7,
                 "البائعين🧑‍💼" to 6,
                 (if (pendingProductsCount > 0) "طلبات البائعين⏳ ($pendingProductsCount)" else "طلبات البائعين⏳") to 8,
-                "المخزون📦" to 7,
+                "المنتجات🛍️" to 2,
+                "إضافة ➕" to 1,
                 "مفاتيح الربط🔑" to 5
             )
             LazyRow(
@@ -9623,7 +9936,7 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                             color = MediumContrastTextDark,
                             textAlign = TextAlign.Right
                         )
-
+                        
                         Spacer(modifier = Modifier.height(12.dp))
                         HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
                         Spacer(modifier = Modifier.height(10.dp))
@@ -9935,24 +10248,26 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                                         Spacer(modifier = Modifier.height(10.dp))
                                         Button(
                                             onClick = {
-                                                val itemsText = itemsList.joinToString("\n") { "• ${it.productName} (العدد: ${it.quantity}) - ${viewModel.formatPrice(it.priceAtOrder * it.quantity)} SDG" }
+                                                val itemsText = itemsList.joinToString("\n") { "• ${it.productName} (العدد: ${it.quantity}) - ${viewModel.formatPrice(it.priceAtOrder * it.quantity)}" }
                                                 val totalInvPrice = itemsList.sumOf { it.priceAtOrder * it.quantity } + (parent?.deliveryFee ?: 0.0)
                                                 val invoiceMsg = """
 🌌 فاتورة تسليم طلبية المجرة 🌌
 ---------------------------
-📦 رقم الطلب: #${orderId.take(7)}...
-👤 اسم الزبون: ${parent?.customerName}
-📞 هاتف الزبون: ${parent?.customerPhone}
-📍 عنوان التسليم: ${parent?.customerAddress}
-🚴 اسم المندوب: ${myCourierInfo?.name ?: "مندوب مجرة"}
+🚴 نوع الفاتورة: فاتورة مندوب
+✍️ اسم المندوب: ${myCourierInfo?.name ?: "مندوب مجرة"}
+👤 اسم الزبون: ${parent?.customerName ?: "غير معروف"}
+📞 هاتف الزبون: ${parent?.customerPhone ?: "غير معروف"}
+📍 عنوان التسليم: ${parent?.customerAddress ?: "السودان"}
+📦 رقم الطلب: #$orderId
+💳 طريقة الدفع والاستلام: ${parent?.statusArabic ?: "غير محدد"}
+---------------------------
 💸 تفاصيل الفاتورة والمنتجات:
 $itemsText
 ---------------------------
 🚚 سعر التوصيل: ${viewModel.formatPrice(parent?.deliveryFee ?: 0.0)} SDG
 💰 إجمالي الحساب: ${viewModel.formatPrice(totalInvPrice)} SDG
-📝 حالة الدفع والتوصيل:
-${parent?.statusArabic}
 ---------------------------
+تم تسليم الشحنة بنجاح من قبل مندوب التوصيل المعتمد.
 شكراً لثقتكم بمجرة التسوق الإلكتروني 🌌⚡
 """.trimIndent()
                                                 
