@@ -40,7 +40,11 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
         database.orderDao(),
         database.profileDao(),
         database.courierDao(),
-        database.sellerDao()
+        database.sellerDao(),
+        database.pharmacyDao(),
+        database.pharmacyProductDao(),
+        database.pharmacyOrderDao(),
+        database.adminManagerDao()
     )
 
     // Current Navigation State
@@ -60,8 +64,31 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
 
     val activeProfile = MutableStateFlow<com.example.data.db.ProfileEntity?>(null)
 
-    val isAdmin: StateFlow<Boolean> = combine(activeProfile, _isLoggedIn) { profile, loggedIn ->
-        loggedIn && profile?.email?.trim()?.lowercase() == "mawiaosman0@gmail.com"
+    val allAdminManagers: StateFlow<List<com.example.data.db.AdminManagerEntity>> = repository.adminManagerDao.getAllAdminManagers().stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        emptyList()
+    )
+
+    val isGeneralAdmin: StateFlow<Boolean> = combine(activeProfile, _isLoggedIn) { profile, loggedIn ->
+        loggedIn && profile != null && (
+            profile.email.trim().lowercase() == "mawiaosman0@gmail.com" || 
+            profile.phone.trim() == "0910074223" || 
+            profile.name.trim() == "معاوية عثمان أحمد ياسين"
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val isAdmin: StateFlow<Boolean> = combine(isGeneralAdmin, activeProfile, _isLoggedIn, allAdminManagers) { isGen, profile, loggedIn, managers ->
+        loggedIn && profile != null && (
+            isGen || managers.any { m -> 
+                m.email.trim().lowercase() == profile.email.trim().lowercase() || 
+                m.phone.trim() == profile.phone.trim() 
+            }
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val isAdministrativeManager: StateFlow<Boolean> = combine(isGeneralAdmin, isAdmin) { isGen, isAdm ->
+        isAdm && !isGen
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val allSellers = repository.allSellers.stateIn(
@@ -100,6 +127,8 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
     val loginName = MutableStateFlow("")
     val loginPhone = MutableStateFlow("")
     val isRegisterMode = MutableStateFlow(false)
+    val isLoginLoading = MutableStateFlow(false)
+    val isGlobalLoading = MutableStateFlow(false)
     val registrationRole = MutableStateFlow("customer") // "customer", "seller", "courier"
     val showOtpVerification = MutableStateFlow(false)
     val otpVerificationEmail = MutableStateFlow("")
@@ -250,149 +279,184 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
         val password = loginPassword.value.trim()
         val role = registrationRole.value
 
+        isLoginLoading.value = true
         viewModelScope.launch {
             var error: String? = null
-            if (isRegisterMode.value) {
-                // Register
-                error = repository.registerUserProfile(name, phone, email, password)
-                
-                val isLocalSuccess = error == null || 
-                                     error.contains("تم الحفظ محلياً") || 
-                                     error.contains("profiles") || 
-                                     error.contains("الرفع للسيرفر") ||
-                                     error.contains("already registered", ignoreCase = true) ||
-                                     error.contains("already exists", ignoreCase = true)
+            try {
+                if (isRegisterMode.value) {
+                    // Register
+                    error = repository.registerUserProfile(name, phone, email, password)
+                    
+                    val isLocalSuccess = error == null || 
+                                         error.contains("تم الحفظ محلياً") || 
+                                         error.contains("profiles") || 
+                                         error.contains("الرفع للسيرفر") ||
+                                         error.contains("already registered", ignoreCase = true) ||
+                                         error.contains("already exists", ignoreCase = true)
 
-                if (isLocalSuccess) {
-                    // Create corresponding user type record if not customer
-                    if (role == "seller") {
-                        repository.insertSeller(
-                            com.example.data.db.SellerEntity(
+                    if (isLocalSuccess) {
+                        // Create corresponding user type record if not customer
+                        val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
+                        if (role == "seller") {
+                            repository.insertSeller(
+                                com.example.data.db.SellerEntity(
+                                    name = name,
+                                    email = email,
+                                    phone = phone,
+                                    classification = "تاجر ذهبي ⭐",
+                                    commissionRate = 0.10
+                                )
+                            )
+                        } else if (role == "courier") {
+                            repository.insertCourier(
+                                com.example.data.db.CourierEntity(
+                                    name = name,
+                                    phone = phone,
+                                    stateInfo = "ولاية بورتسودان",
+                                    status = "نشط ومتوفر 🟢"
+                                )
+                            )
+                        } else if (role == "pharmacist") {
+                            sharedPrefs.edit().putString("user_role_${email.trim().lowercase()}", "pharmacist").apply()
+                        } else if (role == "admin") {
+                            sharedPrefs.edit().putString("user_role_${email.trim().lowercase()}", "admin").apply()
+                        }
+
+                        // Show success Toast for local and cloud save
+                        viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                            android.widget.Toast.makeText(
+                                getApplication(),
+                                "نجاح الحفظ سحابياً ومحلياً ✅",
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
+                        }
+
+                        // Log in directly
+                        val loginResult = repository.loginUserProfile(email, password)
+                        val p = loginResult.first
+                        if (p != null) {
+                            sharedPrefs.edit().putBoolean("is_logged_in_state", true).apply()
+
+                            activeProfile.value = p
+                            _isLoggedIn.value = true
+                            checkoutName.value = p.name
+                            checkoutPhone.value = p.phone
+
+                            val cleanP = p.phone.trim().replace("+", "").replace(" ", "")
+                            val matchesCourier = database.courierDao().getAllCouriersSnapshot().any { c ->
+                                c.phone.trim().replace("+", "").replace(" ", "") == cleanP || c.phone.trim() == p.phone.trim()
+                            }
+                            val matchesSeller = database.sellerDao().getAllSellersSnapshot().any { s ->
+                                s.email.trim().lowercase() == p.email.trim().lowercase()
+                            }
+                            val isPharmacistUser = role == "pharmacist" || sharedPrefs.getString("user_role_${p.email.trim().lowercase()}", "") == "pharmacist"
+                            val isAdminUser = p.email.trim().lowercase() == "mawiaosman0@gmail.com" || role == "admin" || sharedPrefs.getString("user_role_${p.email.trim().lowercase()}", "") == "admin"
+
+                            if (isAdminUser) {
+                                _currentScreen.value = Screen.Admin
+                            } else if (role == "courier" || matchesCourier) {
+                                _currentScreen.value = Screen.Courier
+                            } else if (role == "seller" || matchesSeller) {
+                                _currentScreen.value = Screen.Seller
+                            } else if (isPharmacistUser) {
+                                _selectedCategory.value = "pharmacy"
+                                _currentScreen.value = Screen.Home
+                            } else {
+                                _currentScreen.value = Screen.Home
+                            }
+
+                            // Clear register state
+                            isRegisterMode.value = false
+                            showOtpVerification.value = false
+                            error = null // Clear error to represent success
+                        } else {
+                            // Fallback to manual local user profile construction
+                            val fallbackProfile = database.profileDao().getAllProfiles().firstOrNull() ?: com.example.data.db.ProfileEntity(
+                                id = java.util.UUID.randomUUID().toString(),
                                 name = name,
+                                phone = phone,
                                 email = email,
-                                phone = phone,
-                                classification = "تاجر ذهبي ⭐",
-                                commissionRate = 0.10
+                                password = password
                             )
-                        )
-                    } else if (role == "courier") {
-                        repository.insertCourier(
-                            com.example.data.db.CourierEntity(
-                                name = name,
-                                phone = phone,
-                                stateInfo = "ولاية بورتسودان",
-                                status = "نشط ومتوفر 🟢"
-                            )
-                        )
-                    }
+                            database.profileDao().clearProfiles()
+                            database.profileDao().insertProfile(fallbackProfile)
 
-                    // Log in directly
-                    val loginResult = repository.loginUserProfile(email, password)
-                    val p = loginResult.first
-                    if (p != null) {
+                            sharedPrefs.edit().putBoolean("is_logged_in_state", true).apply()
+
+                            activeProfile.value = fallbackProfile
+                            _isLoggedIn.value = true
+                            checkoutName.value = fallbackProfile.name
+                            checkoutPhone.value = fallbackProfile.phone
+
+                            val isPharmacistUser = role == "pharmacist" || sharedPrefs.getString("user_role_${fallbackProfile.email.trim().lowercase()}", "") == "pharmacist"
+                            val isAdminUser = fallbackProfile.email.trim().lowercase() == "mawiaosman0@gmail.com" || role == "admin" || sharedPrefs.getString("user_role_${fallbackProfile.email.trim().lowercase()}", "") == "admin"
+
+                            if (isAdminUser) {
+                                _currentScreen.value = Screen.Admin
+                            } else if (role == "courier") {
+                                _currentScreen.value = Screen.Courier
+                            } else if (role == "seller") {
+                                _currentScreen.value = Screen.Seller
+                            } else if (isPharmacistUser) {
+                                _selectedCategory.value = "pharmacy"
+                                _currentScreen.value = Screen.Home
+                            } else {
+                                _currentScreen.value = Screen.Home
+                            }
+
+                            isRegisterMode.value = false
+                            showOtpVerification.value = false
+                            error = null
+                        }
+                    }
+                } else {
+                    // Sign In
+                    val result = repository.loginUserProfile(email, password)
+                    error = result.second
+                    if (error == null) {
                         val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
                         sharedPrefs.edit().putBoolean("is_logged_in_state", true).apply()
 
+                        val p = result.first
                         activeProfile.value = p
                         _isLoggedIn.value = true
-                        checkoutName.value = p.name
-                        checkoutPhone.value = p.phone
+                        val pPhone = p?.phone ?: ""
+                        checkoutName.value = p?.name ?: ""
+                        checkoutPhone.value = pPhone
 
-                        val cleanP = p.phone.trim().replace("+", "").replace(" ", "")
+                        val cleanP = pPhone.trim().replace("+", "").replace(" ", "")
                         val matchesCourier = database.courierDao().getAllCouriersSnapshot().any { c ->
-                            c.phone.trim().replace("+", "").replace(" ", "") == cleanP || c.phone.trim() == p.phone.trim()
+                            c.phone.trim().replace("+", "").replace(" ", "") == cleanP || c.phone.trim() == pPhone.trim()
                         }
                         val matchesSeller = database.sellerDao().getAllSellersSnapshot().any { s ->
-                            s.email.trim().lowercase() == p.email.trim().lowercase()
+                            s.email.trim().lowercase() == p?.email?.trim()?.lowercase()
                         }
+                        val isPharmacistUser = sharedPrefs.getString("user_role_${p?.email?.trim()?.lowercase()}", "") == "pharmacist"
+                        val isAdminUser = p?.email?.trim()?.lowercase() == "mawiaosman0@gmail.com" || sharedPrefs.getString("user_role_${p?.email?.trim()?.lowercase()}", "") == "admin"
 
-                        if (p.email.trim().lowercase() == "mawiaosman0@gmail.com") {
+                        if (isAdminUser) {
                             _currentScreen.value = Screen.Admin
-                        } else if (role == "courier" || matchesCourier) {
+                        } else if (matchesCourier) {
                             _currentScreen.value = Screen.Courier
-                        } else if (role == "seller" || matchesSeller) {
+                        } else if (matchesSeller) {
                             _currentScreen.value = Screen.Seller
+                        } else if (isPharmacistUser) {
+                            _selectedCategory.value = "pharmacy"
+                            _currentScreen.value = Screen.Home
                         } else {
                             _currentScreen.value = Screen.Home
                         }
-
-                        // Clear register state
-                        isRegisterMode.value = false
-                        showOtpVerification.value = false
-                        error = null // Clear error to represent success
-                    } else {
-                        // Fallback to manual local user profile construction
-                        val fallbackProfile = database.profileDao().getAllProfiles().firstOrNull() ?: com.example.data.db.ProfileEntity(
-                            id = java.util.UUID.randomUUID().toString(),
-                            name = name,
-                            phone = phone,
-                            email = email,
-                            password = password
-                        )
-                        database.profileDao().clearProfiles()
-                        database.profileDao().insertProfile(fallbackProfile)
-
-                        val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
-                        sharedPrefs.edit().putBoolean("is_logged_in_state", true).apply()
-
-                        activeProfile.value = fallbackProfile
-                        _isLoggedIn.value = true
-                        checkoutName.value = fallbackProfile.name
-                        checkoutPhone.value = fallbackProfile.phone
-
-                        if (fallbackProfile.email.trim().lowercase() == "mawiaosman0@gmail.com") {
-                            _currentScreen.value = Screen.Admin
-                        } else if (role == "courier") {
-                            _currentScreen.value = Screen.Courier
-                        } else if (role == "seller") {
-                            _currentScreen.value = Screen.Seller
-                        } else {
-                            _currentScreen.value = Screen.Home
-                        }
-
-                        isRegisterMode.value = false
-                        showOtpVerification.value = false
-                        error = null
+                    } else if (error != null && (error.contains("Email not confirmed", ignoreCase = true) || error.contains("تأكيد", ignoreCase = true))) {
+                        otpVerificationEmail.value = email
+                        showOtpVerification.value = true
                     }
                 }
-            } else {
-                // Sign In
-                val result = repository.loginUserProfile(email, password)
-                error = result.second
-                if (error == null) {
-                    val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
-                    sharedPrefs.edit().putBoolean("is_logged_in_state", true).apply()
-
-                    val p = result.first
-                    activeProfile.value = p
-                    _isLoggedIn.value = true
-                    val pPhone = p?.phone ?: ""
-                    checkoutName.value = p?.name ?: ""
-                    checkoutPhone.value = pPhone
-
-                    val cleanP = pPhone.trim().replace("+", "").replace(" ", "")
-                    val matchesCourier = database.courierDao().getAllCouriersSnapshot().any { c ->
-                        c.phone.trim().replace("+", "").replace(" ", "") == cleanP || c.phone.trim() == pPhone.trim()
-                    }
-                    val matchesSeller = database.sellerDao().getAllSellersSnapshot().any { s ->
-                        s.email.trim().lowercase() == p?.email?.trim()?.lowercase()
-                    }
-
-                    if (p?.email?.trim()?.lowercase() == "mawiaosman0@gmail.com") {
-                        _currentScreen.value = Screen.Admin
-                    } else if (matchesCourier) {
-                        _currentScreen.value = Screen.Courier
-                    } else if (matchesSeller) {
-                        _currentScreen.value = Screen.Seller
-                    } else {
-                        _currentScreen.value = Screen.Home
-                    }
-                } else if (error != null && (error.contains("Email not confirmed", ignoreCase = true) || error.contains("تأكيد", ignoreCase = true))) {
-                    otpVerificationEmail.value = email
-                    showOtpVerification.value = true
-                }
+            } catch (e: Exception) {
+                error = e.localizedMessage ?: e.message
+            } finally {
+                isLoginLoading.value = false
+                onSuccess(error)
             }
-            onSuccess(error)
         }
     }
 
@@ -823,6 +887,75 @@ $couponMessage---------------------------
         }
     }
 
+    fun addAdminManager(name: String, email: String, phone: String, onComplete: (String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                repository.adminManagerDao.insertAdminManager(
+                    com.example.data.db.AdminManagerEntity(
+                        name = name,
+                        email = email,
+                        phone = phone
+                    )
+                )
+                onComplete(null)
+            } catch (e: Exception) {
+                onComplete(e.localizedMessage ?: "حدث خطأ غير معروف")
+            }
+        }
+    }
+
+    fun removeAdminManager(id: Int, onComplete: (String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                repository.adminManagerDao.deleteAdminManager(id)
+                onComplete(null)
+            } catch (e: Exception) {
+                onComplete(e.localizedMessage ?: "حدث خطأ غير معروف")
+            }
+        }
+    }
+
+    fun activateAdminManager(name: String, email: String, phone: String, password: String, onComplete: (String?) -> Unit) {
+        isLoginLoading.value = true
+        viewModelScope.launch {
+            try {
+                // 1. Register profile
+                val error = repository.registerUserProfile(name, phone, email, password)
+                
+                // 2. Set admin role in prefs
+                val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
+                sharedPrefs.edit().putString("user_role_${email.trim().lowercase()}", "admin").apply()
+                sharedPrefs.edit().putBoolean("is_logged_in_state", true).apply()
+                
+                // 3. Auto login
+                val loginResult = repository.loginUserProfile(email, password)
+                val p = loginResult.first ?: com.example.data.db.ProfileEntity(
+                    id = java.util.UUID.randomUUID().toString(),
+                    name = name,
+                    phone = phone,
+                    email = email,
+                    password = password
+                )
+                
+                database.profileDao().clearProfiles()
+                database.profileDao().insertProfile(p)
+                
+                activeProfile.value = p
+                _isLoggedIn.value = true
+                checkoutName.value = p.name
+                checkoutPhone.value = p.phone
+                
+                _currentScreen.value = Screen.Admin
+                
+                onComplete(null)
+            } catch (e: Exception) {
+                onComplete(e.localizedMessage ?: "حدث خطأ غير معروف")
+            } finally {
+                isLoginLoading.value = false
+            }
+        }
+    }
+
     fun updateCourier(courier: com.example.data.db.CourierEntity, onComplete: (String?) -> Unit = {}) {
         viewModelScope.launch {
             val err = repository.updateCourier(courier)
@@ -890,6 +1023,224 @@ $couponMessage---------------------------
                 }
             }
             onComplete(err)
+        }
+    }
+
+    // --- Planet Pharmacy State Flows ---
+    val allPharmacies = repository.allPharmacies.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        emptyList()
+    )
+
+    val allPharmacyProducts = repository.allPharmacyProducts.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        emptyList()
+    )
+
+    val allPharmacyOrders = repository.allPharmacyOrders.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        emptyList()
+    )
+
+    val isPharmacist: StateFlow<Boolean> = combine(activeProfile, _isLoggedIn, allPharmacies) { profile, loggedIn, pharmacies ->
+        if (!loggedIn || profile == null) {
+            false
+        } else if (profile.email.trim().lowercase() == "mawiaosman0@gmail.com") {
+            false
+        } else {
+            val emailClean = profile.email.trim().lowercase()
+            val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
+            val isPharmPref = sharedPrefs.getString("user_role_${profile.email}", "") == "pharmacist"
+            isPharmPref || pharmacies.any { p -> p.pharmacistEmail.trim().lowercase() == emailClean }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    fun getPharmacyByPharmacistEmail(email: String, onResult: (com.example.data.db.PharmacyEntity?) -> Unit) {
+        viewModelScope.launch {
+            val res = repository.getPharmacyByPharmacistEmail(email)
+            onResult(res)
+        }
+    }
+
+    fun addPharmacy(name: String, doctorName: String, phone: String, location: String, pharmacistEmail: String, onComplete: (String?) -> Unit) {
+        isGlobalLoading.value = true
+        viewModelScope.launch {
+            var error: String? = null
+            try {
+                val p = com.example.data.db.PharmacyEntity(
+                    name = name,
+                    doctorName = doctorName,
+                    phone = phone,
+                    location = location,
+                    pharmacistEmail = pharmacistEmail,
+                    isApproved = false
+                )
+                repository.insertPharmacy(p)
+            } catch (e: Exception) {
+                error = e.localizedMessage ?: "حدث خطأ أثناء حفظ الصيدلية"
+            } finally {
+                isGlobalLoading.value = false
+                onComplete(error)
+            }
+        }
+    }
+
+    fun approvePharmacy(id: Int, onComplete: (String?) -> Unit) {
+        isGlobalLoading.value = true
+        viewModelScope.launch {
+            var error: String? = null
+            try {
+                repository.updatePharmacyApproval(id, true)
+            } catch (e: Exception) {
+                error = e.localizedMessage
+            } finally {
+                isGlobalLoading.value = false
+                onComplete(error)
+            }
+        }
+    }
+
+    fun deletePharmacy(id: Int, onComplete: (String?) -> Unit) {
+        isGlobalLoading.value = true
+        viewModelScope.launch {
+            var error: String? = null
+            try {
+                repository.deletePharmacy(id)
+            } catch (e: Exception) {
+                error = e.localizedMessage
+            } finally {
+                isGlobalLoading.value = false
+                onComplete(error)
+            }
+        }
+    }
+
+    fun addPharmacyProduct(pharmacyId: Int, type: String, name: String, company: String, price: Double, imageBase64: String, onComplete: (String?) -> Unit) {
+        isGlobalLoading.value = true
+        viewModelScope.launch {
+            var error: String? = null
+            try {
+                val prod = com.example.data.db.PharmacyProductEntity(
+                    pharmacyId = pharmacyId,
+                    type = type,
+                    name = name,
+                    company = company,
+                    price = price,
+                    imageBase64 = imageBase64,
+                    isApproved = false
+                )
+                repository.insertPharmacyProduct(prod)
+            } catch (e: Exception) {
+                error = e.localizedMessage ?: "حدث خطأ أثناء حفظ المنتج"
+            } finally {
+                isGlobalLoading.value = false
+                onComplete(error)
+            }
+        }
+    }
+
+    fun approvePharmacyProduct(id: Int, onComplete: (String?) -> Unit) {
+        isGlobalLoading.value = true
+        viewModelScope.launch {
+            var error: String? = null
+            try {
+                repository.updatePharmacyProductApproval(id, true)
+            } catch (e: Exception) {
+                error = e.localizedMessage
+            } finally {
+                isGlobalLoading.value = false
+                onComplete(error)
+            }
+        }
+    }
+
+    fun deletePharmacyProduct(id: Int, onComplete: (String?) -> Unit) {
+        isGlobalLoading.value = true
+        viewModelScope.launch {
+            var error: String? = null
+            try {
+                repository.deletePharmacyProduct(id)
+            } catch (e: Exception) {
+                error = e.localizedMessage
+            } finally {
+                isGlobalLoading.value = false
+                onComplete(error)
+            }
+        }
+    }
+
+    fun getProductsByPharmacy(pharmacyId: Int): kotlinx.coroutines.flow.Flow<List<com.example.data.db.PharmacyProductEntity>> {
+        return repository.getProductsByPharmacy(pharmacyId)
+    }
+
+    fun addPharmacyOrder(pharmacyId: Int, customerName: String, customerPhone: String, customerEmail: String, prescriptionBase64: String, onComplete: (String?) -> Unit) {
+        isGlobalLoading.value = true
+        viewModelScope.launch {
+            var error: String? = null
+            try {
+                val ord = com.example.data.db.PharmacyOrderEntity(
+                    pharmacyId = pharmacyId,
+                    customerName = customerName,
+                    customerPhone = customerPhone,
+                    customerEmail = customerEmail,
+                    prescriptionImageBase64 = prescriptionBase64,
+                    status = "بانتظار الصيدلي"
+                )
+                repository.insertPharmacyOrder(ord)
+            } catch (e: Exception) {
+                error = e.localizedMessage ?: "حدث خطأ أثناء تقديم الروشتة"
+            } finally {
+                isGlobalLoading.value = false
+                onComplete(error)
+            }
+        }
+    }
+
+    fun pharmacistExecuteOrder(orderId: Int, medicinesJson: String, totalPrice: Double, onComplete: (String?) -> Unit) {
+        isGlobalLoading.value = true
+        viewModelScope.launch {
+            var error: String? = null
+            try {
+                repository.updatePharmacyOrderPriceAndStatus(orderId, "بانتظار المدير", totalPrice, medicinesJson)
+            } catch (e: Exception) {
+                error = e.localizedMessage
+            } finally {
+                isGlobalLoading.value = false
+                onComplete(error)
+            }
+        }
+    }
+
+    fun adminApprovePharmacyOrder(orderId: Int, courierName: String, courierPhone: String, deliveryFee: Double, onComplete: (String?) -> Unit) {
+        isGlobalLoading.value = true
+        viewModelScope.launch {
+            var error: String? = null
+            try {
+                repository.assignPharmacyOrderCourierAndDeliveryFee(orderId, "تم تحديد السعر النهائي", courierName, courierPhone, deliveryFee)
+            } catch (e: Exception) {
+                error = e.localizedMessage
+            } finally {
+                isGlobalLoading.value = false
+                onComplete(error)
+            }
+        }
+    }
+
+    fun updatePharmacyOrderStatus(orderId: Int, status: String, onComplete: (String?) -> Unit) {
+        isGlobalLoading.value = true
+        viewModelScope.launch {
+            var error: String? = null
+            try {
+                repository.updatePharmacyOrderStatus(orderId, status)
+            } catch (e: Exception) {
+                error = e.localizedMessage
+            } finally {
+                isGlobalLoading.value = false
+                onComplete(error)
+            }
         }
     }
 }

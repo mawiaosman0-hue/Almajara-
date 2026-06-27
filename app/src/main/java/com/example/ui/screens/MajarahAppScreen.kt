@@ -64,6 +64,106 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 
 @Composable
+fun CosmicMajarahLoader(
+    modifier: Modifier = Modifier,
+    logoSize: androidx.compose.ui.unit.Dp = 64.dp
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "stars_rotation")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(3000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "stars_rotation"
+    )
+
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        // Revolving Stars and Orbits
+        Canvas(modifier = Modifier.size(logoSize * 1.6f)) {
+            val center = androidx.compose.ui.geometry.Offset(size.width / 2, size.height / 2)
+            val radius = size.width / 2.2f
+            
+            // Draw a subtle orbit path
+            drawCircle(
+                color = CosmicSecondary.copy(alpha = 0.15f),
+                radius = radius,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                    width = 1.5f,
+                    pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
+                )
+            )
+
+            // Draw spinning stars around the logo
+            val numberOfStars = 4
+            for (i in 0 until numberOfStars) {
+                val angleInRad = Math.toRadians((rotation + (i * (360 / numberOfStars))).toDouble())
+                val starX = center.x + (radius * Math.cos(angleInRad)).toFloat()
+                val starY = center.y + (radius * Math.sin(angleInRad)).toFloat()
+                
+                // Draw star symbol or a cute sparkling star
+                drawCircle(
+                    color = CosmicSecondary,
+                    radius = 5f,
+                    center = androidx.compose.ui.geometry.Offset(starX, starY)
+                )
+                
+                // Draw smaller companion stars
+                val angleInRadComp = Math.toRadians((rotation + (i * (360 / numberOfStars)) + 25).toDouble())
+                val starXComp = center.x + ((radius - 8.dp.toPx()) * Math.cos(angleInRadComp)).toFloat()
+                val starYComp = center.y + ((radius - 8.dp.toPx()) * Math.sin(angleInRadComp)).toFloat()
+                drawCircle(
+                    color = CosmicPrimary,
+                    radius = 3f,
+                    center = androidx.compose.ui.geometry.Offset(starXComp, starYComp)
+                )
+            }
+        }
+
+        // Central Majarah Logo
+        Image(
+            painter = painterResource(id = R.drawable.img_majarah_logo_1782345985330),
+            contentDescription = "Loading...",
+            modifier = Modifier.size(logoSize)
+        )
+    }
+}
+
+@Composable
+fun CosmicLogoLoaderDialog() {
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = {},
+        properties = androidx.compose.ui.window.DialogProperties(
+            dismissOnBackPress = false,
+            dismissOnClickOutside = false,
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.85f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                CosmicMajarahLoader(logoSize = 80.dp)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "جاري الاتصال والتحميل الكوني... 🌌",
+                    color = CosmicSecondary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun ProductImagePlaceholder(imageName: String, modifier: Modifier = Modifier) {
     if (imageName.length > 50) {
         val bitmap = remember(imageName) {
@@ -695,7 +795,7 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator(color = CosmicSecondary)
+                        CosmicMajarahLoader(logoSize = 56.dp)
                     }
                 }
             }
@@ -1940,7 +2040,11 @@ fun HomeScreenBody(
             }
 
         // Main Product List Feed
-        if (products.isEmpty()) {
+        if (selectedCategory == "pharmacy") {
+            item {
+                com.example.ui.screens.PharmacyPlanetSection(viewModel = viewModel)
+            }
+        } else if (products.isEmpty()) {
             item {
                 Box(
                     modifier = Modifier
@@ -2999,7 +3103,7 @@ fun HistoryScreenBody(
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                CircularProgressIndicator(color = CosmicSecondary)
+                CosmicMajarahLoader(logoSize = 56.dp)
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     text = "جاري مزامنة وتحديث حالة طلباتك من السحابة... 🛰️",
@@ -3771,6 +3875,9 @@ fun LoginScreenBody(
     val scope = rememberCoroutineScope()
     var isCheckingEmail by remember { mutableStateOf(false) }
     var isGoogleAccountExists by remember { mutableStateOf(false) }
+    val isLoginLoading by viewModel.isLoginLoading.collectAsStateWithLifecycle()
+    val isGlobalLoading by viewModel.isGlobalLoading.collectAsStateWithLifecycle()
+    val isCurrentlyLoading = isCheckingEmail || isLoginLoading || isGlobalLoading
 
     val logoScale = remember { Animatable(0.2f) }
     val logoAlpha = remember { Animatable(0f) }
@@ -4037,32 +4144,8 @@ fun LoginScreenBody(
                         }
                     }
 
-                    if (isGoogleFlowActive && isGoogleAccountExists) {
-                        // Existing Google Account: Ask for Phone and Password only
-                        item {
-                            OutlinedTextField(
-                                value = phone,
-                                onValueChange = onPhoneChange,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("login_phone_input"),
-                                placeholder = { Text(viewModel.t("أكد رقم هاتف حسابك (مثال: 0912345678)", "Confirm account phone number (e.g., 0912345678)"), color = MediumContrastTextDark, fontSize = 13.sp) },
-                                leadingIcon = { Icon(Icons.Default.Phone, null, tint = CosmicSecondary) },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-                                singleLine = true,
-                                shape = RoundedCornerShape(12.dp),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = CosmicSecondary,
-                                    unfocusedBorderColor = CosmicSurfaceVariant,
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White,
-                                    focusedContainerColor = CosmicDeepSpace,
-                                    unfocusedContainerColor = CosmicDeepSpace
-                                )
-                            )
-                        }
-                    } else if (isRegister || isGoogleFlowActive) {
-                        // Registration mode or new Google account registration
+                    if (isRegister || isGoogleFlowActive) {
+                        // Registration mode or Google account registration/sync
                         item {
                             val selectedRole by viewModel.registrationRole.collectAsStateWithLifecycle()
                             Text(
@@ -4080,7 +4163,9 @@ fun LoginScreenBody(
                                 val roles = listOf(
                                     Triple("customer", "عميل 👤", "Customer 👤"),
                                     Triple("seller", "بائع 🛒", "Seller 🛒"),
-                                    Triple("courier", "مندوب 🚴", "Courier 🚴")
+                                    Triple("courier", "مندوب 🚴", "Courier 🚴"),
+                                    Triple("pharmacist", "صيدلي 💊", "Pharmacist 💊"),
+                                    Triple("admin", "مدير 👑", "Admin 👑")
                                 )
                                 roles.forEach { (roleKey, arLabel, enLabel) ->
                                     val isSelected = selectedRole == roleKey
@@ -4122,7 +4207,8 @@ fun LoginScreenBody(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("login_name_input"),
-                                placeholder = { Text(viewModel.t("الاسم بالكامل", "Full Name"), color = MediumContrastTextDark, fontSize = 13.sp) },
+                                label = { Text("الاسم بالكامل 👤", color = CosmicSecondary) },
+                                placeholder = null,
                                 leadingIcon = { Icon(Icons.Default.Person, null, tint = CosmicSecondary) },
                                 singleLine = true,
                                 shape = RoundedCornerShape(12.dp),
@@ -4188,52 +4274,189 @@ fun LoginScreenBody(
                         }
                     }
 
-                    item {
-                        OutlinedTextField(
-                            value = password,
-                            onValueChange = onPasswordChange,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("login_password_input"),
-                            placeholder = { Text(viewModel.t("كلمة المرور الخاصة بك", "Your password"), color = MediumContrastTextDark, fontSize = 13.sp) },
-                            leadingIcon = { Icon(Icons.Default.Lock, null, tint = CosmicSecondary) },
-                            trailingIcon = {
-                                IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                    Icon(
-                                        imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                        contentDescription = viewModel.t("عرض كلمة المرور", "Show password"),
-                                        tint = MediumContrastTextDark
-                                    )
-                                }
-                            },
-                            visualTransformation = if (passwordVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = CosmicSecondary,
-                                unfocusedBorderColor = CosmicSurfaceVariant,
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedContainerColor = CosmicDeepSpace,
-                                unfocusedContainerColor = CosmicDeepSpace
-                            )
-                        )
+                    val adminManagers by viewModel.allAdminManagers.collectAsStateWithLifecycle()
+                    val matchingAdminManager = if (email.trim().isNotEmpty()) {
+                        adminManagers.firstOrNull { manager ->
+                            val cleanInput = email.trim().lowercase()
+                            manager.email.trim().lowercase() == cleanInput || manager.phone.trim() == cleanInput
+                        }
+                    } else {
+                        null
                     }
 
-                    if (!isRegister) {
+                    if (matchingAdminManager != null) {
                         item {
-                            Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp), contentAlignment = Alignment.CenterEnd) {
-                                TextButton(
-                                    onClick = onForgotPassword,
-                                    contentPadding = PaddingValues(0.dp)
+                            Card(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                colors = CardDefaults.cardColors(containerColor = CosmicSurfaceVariant.copy(alpha = 0.45f)),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, CosmicSecondary.copy(alpha = 0.6f)),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     Text(
-                                        viewModel.t("نسيت كلمة المرور؟ 🔑 استعادة وحفظ برقم الهاتف", "Forgot Password? 🔑 Recover and save by phone"),
-                                        color = CosmicSecondary,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        textAlign = TextAlign.Right
+                                        text = "تأكيد هوية المدير الإداري: ${matchingAdminManager.name} 👑✨",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        textAlign = TextAlign.Center
                                     )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "مرحباً بك! لقد تم تسجيلك من قبل المدير العام. يرجى تعيين كلمة مرور للتطبيق بالأسفل وتأكيدها لتنشيط حسابك والدخول المباشر للوحة التحكم.",
+                                        color = CosmicSecondary,
+                                        fontSize = 11.sp,
+                                        textAlign = TextAlign.Center,
+                                        lineHeight = 15.sp
+                                    )
+                                    
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    
+                                    var adminPassword by remember { mutableStateOf("") }
+                                    var confirmPassword by remember { mutableStateOf("") }
+                                    var adminPassVisible by remember { mutableStateOf(false) }
+                                    
+                                    OutlinedTextField(
+                                        value = adminPassword,
+                                        onValueChange = { adminPassword = it },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        placeholder = { Text("أدخل كلمة المرور الجديدة للتطبيق 🔑", color = MediumContrastTextDark, fontSize = 12.sp) },
+                                        leadingIcon = { Icon(Icons.Default.Lock, null, tint = CosmicSecondary) },
+                                        trailingIcon = {
+                                            IconButton(onClick = { adminPassVisible = !adminPassVisible }) {
+                                                Icon(
+                                                    imageVector = if (adminPassVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                                    contentDescription = "عرض كلمة المرور",
+                                                    tint = MediumContrastTextDark
+                                                )
+                                            }
+                                        },
+                                        visualTransformation = if (adminPassVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                                        singleLine = true,
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedBorderColor = CosmicSecondary,
+                                            unfocusedBorderColor = CosmicSurfaceVariant,
+                                            focusedTextColor = Color.White,
+                                            unfocusedTextColor = Color.White,
+                                            focusedContainerColor = CosmicDeepSpace,
+                                            unfocusedContainerColor = CosmicDeepSpace
+                                        )
+                                    )
+                                    
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    
+                                    OutlinedTextField(
+                                        value = confirmPassword,
+                                        onValueChange = { confirmPassword = it },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        placeholder = { Text("تأكيد كلمة المرور الجديدة 🔒", color = MediumContrastTextDark, fontSize = 12.sp) },
+                                        leadingIcon = { Icon(Icons.Default.Lock, null, tint = CosmicSecondary) },
+                                        trailingIcon = {
+                                            IconButton(onClick = { adminPassVisible = !adminPassVisible }) {
+                                                Icon(
+                                                    imageVector = if (adminPassVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                                    contentDescription = "عرض كلمة المرور",
+                                                    tint = MediumContrastTextDark
+                                                )
+                                            }
+                                        },
+                                        visualTransformation = if (adminPassVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                                        singleLine = true,
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedBorderColor = CosmicSecondary,
+                                            unfocusedBorderColor = CosmicSurfaceVariant,
+                                            focusedTextColor = Color.White,
+                                            unfocusedTextColor = Color.White,
+                                            focusedContainerColor = CosmicDeepSpace,
+                                            unfocusedContainerColor = CosmicDeepSpace
+                                        )
+                                    )
+                                    
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    
+                                    Button(
+                                        onClick = {
+                                            if (adminPassword.length < 6) {
+                                                Toast.makeText(context, "يجب أن تكون كلمة المرور 6 أحرف أو أكثر ⚠️", Toast.LENGTH_SHORT).show()
+                                            } else if (adminPassword != confirmPassword) {
+                                                Toast.makeText(context, "كلمتا المرور غير متطابقتين! ⚠️", Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                viewModel.activateAdminManager(
+                                                    name = matchingAdminManager.name,
+                                                    email = matchingAdminManager.email,
+                                                    phone = matchingAdminManager.phone,
+                                                    password = adminPassword
+                                                ) { err ->
+                                                    if (err == null) {
+                                                        Toast.makeText(context, "تم تفعيل حسابك كمدير إداري بنجاح! 🎉👑", Toast.LENGTH_LONG).show()
+                                                    } else {
+                                                        Toast.makeText(context, "فشل التنشيط: $err", Toast.LENGTH_LONG).show()
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        enabled = adminPassword.isNotEmpty() && confirmPassword.isNotEmpty(),
+                                        colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("تفعيل الحساب وتعيين كلمة المرور 👑🔓", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        item {
+                            OutlinedTextField(
+                                value = password,
+                                onValueChange = onPasswordChange,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("login_password_input"),
+                                placeholder = { Text(viewModel.t("كلمة المرور الخاصة بك", "Your password"), color = MediumContrastTextDark, fontSize = 13.sp) },
+                                leadingIcon = { Icon(Icons.Default.Lock, null, tint = CosmicSecondary) },
+                                trailingIcon = {
+                                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                        Icon(
+                                            imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                            contentDescription = viewModel.t("عرض كلمة المرور", "Show password"),
+                                            tint = MediumContrastTextDark
+                                        )
+                                    }
+                                },
+                                visualTransformation = if (passwordVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = CosmicSecondary,
+                                    unfocusedBorderColor = CosmicSurfaceVariant,
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedContainerColor = CosmicDeepSpace,
+                                    unfocusedContainerColor = CosmicDeepSpace
+                                )
+                            )
+                        }
+
+                        if (!isRegister) {
+                            item {
+                                Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp), contentAlignment = Alignment.CenterEnd) {
+                                    TextButton(
+                                        onClick = onForgotPassword,
+                                        contentPadding = PaddingValues(0.dp)
+                                    ) {
+                                        Text(
+                                            viewModel.t("نسيت كلمة المرور؟ 🔑 استعادة وحفظ برقم الهاتف", "Forgot Password? 🔑 Recover and save by phone"),
+                                            color = CosmicSecondary,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            textAlign = TextAlign.Right
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -4374,15 +4597,15 @@ fun LoginScreenBody(
                                                         val p = remoteProfs.first()
                                                         googleEmailState = email
                                                         onEmailChange(email)
-                                                        onNameChange(p.name ?: name)
-                                                        onPhoneChange(p.phone ?: "")
+                                                        onNameChange("")
+                                                        onPhoneChange("")
                                                         isGoogleAccountExists = true
                                                         isGoogleFlowActive = true
                                                         Toast.makeText(context, "تم المتابعة بحسابك النشط ($email) والتحقق بنجاح! 💚📱", Toast.LENGTH_LONG).show()
                                                     } else {
                                                         googleEmailState = email
                                                         onEmailChange(email)
-                                                        onNameChange(name)
+                                                        onNameChange("")
                                                         onPhoneChange("")
                                                         isGoogleAccountExists = false
                                                         isGoogleFlowActive = true
@@ -4391,7 +4614,7 @@ fun LoginScreenBody(
                                                 } catch (e: Exception) {
                                                     googleEmailState = email
                                                     onEmailChange(email)
-                                                    onNameChange(name)
+                                                    onNameChange("")
                                                     onPhoneChange("")
                                                     isGoogleAccountExists = false
                                                     isGoogleFlowActive = true
@@ -4512,9 +4735,6 @@ fun LoginScreenBody(
                                 } catch (e: Exception) {
                                     // Security or other errors ignored
                                 }
-                                if (list.none { it.first.equals("mawiaosman0@gmail.com", ignoreCase = true) }) {
-                                    list.add(Pair("mawiaosman0@gmail.com", "معاوية عثمان"))
-                                }
                                 list
                             }
 
@@ -4545,15 +4765,15 @@ fun LoginScreenBody(
                                                         val p = remoteProfs.first()
                                                         googleEmailState = email
                                                         onEmailChange(email)
-                                                        onNameChange(p.name ?: name)
-                                                        onPhoneChange(p.phone ?: "")
+                                                        onNameChange("")
+                                                        onPhoneChange("")
                                                         isGoogleAccountExists = true
                                                         isGoogleFlowActive = true
                                                         Toast.makeText(context, "تم إرسال رمز تحقق حقيقي إلى بريدك الإلكتروني ($email) بنجاح عبر Supabase! 📧✨", Toast.LENGTH_LONG).show()
                                                     } else {
                                                         googleEmailState = email
                                                         onEmailChange(email)
-                                                        onNameChange(name)
+                                                        onNameChange("")
                                                         onPhoneChange("")
                                                         isGoogleAccountExists = false
                                                         isGoogleFlowActive = true
@@ -4562,7 +4782,7 @@ fun LoginScreenBody(
                                                 } catch (e: Exception) {
                                                     googleEmailState = email
                                                     onEmailChange(email)
-                                                    onNameChange(name)
+                                                    onNameChange("")
                                                     onPhoneChange("")
                                                     isGoogleAccountExists = false
                                                     isGoogleFlowActive = true
@@ -4638,7 +4858,7 @@ fun LoginScreenBody(
                                 value = localGoogleEmail,
                                 onValueChange = { localGoogleEmail = it },
                                 modifier = Modifier.fillMaxWidth(),
-                                placeholder = { Text("مثال: user@gmail.com", color = MediumContrastTextDark, fontSize = 12.sp) },
+                                placeholder = null,
                                 label = { Text("بريد Google الإلكتروني 📧", color = CosmicSecondary, fontSize = 11.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Right) },
                                 singleLine = true,
                                 shape = RoundedCornerShape(12.dp),
@@ -4659,7 +4879,7 @@ fun LoginScreenBody(
                                 value = localGoogleName,
                                 onValueChange = { localGoogleName = it },
                                 modifier = Modifier.fillMaxWidth(),
-                                placeholder = { Text("مثال: معاوية عثمان", color = MediumContrastTextDark, fontSize = 12.sp) },
+                                placeholder = null,
                                 label = { Text("الاسم الكامل 👤", color = CosmicSecondary, fontSize = 11.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Right) },
                                 singleLine = true,
                                 shape = RoundedCornerShape(12.dp),
@@ -4697,15 +4917,15 @@ fun LoginScreenBody(
                                                     val p = remoteProfs.first()
                                                     googleEmailState = email
                                                     onEmailChange(email)
-                                                    onNameChange(p.name ?: name)
-                                                    onPhoneChange(p.phone ?: "")
+                                                    onNameChange("")
+                                                    onPhoneChange("")
                                                     isGoogleAccountExists = true
                                                     isGoogleFlowActive = true
                                                     Toast.makeText(context, "تم إرسال رمز تحقق حقيقي إلى بريدك الإلكتروني ($email) بنجاح عبر Supabase! 📧✨", Toast.LENGTH_LONG).show()
                                                 } else {
                                                     googleEmailState = email
                                                     onEmailChange(email)
-                                                    onNameChange(name)
+                                                    onNameChange("")
                                                     onPhoneChange("")
                                                     isGoogleAccountExists = false
                                                     isGoogleFlowActive = true
@@ -4714,7 +4934,7 @@ fun LoginScreenBody(
                                             } catch (e: Exception) {
                                                 googleEmailState = email
                                                 onEmailChange(email)
-                                                onNameChange(name)
+                                                onNameChange("")
                                                 onPhoneChange("")
                                                 isGoogleAccountExists = false
                                                 isGoogleFlowActive = true
@@ -4759,33 +4979,8 @@ fun LoginScreenBody(
             }
         }
 
-        if (isCheckingEmail) {
-            androidx.compose.ui.window.Dialog(onDismissRequest = {}) {
-                Card(
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = CosmicSurface),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, CosmicSecondary.copy(0.3f))
-                ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        CircularProgressIndicator(color = CosmicSecondary, modifier = Modifier.size(40.dp))
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = viewModel.t(
-                                "جاري التحقق من حساب Google بقاعدة البيانات... 🛰️🚀",
-                                "Checking Google account in the database... 🛰️🚀"
-                            ),
-                            color = Color.White,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
-            }
+        if (isCurrentlyLoading) {
+            CosmicLogoLoaderDialog()
         }
     }
 }
@@ -5194,6 +5389,9 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
     val allProducts by viewModel.allProducts.collectAsStateWithLifecycle()
     val allOrders by viewModel.allOrdersFlow.collectAsStateWithLifecycle()
     val allCouriers by viewModel.allCouriers.collectAsStateWithLifecycle()
+    val isGeneralAdmin by viewModel.isGeneralAdmin.collectAsStateWithLifecycle()
+    val allAdminManagers by viewModel.allAdminManagers.collectAsStateWithLifecycle()
+    val isAdministrativeManager by viewModel.isAdministrativeManager.collectAsStateWithLifecycle()
 
     val pendingCourierOrdersCount = remember(allOrders) {
         val grouped = allOrders.groupBy { it.orderId }
@@ -5517,16 +5715,24 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                             ) {
                                                 IconButton(
                                                     onClick = {
-                                                        viewModel.removeCourier(courier.id) { err ->
-                                                            if (err == null) {
-                                                                Toast.makeText(context, "تم حذف وإلغاء تفعيل المندوب! 🗑️", Toast.LENGTH_SHORT).show()
-                                                            } else {
-                                                                Toast.makeText(context, "خطأ بالطلب: $err", Toast.LENGTH_LONG).show()
+                                                        if (!isGeneralAdmin) {
+                                                            Toast.makeText(context, "عذراً، حذف مناديب التوصيل ميزة حصرية للمدير العام فقط 🔒", Toast.LENGTH_SHORT).show()
+                                                        } else {
+                                                            viewModel.removeCourier(courier.id) { err ->
+                                                                if (err == null) {
+                                                                    Toast.makeText(context, "تم حذف وإلغاء تفعيل المندوب! 🗑️", Toast.LENGTH_SHORT).show()
+                                                                } else {
+                                                                    Toast.makeText(context, "خطأ بالطلب: $err", Toast.LENGTH_LONG).show()
+                                                                }
                                                             }
                                                         }
                                                     }
                                                 ) {
-                                                    Icon(Icons.Default.Delete, "حذف المندوب", tint = Color.Red.copy(alpha = 0.8f))
+                                                    Icon(
+                                                        Icons.Default.Delete,
+                                                        "حذف المندوب",
+                                                        tint = if (isGeneralAdmin) Color.Red.copy(alpha = 0.8f) else Color.Gray.copy(alpha = 0.5f)
+                                                    )
                                                 }
                                                 
                                                 Column(horizontalAlignment = Alignment.End) {
@@ -5679,17 +5885,21 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val tabs = listOf(
-                "الملخص📊" to 0,
-                (if (pendingCourierOrdersCount > 0) "الطلبات 📦 ($pendingCourierOrdersCount)" else "الطلبات📦") to 3,
-                "المناديب🚴" to 4,
-                "المخزون📦" to 7,
-                "البائعين🧑‍💼" to 6,
-                (if (pendingProductsCount > 0) "طلبات البائعين⏳ ($pendingProductsCount)" else "طلبات البائعين⏳") to 8,
-                "المنتجات🛍️" to 2,
-                "إضافة ➕" to 1,
-                "مفاتيح الربط🔑" to 5
-            )
+            val tabs = buildList {
+                add("الملخص📊" to 0)
+                add((if (pendingCourierOrdersCount > 0) "الطلبات 📦 ($pendingCourierOrdersCount)" else "الطلبات📦") to 3)
+                add("المناديب🚴" to 4)
+                add("المخزون📦" to 7)
+                add("البائعين🧑‍💼" to 6)
+                add((if (pendingProductsCount > 0) "طلبات البائعين⏳ ($pendingProductsCount)" else "طلبات البائعين⏳") to 8)
+                add("المنتجات🛍️" to 2)
+                add("إضافة ➕" to 1)
+                add("مفاتيح الربط🔑" to 5)
+                add("الصيدليات 💊" to 9)
+                if (isGeneralAdmin) {
+                    add("المدراء 👑" to 10)
+                }
+            }
             LazyRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -5862,8 +6072,48 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                     }
                 }
                 1 -> {
-                    // ADD PRODUCT FORM
-                    LazyColumn(
+                    if (!isGeneralAdmin) {
+                        Box(
+                            modifier = Modifier.fillMaxSize().padding(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color.Red.copy(0.4f)),
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(24.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Lock,
+                                        contentDescription = null,
+                                        tint = Color.Red,
+                                        modifier = Modifier.size(48.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Text(
+                                        text = "صلاحية مقيدة 🔒",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = "عذراً، إضافة منتجات جديدة للمتجر هي ميزة حصرية للمدير العام فقط لحماية وتأمين جودة السلع والمبيعات.",
+                                        color = MediumContrastTextDark,
+                                        fontSize = 12.sp,
+                                        textAlign = TextAlign.Center,
+                                        lineHeight = 18.sp
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        // ADD PRODUCT FORM
+                        LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
@@ -6103,6 +6353,7 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                             }
                         }
                     }
+                    }
                 }
                 2 -> {
                     // MANAGE PRODUCTS LIST
@@ -6134,16 +6385,24 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                             // Delete Product Button
                                             IconButton(
                                                 onClick = {
-                                                    viewModel.deleteProduct(product.id) { err ->
-                                                        if (err == null) {
-                                                          Toast.makeText(context, "تم حذف المنتج بنجاح 🗑️", Toast.LENGTH_SHORT).show()
-                                                        } else {
-                                                          Toast.makeText(context, "تم الحذف محلياً! خطأ Supabase: $err", Toast.LENGTH_SHORT).show()
+                                                    if (!isGeneralAdmin) {
+                                                        Toast.makeText(context, "عذراً، حذف المنتجات ميزة حصرية للمدير العام فقط 🔒", Toast.LENGTH_SHORT).show()
+                                                    } else {
+                                                        viewModel.deleteProduct(product.id) { err ->
+                                                            if (err == null) {
+                                                              Toast.makeText(context, "تم حذف المنتج بنجاح 🗑️", Toast.LENGTH_SHORT).show()
+                                                            } else {
+                                                              Toast.makeText(context, "تم الحذف محلياً! خطأ Supabase: $err", Toast.LENGTH_SHORT).show()
+                                                            }
                                                         }
                                                     }
                                                 }
                                             ) {
-                                                Icon(Icons.Default.Delete, "حذف", tint = Color.Red.copy(alpha = 0.8f))
+                                                Icon(
+                                                    Icons.Default.Delete,
+                                                    "حذف",
+                                                    tint = if (isGeneralAdmin) Color.Red.copy(alpha = 0.8f) else Color.Gray.copy(alpha = 0.5f)
+                                                )
                                             }
                                             
                                             Column(horizontalAlignment = Alignment.End) {
@@ -7703,11 +7962,44 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                     }
                 }
                 5 -> {
-                    // SUPABASE CONNECTION KEYS SETTING SCREEN - INTEGRATED DIRECTLY IN ADMIN DASHBOARD
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
+                    if (!isGeneralAdmin) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                            border = BorderStroke(1.dp, Color.Red.copy(alpha = 0.3f))
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(24.dp).fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = "🔒",
+                                    tint = Color.Red,
+                                    modifier = Modifier.size(48.dp)
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = "صلاحية مغلقة 🔒",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "تعديل مفاتيح الربط والاتصال السحابي ميزة حصرية للمدير العام فقط ولا يمكن للمدراء الإداريين تعديلها.",
+                                    color = MediumContrastTextDark,
+                                    fontSize = 12.sp,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    } else {
+                        // SUPABASE CONNECTION KEYS SETTING SCREEN - INTEGRATED DIRECTLY IN ADMIN DASHBOARD
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
                         item {
                             Text(
                                 "لوحة مفاتيح الربط والاتصال السحابي (Supabase) 🔐 🛰️",
@@ -8006,6 +8298,7 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                 }
                             }
                         }
+                    }
                     }
                 }
                 6 -> {
@@ -8580,6 +8873,215 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                 8 -> {
                     PendingProductsReviewSection(viewModel)
                 }
+                9 -> {
+                    com.example.ui.screens.AdminPharmacyPortal(viewModel = viewModel)
+                }
+                10 -> {
+                    AdminManagersSection(viewModel = viewModel)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AdminManagersSection(viewModel: MajarahViewModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current ?: LocalContext.current
+    val allAdminManagers by viewModel.allAdminManagers.collectAsStateWithLifecycle()
+    
+    var managerName by remember { mutableStateOf("") }
+    var managerEmail by remember { mutableStateOf("") }
+    var managerPhone by remember { mutableStateOf("") }
+    var isAdding by remember { mutableStateOf(false) }
+
+    LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 32.dp)
+    ) {
+        item {
+            Text(
+                "إدارة المدراء الإداريين بالمنظومة الكونية 👑",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                textAlign = TextAlign.Right,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                "يمكن للمدير العام إضافة مدراء إداريين لمساعدته في إدارة التطبيق. المدراء الإداريون لديهم كافة الصلاحيات ما عدا تعديل مفاتيح الربط وحذف أو إضافة مدراء آخرين.",
+                color = MediumContrastTextDark,
+                fontSize = 11.sp,
+                textAlign = TextAlign.Right,
+                modifier = Modifier.fillMaxWidth(),
+                lineHeight = 15.sp
+            )
+        }
+
+        // Add Manager Card Form
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                border = BorderStroke(1.dp, CosmicSecondary.copy(alpha = 0.3f))
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Text(
+                        "إضافة مدير إداري جديد ➕",
+                        fontWeight = FontWeight.Bold,
+                        color = CosmicSecondary,
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Right,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    OutlinedTextField(
+                        value = managerName,
+                        onValueChange = { managerName = it },
+                        label = { Text("الاسم بالكامل", color = CosmicSecondary) },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CosmicSecondary,
+                            unfocusedBorderColor = CosmicSurfaceVariant,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = managerEmail,
+                        onValueChange = { managerEmail = it },
+                        label = { Text("البريد الإلكتروني", color = CosmicSecondary) },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CosmicSecondary,
+                            unfocusedBorderColor = CosmicSurfaceVariant,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = managerPhone,
+                        onValueChange = { managerPhone = it },
+                        label = { Text("رقم الهاتف (مثل: 0910074223)", color = CosmicSecondary) },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CosmicSecondary,
+                            unfocusedBorderColor = CosmicSurfaceVariant,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Button(
+                        onClick = {
+                            if (managerName.isBlank() || managerEmail.isBlank() || managerPhone.isBlank()) {
+                                Toast.makeText(context, "الرجاء تعبئة كافة الحقول لملء الصلاحية ⚠️", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            isAdding = true
+                            viewModel.addAdminManager(managerName.trim(), managerEmail.trim(), managerPhone.trim()) { err ->
+                                isAdding = false
+                                if (err == null) {
+                                    Toast.makeText(context, "تمت إضافة المدير الإداري بنجاح! 🎉", Toast.LENGTH_SHORT).show()
+                                    managerName = ""
+                                    managerEmail = ""
+                                    managerPhone = ""
+                                } else {
+                                    Toast.makeText(context, "خطأ: $err ❌", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary),
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isAdding
+                    ) {
+                        Text("إعتماد الصلاحية كمدير إداري ✅", color = Color.Black, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // Managers List Header
+        item {
+            Text(
+                "قائمة المدراء الإداريين النشطين 📋",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                textAlign = TextAlign.Right,
+                modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
+            )
+        }
+
+        if (allAdminManagers.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = CosmicSurface.copy(alpha = 0.5f))
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "لا يوجد مدراء إداريون مسجلون حالياً. 🌌",
+                            color = Color.Gray,
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+        } else {
+            items(allAdminManagers) { manager ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Delete Button
+                        IconButton(
+                            onClick = {
+                                viewModel.removeAdminManager(manager.id) { err ->
+                                    if (err == null) {
+                                        Toast.makeText(context, "تم سحب صلاحية المدير بنجاح 🗑️", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        Toast.makeText(context, "خطأ: $err ❌", Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            }
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = "حذف الصلاحية", tint = Color.Red)
+                        }
+
+                        // Info
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(manager.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(manager.email, color = MediumContrastTextDark, fontSize = 11.sp)
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text("هاتف: ${manager.phone}", color = CosmicSecondary, fontSize = 11.sp)
+                        }
+                    }
+                }
             }
         }
     }
@@ -8590,6 +9092,49 @@ fun PendingProductsReviewSection(viewModel: MajarahViewModel) {
     val context = LocalContext.current
     val allProducts by viewModel.allProducts.collectAsStateWithLifecycle()
     val pendingProducts = remember(allProducts) { allProducts.filter { !it.isApproved } }
+    val isGeneralAdmin by viewModel.isGeneralAdmin.collectAsStateWithLifecycle()
+
+    if (!isGeneralAdmin) {
+        Box(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color.Red.copy(0.4f)),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = Color.Red,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "صلاحية مقيدة 🔒",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "عذراً، مراجعة وقبول طلبات المنتجات المعلقة للبائعين واعتمادها هي ميزة حصرية للمدير العام فقط لتنظيم الأسعار والعمولات.",
+                        color = MediumContrastTextDark,
+                        fontSize = 12.sp,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+        }
+        return
+    }
 
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -9010,11 +9555,26 @@ fun SellerDashboardScreenBody(viewModel: MajarahViewModel) {
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        // Stock Controls
+                                        // Delete Button & Stock Controls
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                                         ) {
+                                            IconButton(
+                                                onClick = {
+                                                    viewModel.deleteProduct(product.id) { err ->
+                                                        if (err == null) {
+                                                            Toast.makeText(context, "تم حذف المنتج بنجاح! 🗑️", Toast.LENGTH_SHORT).show()
+                                                        } else {
+                                                            Toast.makeText(context, "خطأ أثناء الحذف: $err", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    }
+                                                },
+                                                modifier = Modifier.size(36.dp)
+                                            ) {
+                                                Icon(Icons.Default.Delete, contentDescription = "حذف المنتج", tint = Color.Red.copy(alpha = 0.8f))
+                                            }
+
                                             IconButton(
                                                 onClick = {
                                                     if (product.stock > 0) {
@@ -10450,11 +11010,10 @@ fun SplashScreenBody() {
 
             Spacer(modifier = Modifier.height(48.dp))
 
-            // M3 Elegant Circular Loading Indicator
-            CircularProgressIndicator(
-                color = CosmicSecondary,
-                strokeWidth = 3.dp,
-                modifier = Modifier.size(36.dp)
+            // Cosmic Elegant Logo and Rotating Stars Loading Indicator
+            CosmicMajarahLoader(
+                logoSize = 56.dp,
+                modifier = Modifier.padding(8.dp)
             )
 
             Spacer(modifier = Modifier.height(16.dp))

@@ -29,10 +29,87 @@ class MajarahRepository(
     private val orderDao: OrderDao,
     private val profileDao: ProfileDao,
     private val courierDao: com.example.data.db.CourierDao,
-    private val sellerDao: com.example.data.db.SellerDao
+    private val sellerDao: com.example.data.db.SellerDao,
+    val pharmacyDao: com.example.data.db.PharmacyDao,
+    val pharmacyProductDao: com.example.data.db.PharmacyProductDao,
+    val pharmacyOrderDao: com.example.data.db.PharmacyOrderDao,
+    val adminManagerDao: com.example.data.db.AdminManagerDao
 ) {
     private val _dbStatus = MutableStateFlow("جاري الاتصال بـ Supabase...")
     val dbStatus: StateFlow<String> = _dbStatus.asStateFlow()
+
+    // --- Planet Pharmacy / Pharmacy Doctor Methods ---
+    val allPharmacies: Flow<List<com.example.data.db.PharmacyEntity>> = pharmacyDao.getAllPharmaciesFlow()
+
+    suspend fun getPharmacyByPharmacistEmail(email: String): com.example.data.db.PharmacyEntity? {
+        return pharmacyDao.getPharmacyByPharmacistEmail(email)
+    }
+
+    suspend fun insertPharmacy(pharmacy: com.example.data.db.PharmacyEntity): Long {
+        return pharmacyDao.insertPharmacy(pharmacy)
+    }
+
+    suspend fun updatePharmacyApproval(id: Int, isApproved: Boolean) {
+        pharmacyDao.updatePharmacyApproval(id, isApproved)
+    }
+
+    suspend fun deletePharmacy(id: Int) {
+        pharmacyDao.deletePharmacy(id)
+    }
+
+    // --- Pharmacy Products ---
+    fun getProductsByPharmacy(pharmacyId: Int): Flow<List<com.example.data.db.PharmacyProductEntity>> {
+        return pharmacyProductDao.getProductsByPharmacyFlow(pharmacyId)
+    }
+
+    val allPharmacyProducts: Flow<List<com.example.data.db.PharmacyProductEntity>> = pharmacyProductDao.getAllPharmacyProductsFlow()
+
+    suspend fun insertPharmacyProduct(product: com.example.data.db.PharmacyProductEntity): Long {
+        return pharmacyProductDao.insertProduct(product)
+    }
+
+    suspend fun updatePharmacyProductApproval(id: Int, isApproved: Boolean) {
+        pharmacyProductDao.updateProductApproval(id, isApproved)
+    }
+
+    suspend fun deletePharmacyProduct(id: Int) {
+        pharmacyProductDao.deleteProduct(id)
+    }
+
+    // --- Pharmacy Orders / Prescriptions ---
+    val allPharmacyOrders: Flow<List<com.example.data.db.PharmacyOrderEntity>> = pharmacyOrderDao.getAllPharmacyOrdersFlow()
+
+    fun getOrdersByPharmacy(pharmacyId: Int): Flow<List<com.example.data.db.PharmacyOrderEntity>> {
+        return pharmacyOrderDao.getOrdersByPharmacyFlow(pharmacyId)
+    }
+
+    fun getOrdersByCustomer(email: String): Flow<List<com.example.data.db.PharmacyOrderEntity>> {
+        return pharmacyOrderDao.getOrdersByCustomerFlow(email)
+    }
+
+    suspend fun getPharmacyOrderById(id: Int): com.example.data.db.PharmacyOrderEntity? {
+        return pharmacyOrderDao.getOrderById(id)
+    }
+
+    suspend fun insertPharmacyOrder(order: com.example.data.db.PharmacyOrderEntity): Long {
+        return pharmacyOrderDao.insertOrder(order)
+    }
+
+    suspend fun updatePharmacyOrderPriceAndStatus(id: Int, status: String, price: Double, medicinesJson: String) {
+        pharmacyOrderDao.updateOrderPriceAndStatus(id, status, price, medicinesJson)
+    }
+
+    suspend fun assignPharmacyOrderCourierAndDeliveryFee(id: Int, status: String, courierName: String, courierPhone: String, deliveryFee: Double) {
+        pharmacyOrderDao.assignOrderCourierAndDeliveryFee(id, status, courierName, courierPhone, deliveryFee)
+    }
+
+    suspend fun updatePharmacyOrderStatus(id: Int, status: String) {
+        pharmacyOrderDao.updateOrderStatus(id, status)
+    }
+
+    suspend fun deletePharmacyOrder(id: Int) {
+        pharmacyOrderDao.deleteOrder(id)
+    }
 
     // Register and sync profile to Supabase
     suspend fun registerUserProfile(name: String, phone: String, email: String, password: String): String? {
