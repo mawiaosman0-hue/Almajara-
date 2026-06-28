@@ -16,9 +16,11 @@ import androidx.room.RoomDatabase
         PharmacyEntity::class,
         PharmacyProductEntity::class,
         PharmacyOrderEntity::class,
-        AdminManagerEntity::class
+        AdminManagerEntity::class,
+        RestaurantEntity::class,
+        RestaurantOrderEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -32,6 +34,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun pharmacyProductDao(): PharmacyProductDao
     abstract fun pharmacyOrderDao(): PharmacyOrderDao
     abstract fun adminManagerDao(): AdminManagerDao
+    abstract fun restaurantDao(): RestaurantDao
+    abstract fun restaurantOrderDao(): RestaurantOrderDao
 
     companion object {
         @Volatile

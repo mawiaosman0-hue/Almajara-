@@ -44,7 +44,9 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
         database.pharmacyDao(),
         database.pharmacyProductDao(),
         database.pharmacyOrderDao(),
-        database.adminManagerDao()
+        database.adminManagerDao(),
+        database.restaurantDao(),
+        database.restaurantOrderDao()
     )
 
     // Current Navigation State
@@ -664,7 +666,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun addToCart(productId: Int, quantity: Int = 1) {
-        if (isSeller.value) return
+        if (isSeller.value || isAdmin.value || isGeneralAdmin.value || isPharmacist.value) return
         viewModelScope.launch {
             repository.addToCart(productId, quantity)
         }
@@ -979,9 +981,32 @@ $couponMessage---------------------------
         }
     }
 
+    fun updateOrderPaymentMethod(orderId: String, paymentMethod: String, transactionId: String, onComplete: (String?) -> Unit) {
+        viewModelScope.launch {
+            val err = repository.updateOrderPaymentMethod(orderId, paymentMethod, transactionId)
+            if (err == null) {
+                syncOrders()
+            }
+            onComplete(err)
+        }
+    }
+
     fun updateOrderStatus(orderId: String, status: String, courierName: String = "", courierPhone: String = "", deliveryFee: Double? = null, onComplete: (String?) -> Unit) {
         viewModelScope.launch {
-            val err = repository.updateOrderStatus(orderId, status, courierName, courierPhone, deliveryFee)
+            val existingOrder = allOrdersFlow.value.find { it.orderId == orderId }
+            val existingStatus = existingOrder?.statusArabic ?: ""
+            val suffix = if (existingStatus.contains("(")) {
+                existingStatus.substring(existingStatus.indexOf("("))
+            } else {
+                ""
+            }
+            val finalStatusWithSuffix = if (suffix.isNotEmpty() && !status.contains("(")) {
+                "$status $suffix"
+            } else {
+                status
+            }
+
+            val err = repository.updateOrderStatus(orderId, finalStatusWithSuffix, courierName, courierPhone, deliveryFee)
             if (err == null) {
                 // If a courier was assigned, set their status to "في مهمة توصيل 🟡"
                 val finalName = courierName.trim()
@@ -1240,6 +1265,145 @@ $couponMessage---------------------------
             } finally {
                 isGlobalLoading.value = false
                 onComplete(error)
+            }
+        }
+    }
+
+    // --- Planet Restaurants View & Actions ---
+    val allRestaurants = repository.allRestaurants.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        emptyList()
+    )
+
+    val allRestaurantOrders = repository.allRestaurantOrders.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        emptyList()
+    )
+
+    fun addRestaurant(name: String, phone: String, menuImageUri: String?, onComplete: (String?) -> Unit) {
+        isGlobalLoading.value = true
+        viewModelScope.launch {
+            var error: String? = null
+            try {
+                val restaurant = com.example.data.db.RestaurantEntity(
+                    name = name,
+                    phone = phone,
+                    menuImageUri = menuImageUri
+                )
+                repository.insertRestaurant(restaurant)
+            } catch (e: Exception) {
+                error = e.localizedMessage
+            } finally {
+                isGlobalLoading.value = false
+                onComplete(error)
+            }
+        }
+    }
+
+    fun deleteRestaurant(id: Int, onComplete: (String?) -> Unit) {
+        isGlobalLoading.value = true
+        viewModelScope.launch {
+            var error: String? = null
+            try {
+                repository.deleteRestaurant(id)
+            } catch (e: Exception) {
+                error = e.localizedMessage
+            } finally {
+                isGlobalLoading.value = false
+                onComplete(error)
+            }
+        }
+    }
+
+    fun addRestaurantOrder(
+        restaurantId: Int,
+        restaurantName: String,
+        restaurantPhone: String,
+        customerName: String,
+        customerPhone: String,
+        customerEmail: String,
+        itemsAndNotes: String,
+        paymentMethod: String,
+        deliveryFee: Double,
+        bankReceiptImageUri: String?,
+        onComplete: (String?, com.example.data.db.RestaurantOrderEntity?) -> Unit
+    ) {
+        isGlobalLoading.value = true
+        viewModelScope.launch {
+            var error: String? = null
+            var savedOrder: com.example.data.db.RestaurantOrderEntity? = null
+            try {
+                val order = com.example.data.db.RestaurantOrderEntity(
+                    restaurantId = restaurantId,
+                    restaurantName = restaurantName,
+                    restaurantPhone = restaurantPhone,
+                    customerName = customerName,
+                    customerPhone = customerPhone,
+                    customerEmail = customerEmail,
+                    itemsAndNotes = itemsAndNotes,
+                    status = "معلق",
+                    paymentMethod = paymentMethod,
+                    deliveryFee = deliveryFee,
+                    bankReceiptImageUri = bankReceiptImageUri
+                )
+                val newId = repository.insertRestaurantOrder(order)
+                savedOrder = order.copy(id = newId.toInt())
+            } catch (e: Exception) {
+                error = e.localizedMessage
+            } finally {
+                isGlobalLoading.value = false
+                onComplete(error, savedOrder)
+            }
+        }
+    }
+
+    fun updateRestaurantOrderStatus(id: Int, status: String, onComplete: (String?) -> Unit) {
+        isGlobalLoading.value = true
+        viewModelScope.launch {
+            var error: String? = null
+            try {
+                repository.updateRestaurantOrderStatus(id, status)
+            } catch (e: Exception) {
+                error = e.localizedMessage
+            } finally {
+                isGlobalLoading.value = false
+                onComplete(error)
+            }
+        }
+    }
+
+    fun deleteRestaurantOrder(id: Int, onComplete: (String?) -> Unit) {
+        isGlobalLoading.value = true
+        viewModelScope.launch {
+            var error: String? = null
+            try {
+                repository.deleteRestaurantOrder(id)
+            } catch (e: Exception) {
+                error = e.localizedMessage
+            } finally {
+                isGlobalLoading.value = false
+                onComplete(error)
+            }
+        }
+    }
+
+    fun updateProfileImage(imageUri: String, onComplete: (String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val profiles = database.profileDao().getAllProfiles()
+                if (profiles.isNotEmpty()) {
+                    val current = profiles.first()
+                    val updated = current.copy(profileImageUri = imageUri)
+                    database.profileDao().insertProfile(updated)
+                    activeProfile.value = updated
+                    onComplete(null)
+                } else {
+                    onComplete("لم يتم العثور على ملف شخصي")
+                }
+            } catch (e: Exception) {
+                onComplete(e.localizedMessage ?: "فشل تحديث صورة الملف الشخصي")
             }
         }
     }

@@ -10,5 +10,6 @@ data class ProfileEntity(
     val phone: String,
     val email: String,
     val password: String,
+    val profileImageUri: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 )

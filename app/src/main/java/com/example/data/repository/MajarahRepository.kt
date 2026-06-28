@@ -33,10 +33,40 @@ class MajarahRepository(
     val pharmacyDao: com.example.data.db.PharmacyDao,
     val pharmacyProductDao: com.example.data.db.PharmacyProductDao,
     val pharmacyOrderDao: com.example.data.db.PharmacyOrderDao,
-    val adminManagerDao: com.example.data.db.AdminManagerDao
+    val adminManagerDao: com.example.data.db.AdminManagerDao,
+    val restaurantDao: com.example.data.db.RestaurantDao,
+    val restaurantOrderDao: com.example.data.db.RestaurantOrderDao
 ) {
     private val _dbStatus = MutableStateFlow("جاري الاتصال بـ Supabase...")
     val dbStatus: StateFlow<String> = _dbStatus.asStateFlow()
+
+    // --- Planet Restaurants ---
+    val allRestaurants: Flow<List<com.example.data.db.RestaurantEntity>> = restaurantDao.getAllRestaurantsFlow()
+    val allRestaurantOrders: Flow<List<com.example.data.db.RestaurantOrderEntity>> = restaurantOrderDao.getAllRestaurantOrdersFlow()
+
+    fun getRestaurantOrdersByCustomer(email: String): Flow<List<com.example.data.db.RestaurantOrderEntity>> {
+        return restaurantOrderDao.getOrdersByCustomerFlow(email)
+    }
+
+    suspend fun insertRestaurant(restaurant: com.example.data.db.RestaurantEntity): Long {
+        return restaurantDao.insertRestaurant(restaurant)
+    }
+
+    suspend fun deleteRestaurant(id: Int) {
+        restaurantDao.deleteRestaurant(id)
+    }
+
+    suspend fun insertRestaurantOrder(order: com.example.data.db.RestaurantOrderEntity): Long {
+        return restaurantOrderDao.insertOrder(order)
+    }
+
+    suspend fun updateRestaurantOrderStatus(id: Int, status: String) {
+        restaurantOrderDao.updateOrderStatus(id, status)
+    }
+
+    suspend fun deleteRestaurantOrder(id: Int) {
+        restaurantOrderDao.deleteOrder(id)
+    }
 
     // --- Planet Pharmacy / Pharmacy Doctor Methods ---
     val allPharmacies: Flow<List<com.example.data.db.PharmacyEntity>> = pharmacyDao.getAllPharmaciesFlow()
@@ -1255,6 +1285,35 @@ class MajarahRepository(
             if (deliveryFee != null) {
                 updatePayload["delivery_fee"] = deliveryFee.toString()
             }
+            com.example.data.network.SupabaseClient.api.updateOrderStatus(
+                "eq.$orderId",
+                updatePayload
+            )
+            null
+        } catch (e: java.lang.Exception) {
+            e.printStackTrace()
+            com.example.data.network.SupabaseClient.parseError(e)
+        }
+    }
+
+    suspend fun updateOrderPaymentMethod(
+        orderId: String,
+        paymentMethod: String,
+        transactionId: String
+    ): String? {
+        val existingOrders = orderDao.getOrderById(orderId)
+        val baseStatus = existingOrders.firstOrNull()?.statusArabic?.substringBefore("(")?.trim() ?: "جاري التجهيز للتوصيل 📦"
+        val suffixString = if (paymentMethod == "bank") {
+            "(تحويل بنكي - إشعار: $transactionId)"
+        } else {
+            "(الدفع نقداً عند التسليم)"
+        }
+        val finalStatus = "$baseStatus $suffixString"
+        orderDao.updateOrderStatus(orderId, finalStatus)
+        return try {
+            val updatePayload = mapOf(
+                "status_arabic" to finalStatus
+            )
             com.example.data.network.SupabaseClient.api.updateOrderStatus(
                 "eq.$orderId",
                 updatePayload

@@ -9,6 +9,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.ui.zIndex
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -245,6 +248,7 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
     val checkoutSuccess by viewModel.checkoutSuccessMessage.collectAsStateWithLifecycle()
     val isLoggedIn by viewModel.isLoggedIn.collectAsStateWithLifecycle()
     val isAdmin by viewModel.isAdmin.collectAsStateWithLifecycle()
+    val isGeneralAdmin by viewModel.isGeneralAdmin.collectAsStateWithLifecycle()
     val isCourier by viewModel.isCourier.collectAsStateWithLifecycle()
     val isSeller by viewModel.isSeller.collectAsStateWithLifecycle()
     val isEnglish by viewModel.isEnglish.collectAsStateWithLifecycle()
@@ -295,7 +299,53 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
 
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
 
-    Scaffold(
+    var pendingNotificationMsg by remember { mutableStateOf<String?>(null) }
+    var notifiedOrderIds by remember { mutableStateOf(setOf<String>()) }
+    val activeProfile by viewModel.activeProfile.collectAsStateWithLifecycle()
+    val allOrders by viewModel.allOrdersFlow.collectAsStateWithLifecycle()
+    val allPharmacyOrders by viewModel.allPharmacyOrders.collectAsStateWithLifecycle()
+
+    LaunchedEffect(isCourier, activeProfile, allOrders, allPharmacyOrders) {
+        if (isCourier && activeProfile != null) {
+            val courierPhone = activeProfile?.phone?.trim()?.replace("+", "")?.replace(" ", "") ?: ""
+            val courierName = activeProfile?.name?.trim()?.lowercase() ?: ""
+            
+            val activeStandardAssigned = allOrders.filter { o ->
+                val oPhone = o.courierPhone.trim().replace("+", "").replace(" ", "")
+                val oName = o.courierName.trim().lowercase()
+                val isMatching = (courierPhone.isNotEmpty() && oPhone == courierPhone) || (courierName.isNotEmpty() && oName == courierName)
+                isMatching && !o.statusArabic.contains("تم توصيل") && !o.statusArabic.contains("ملغي")
+            }.map { "std_${it.orderId}" }
+
+            val activePharmacyAssigned = allPharmacyOrders.filter { po ->
+                val poPhone = po.courierPhone?.trim()?.replace("+", "")?.replace(" ", "") ?: ""
+                val poName = po.courierName?.trim()?.lowercase() ?: ""
+                val isMatching = (courierPhone.isNotEmpty() && poPhone == courierPhone) || (courierName.isNotEmpty() && poName == courierName)
+                isMatching && !po.status.contains("تم توصيل") && !po.status.contains("ملغي")
+            }.map { "pharm_${it.id}" }
+
+            val allAssignedActive = activeStandardAssigned + activePharmacyAssigned
+            
+            // If we found any new assigned order that we haven't notified yet
+            val newUnnotified = allAssignedActive.filter { it !in notifiedOrderIds }
+            if (newUnnotified.isNotEmpty()) {
+                pendingNotificationMsg = "مرحباً ${activeProfile?.name}! تم إسناد مهمة توصيل جديدة لك بنجاح 🚴📦 اضغط هنا لمباشرتها."
+                notifiedOrderIds = notifiedOrderIds + allAssignedActive
+                
+                // Play notification alert sound
+                try {
+                    val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+                    val r = android.media.RingtoneManager.getRingtone(context, alertUri)
+                    r?.play()
+                } catch (e: Exception) {
+                    // Fallback
+                }
+            }
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
         topBar = {
             if (currentScreen !is Screen.Login && currentScreen !is Screen.Splash) {
                 Column {
@@ -440,39 +490,41 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                     else -> Color(0xFFA3F4C5)
                 }
                 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(bannerBg)
-                        .let { modifier ->
-                            if (isAdmin) {
-                                modifier.clickable {
-                                    supabaseUrlInput = com.example.data.network.SupabaseConfig.url
-                                    supabaseKeyInput = com.example.data.network.SupabaseConfig.apiKey
-                                    showSupabaseSettingsDialog = true
+                if (isGeneralAdmin) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(bannerBg)
+                            .let { modifier ->
+                                if (isAdmin) {
+                                    modifier.clickable {
+                                        supabaseUrlInput = com.example.data.network.SupabaseConfig.url
+                                        supabaseKeyInput = com.example.data.network.SupabaseConfig.apiKey
+                                        showSupabaseSettingsDialog = true
+                                    }
+                                } else {
+                                    modifier
                                 }
-                            } else {
-                                modifier
                             }
-                        }
-                        .padding(horizontal = 16.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        imageVector = bannerTextIcon,
-                        contentDescription = "DB Sync",
-                        tint = bannerThemeColor,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = if (isAdmin) "$dbStatus (انقر للضبط ⚙️)" else dbStatus,
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        textAlign = TextAlign.Center
-                    )
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = bannerTextIcon,
+                            contentDescription = "DB Sync",
+                            tint = bannerThemeColor,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (isAdmin) "$dbStatus (انقر للضبط ⚙️)" else dbStatus,
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 }
                 }
             }
@@ -1819,8 +1871,62 @@ CREATE POLICY "Allow delete sellers" ON public.sellers FOR DELETE USING (true);
             }
 
 
+            // Floating Custom Courier Notification Banner
+            AnimatedVisibility(
+                visible = pendingNotificationMsg != null,
+                enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 80.dp)
+                    .padding(horizontal = 16.dp)
+                    .zIndex(99f)
+            ) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            viewModel.navigateTo(Screen.Courier)
+                            pendingNotificationMsg = null
+                        },
+                    colors = CardDefaults.cardColors(containerColor = CosmicSecondary),
+                    shape = RoundedCornerShape(12.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                    border = BorderStroke(1.5.dp, Color.Black)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DirectionsBike,
+                            contentDescription = "مهمة جديدة",
+                            tint = Color.Black,
+                            modifier = Modifier.size(32.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "تنبيه بمهمة جديدة! ⚠️",
+                                color = Color.Black,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = pendingNotificationMsg ?: "",
+                                color = Color.Black.copy(0.85f),
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp
+                            )
+                        }
+                    }
+                }
+            }
+
         }
     }
+}
 }
 
 @Composable
@@ -1944,6 +2050,7 @@ fun HomeScreenBody(
                     Pair("estate_cars", "🚗 كوكب بيع العقارات والسيارات"),
                     Pair("rentals", "🔑 كوكب الإيجارات"),
                     Pair("pharmacy", "💊 كوكب صيدلية"),
+                    Pair("restaurant", "🍔 كوكب مطاعم"),
                     Pair("kids", "🍼 كوكب مستلزمات أطفال"),
                     Pair("women", "💅 كوكب للنساء"),
                     Pair("men", "💼 كوكب للرجال"),
@@ -2043,6 +2150,10 @@ fun HomeScreenBody(
         if (selectedCategory == "pharmacy") {
             item {
                 com.example.ui.screens.PharmacyPlanetSection(viewModel = viewModel)
+            }
+        } else if (selectedCategory == "restaurant") {
+            item {
+                com.example.ui.screens.RestaurantsPlanetSection(viewModel = viewModel)
             }
         } else if (products.isEmpty()) {
             item {
@@ -2234,6 +2345,7 @@ fun CategoriesScreenBody(
         Triple("estate_cars", "🚗 كوكب بيع العقارات والسيارات", "أفضل العروض الحقيقية لبيع وشراء السيارات الحديثة والعقارات والأراضي بالسودان."),
         Triple("rentals", "🔑 كوكب الإيجارات", "شقق مفروشة، بيوت للإيجار، سيارات فخمة للإيجار اليومي والشهري بأسعار مناسبة."),
         Triple("pharmacy", "💊 كوكب صيدلية", "مستلزمات طبية، أدوية، رعاية صحية، فيتامينات ومستحضرات معتمدة."),
+        Triple("restaurant", "🍔 كوكب مطاعم", "أشهى وألذ المأكولات والوجبات السريعة والمشروبات الطازجة المجهزة بكل حب."),
         Triple("kids", "🍼 كوكب مستلزمات أطفال", "ملابس أطفال، ألعاب ذكية، حليب ومستلزمات العناية الكاملة بالمواليد."),
         Triple("women", "💅 كوكب للنساء", "كل ما يخص المرأة العصرية من فساتين، حقائب، أدوات زينة وإكسسوارات فاخرة."),
         Triple("men", "💼 كوكب للرجال", "ملابس رجالية، أحذية، عطور، ساعات كلاسيكية وأناقة متكاملة للرجل."),
@@ -2706,115 +2818,6 @@ fun CartScreenBody(
                                 )
                             )
 
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            // Payment method selection header
-                            Text(
-                                text = "طريقة الدفع ومطابقة الفاتورة 💳:",
-                                color = Color.White,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
-                                textAlign = TextAlign.Right
-                            )
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                // Option 1: Cash
-                                Card(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clickable { selectedCheckoutPaymentMethod = "cash" },
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = if (selectedCheckoutPaymentMethod == "cash") CosmicSecondary.copy(alpha = 0.15f) else CosmicDeepSpace
-                                    ),
-                                    border = BorderStroke(
-                                        width = if (selectedCheckoutPaymentMethod == "cash") 1.5.dp else 1.dp,
-                                        color = if (selectedCheckoutPaymentMethod == "cash") CosmicSecondary else CosmicSurfaceVariant
-                                    ),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(10.dp).fillMaxWidth(),
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        Icon(Icons.Default.Payments, "نقدي", tint = if (selectedCheckoutPaymentMethod == "cash") CosmicSecondary else Color.White, modifier = Modifier.size(24.dp))
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text("الدفع نقداً 💵", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                        Text("عند الاستلام الفوري", color = MediumContrastTextDark, fontSize = 9.sp)
-                                    }
-                                }
-
-                                // Option 2: Bank
-                                Card(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clickable { selectedCheckoutPaymentMethod = "bank" },
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = if (selectedCheckoutPaymentMethod == "bank") CosmicSecondary.copy(alpha = 0.15f) else CosmicDeepSpace
-                                    ),
-                                    border = BorderStroke(
-                                        width = if (selectedCheckoutPaymentMethod == "bank") 1.5.dp else 1.dp,
-                                        color = if (selectedCheckoutPaymentMethod == "bank") CosmicSecondary else CosmicSurfaceVariant
-                                    ),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(10.dp).fillMaxWidth(),
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        Icon(Icons.Default.AccountBalance, "بنكي", tint = if (selectedCheckoutPaymentMethod == "bank") CosmicSecondary else Color.White, modifier = Modifier.size(24.dp))
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text("تحويل بنكي فوري 💳", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                        Text("بنك الخرطوم (بنكك)", color = MediumContrastTextDark, fontSize = 9.sp)
-                                    }
-                                }
-                            }
-
-                            // Show fixed Bank account details if "bank" is selected
-                            if (selectedCheckoutPaymentMethod == "bank") {
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = CardDefaults.cardColors(containerColor = CosmicDeepSpace),
-                                    border = BorderStroke(1.dp, CosmicSecondary.copy(alpha = 0.3f)),
-                                    shape = RoundedCornerShape(10.dp)
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(12.dp).fillMaxWidth(),
-                                        horizontalAlignment = Alignment.End
-                                    ) {
-                                        Text("🏦 الحساب البنكي المعتمد للمجرة:", color = CosmicSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
-                                            val context = androidx.compose.ui.platform.LocalContext.current
-                                            androidx.compose.material3.IconButton(
-                                                onClick = {
-                                                    clipboard.setText(androidx.compose.ui.text.AnnotatedString("3414879"))
-                                                    android.widget.Toast.makeText(context, "تم نسخ رقم الحساب البنكي 3414879 بنجاح!", android.widget.Toast.LENGTH_SHORT).show()
-                                                },
-                                                modifier = Modifier.size(28.dp)
-                                            ) {
-                                                Icon(Icons.Default.ContentCopy, "نسخ رقم الحساب", tint = CosmicSecondary, modifier = Modifier.size(16.dp))
-                                            }
-                                            Column(horizontalAlignment = Alignment.End) {
-                                                Text("رقم الحساب: 3414879", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                                                Text("باسم: معاوية عثمان احمد ياسين", color = Color.White.copy(0.9f), fontSize = 11.sp)
-                                                Text("الرجاء التحويل وإشعارنا برقم المعاملة لتأكيد طلبك فورا.", color = MediumContrastTextDark, fontSize = 9.sp)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
                             Spacer(modifier = Modifier.height(16.dp))
 
                             val formValid = nameValue.isNotBlank() && phoneValue.isNotBlank() && addressValue.isNotBlank()
@@ -2886,11 +2889,7 @@ fun CartScreenBody(
 
                             Button(
                                 onClick = {
-                                    if (selectedCheckoutPaymentMethod == "bank") {
-                                        showBankDialog = true
-                                    } else {
-                                        onSubmit("cash", "")
-                                    }
+                                    onSubmit("pending_delivery", "")
                                 },
                                 enabled = formValid,
                                 modifier = Modifier
@@ -2906,7 +2905,7 @@ fun CartScreenBody(
                                 contentPadding = PaddingValues(14.dp)
                             ) {
                                 Text(
-                                    text = if (selectedCheckoutPaymentMethod == "bank") "تم التحويل 💳" else "تأكيد وشحن الطلب الفوري",
+                                    text = "تأكيد وإرسال الطلب الفوري 🚀",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp
                                 )
@@ -3538,6 +3537,176 @@ fun HistoryScreenBody(
                         }
                         
                         Spacer(modifier = Modifier.height(12.dp))
+
+                        // Display the payment method
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            val parsedPaymentMethod = when {
+                                orderStatus.contains("pending_delivery") -> "بانتظار تسليم المندوب لتحديد طريقة الدفع ⏳"
+                                orderStatus.contains("الدفع نقداً") -> "الدفع نقداً عند الاستلام 💵"
+                                orderStatus.contains("تحويل بنكي") -> {
+                                    val txId = orderStatus.substringAfter("إشعار:", "").substringBefore(")").trim()
+                                    if (txId.isNotEmpty()) "تحويل بنكي 💳 (رقم العملية: $txId)" else "تحويل بنكي 💳"
+                                }
+                                else -> "لم يحدد بعد"
+                            }
+                            Text(text = parsedPaymentMethod, color = CosmicSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("طريقة الدفع ومطابقة الفاتورة:", color = MediumContrastTextDark, fontSize = 11.sp)
+                        }
+
+                        // Display the interactive payment choice card if courier is assigned but payment is still pending
+                        if (courierName.isNotBlank() && orderStatus.contains("pending_delivery")) {
+                            var selectedPaymentOption by remember { mutableStateOf("cash") } // "cash" or "bank"
+                            var bankTxId by remember { mutableStateOf("") }
+                            var isSubmittingPayment by remember { mutableStateOf(false) }
+
+                            Card(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                                colors = CardDefaults.cardColors(containerColor = CosmicDeepSpace),
+                                border = androidx.compose.foundation.BorderStroke(1.5.dp, CosmicSecondary),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                                    horizontalAlignment = Alignment.End
+                                ) {
+                                    Text(
+                                        text = "🚨 خيارات الدفع الفورية مفتوحة الآن للطلب:",
+                                        color = Color.White,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(bottom = 8.dp)
+                                    )
+                                    
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        // Option 1: Cash
+                                        Card(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clickable { selectedPaymentOption = "cash" },
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = if (selectedPaymentOption == "cash") CosmicSecondary.copy(alpha = 0.15f) else CosmicSurface
+                                            ),
+                                            border = androidx.compose.foundation.BorderStroke(
+                                                width = if (selectedPaymentOption == "cash") 1.5.dp else 1.dp,
+                                                color = if (selectedPaymentOption == "cash") CosmicSecondary else CosmicSurfaceVariant
+                                            ),
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.padding(8.dp).fillMaxWidth(),
+                                                horizontalAlignment = Alignment.CenterHorizontally
+                                            ) {
+                                                Icon(Icons.Default.Payments, null, tint = if (selectedPaymentOption == "cash") CosmicSecondary else Color.White, modifier = Modifier.size(20.dp))
+                                                Spacer(modifier = Modifier.height(2.dp))
+                                                Text("نقداً عند الاستلام 💵", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+
+                                        // Option 2: Bank
+                                        Card(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clickable { selectedPaymentOption = "bank" },
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = if (selectedPaymentOption == "bank") CosmicSecondary.copy(alpha = 0.15f) else CosmicSurface
+                                            ),
+                                            border = androidx.compose.foundation.BorderStroke(
+                                                width = if (selectedPaymentOption == "bank") 1.5.dp else 1.dp,
+                                                color = if (selectedPaymentOption == "bank") CosmicSecondary else CosmicSurfaceVariant
+                                            ),
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.padding(8.dp).fillMaxWidth(),
+                                                horizontalAlignment = Alignment.CenterHorizontally
+                                            ) {
+                                                Icon(Icons.Default.AccountBalance, null, tint = if (selectedPaymentOption == "bank") CosmicSecondary else Color.White, modifier = Modifier.size(20.dp))
+                                                Spacer(modifier = Modifier.height(2.dp))
+                                                Text("تحويل بنكي (بنكك) 💳", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+
+                                    if (selectedPaymentOption == "bank") {
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, CosmicSecondary.copy(alpha = 0.3f)),
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.padding(8.dp).fillMaxWidth(),
+                                                horizontalAlignment = Alignment.End
+                                            ) {
+                                                Text("🏦 تفاصيل الحساب البنكي المعتمد للمجرة:", color = CosmicSecondary, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                                Text("رقم الحساب: 3414879", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                Text("باسم: معاوية عثمان احمد ياسين", color = Color.White.copy(0.8f), fontSize = 9.sp)
+                                                
+                                                Spacer(modifier = Modifier.height(6.dp))
+                                                
+                                                OutlinedTextField(
+                                                    value = bankTxId,
+                                                    onValueChange = { bankTxId = it },
+                                                    placeholder = { Text("أدخل رقم العملية البنكية هنا", color = MediumContrastTextDark, fontSize = 10.sp) },
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    singleLine = true,
+                                                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 11.sp, color = Color.White),
+                                                    colors = OutlinedTextFieldDefaults.colors(
+                                                        focusedTextColor = Color.White,
+                                                        unfocusedTextColor = Color.White,
+                                                        focusedBorderColor = CosmicSecondary,
+                                                        unfocusedBorderColor = CosmicSurfaceVariant
+                                                    )
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    Button(
+                                        onClick = {
+                                            isSubmittingPayment = true
+                                            val currentStatusBase = orderStatus.substringBefore("(").trim()
+                                            val methodString = if (selectedPaymentOption == "bank") {
+                                                "تحويل بنكي - إشعار: ${bankTxId.trim()}"
+                                            } else {
+                                                "الدفع نقداً عند التسليم"
+                                            }
+                                            val updatedStatus = "$currentStatusBase ($methodString)"
+                                            
+                                            viewModel.updateOrderStatus(orderId, updatedStatus) { err ->
+                                                isSubmittingPayment = false
+                                                if (err == null) {
+                                                    android.widget.Toast.makeText(context, "تم تحديد طريقة الدفع وتأكيد الفاتورة بنجاح! 🎉", android.widget.Toast.LENGTH_SHORT).show()
+                                                } else {
+                                                    android.widget.Toast.makeText(context, "فشل حفظ طريقة الدفع: $err", android.widget.Toast.LENGTH_LONG).show()
+                                                }
+                                            }
+                                        },
+                                        enabled = !isSubmittingPayment && (selectedPaymentOption == "cash" || bankTxId.isNotBlank()),
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        if (isSubmittingPayment) {
+                                            CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.Black)
+                                        } else {
+                                            Text("تأكيد طريقة الدفع ومطابقة الفاتورة ✅", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
                         
                         if (isDelivered) {
                             Box(
@@ -3878,6 +4047,7 @@ fun LoginScreenBody(
     val isLoginLoading by viewModel.isLoginLoading.collectAsStateWithLifecycle()
     val isGlobalLoading by viewModel.isGlobalLoading.collectAsStateWithLifecycle()
     val isCurrentlyLoading = isCheckingEmail || isLoginLoading || isGlobalLoading
+    val adminManagers by viewModel.allAdminManagers.collectAsStateWithLifecycle()
 
     val logoScale = remember { Animatable(0.2f) }
     val logoAlpha = remember { Animatable(0f) }
@@ -4164,8 +4334,7 @@ fun LoginScreenBody(
                                     Triple("customer", "عميل 👤", "Customer 👤"),
                                     Triple("seller", "بائع 🛒", "Seller 🛒"),
                                     Triple("courier", "مندوب 🚴", "Courier 🚴"),
-                                    Triple("pharmacist", "صيدلي 💊", "Pharmacist 💊"),
-                                    Triple("admin", "مدير 👑", "Admin 👑")
+                                    Triple("pharmacist", "صيدلي 💊", "Pharmacist 💊")
                                 )
                                 roles.forEach { (roleKey, arLabel, enLabel) ->
                                     val isSelected = selectedRole == roleKey
@@ -4274,7 +4443,6 @@ fun LoginScreenBody(
                         }
                     }
 
-                    val adminManagers by viewModel.allAdminManagers.collectAsStateWithLifecycle()
                     val matchingAdminManager = if (email.trim().isNotEmpty()) {
                         adminManagers.firstOrNull { manager ->
                             val cleanInput = email.trim().lowercase()
@@ -4668,19 +4836,7 @@ fun LoginScreenBody(
                             Spacer(modifier = Modifier.height(4.dp))
                         }
 
-                        item {
-                            OutlinedButton(
-                                onClick = onSkipAsGuest,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(44.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, CosmicSecondary.copy(alpha = 0.5f)),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = CosmicSecondary)
-                            ) {
-                                Text(viewModel.t("تخطي والدخول كزائر 🌌", "Skip and Enter as Guest 🌌"), fontWeight = FontWeight.Medium, fontSize = 12.sp)
-                            }
-                        }
+
                     }
 
 
@@ -5126,12 +5282,67 @@ fun ProfileScreenBody(
 ) {
     val activeProfile by viewModel.activeProfile.collectAsStateWithLifecycle()
     val isCourier by viewModel.isCourier.collectAsStateWithLifecycle()
+    val isGeneralAdmin by viewModel.isGeneralAdmin.collectAsStateWithLifecycle()
+    val isAdmin by viewModel.isAdmin.collectAsStateWithLifecycle()
+    val isSeller by viewModel.isSeller.collectAsStateWithLifecycle()
+    val isPharmacist by viewModel.isPharmacist.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     var editName by remember(activeProfile) { mutableStateOf(activeProfile?.name ?: "") }
     var editPhone by remember(activeProfile) { mutableStateOf(activeProfile?.phone ?: "") }
     val email = activeProfile?.email ?: ""
     var isUpdating by remember { mutableStateOf(false) }
+
+    val cameraLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (bitmap != null) {
+            try {
+                val outputStream = java.io.ByteArrayOutputStream()
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 75, outputStream)
+                val byteArray = outputStream.toByteArray()
+                val base64 = android.util.Base64.encodeToString(byteArray, android.util.Base64.DEFAULT)
+                viewModel.updateProfileImage(base64) { err ->
+                    if (err == null) {
+                        Toast.makeText(context, "تم التقاط صورة الملف الشخصي بنجاح! 📸", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "فشل: $err", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "فشل حفظ الصورة: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val galleryLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                val bitmap = if (android.os.Build.VERSION.SDK_INT >= 29) {
+                    val source = android.graphics.ImageDecoder.createSource(context.contentResolver, uri)
+                    android.graphics.ImageDecoder.decodeBitmap(source)
+                } else {
+                    @Suppress("DEPRECATION")
+                    android.provider.MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+                }
+                val outputStream = java.io.ByteArrayOutputStream()
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 75, outputStream)
+                val byteArray = outputStream.toByteArray()
+                val base64 = android.util.Base64.encodeToString(byteArray, android.util.Base64.DEFAULT)
+                viewModel.updateProfileImage(base64) { err ->
+                    if (err == null) {
+                        Toast.makeText(context, "تم اختيار صورة الملف الشخصي بنجاح! 🖼️", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "فشل: $err", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "فشل حفظ الصورة: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -5143,6 +5354,20 @@ fun ProfileScreenBody(
         item {
             Spacer(modifier = Modifier.height(32.dp))
             
+            val decodedBitmap = remember(activeProfile?.profileImageUri) {
+                try {
+                    val uri = activeProfile?.profileImageUri
+                    if (!uri.isNullOrEmpty()) {
+                        val decodedBytes = android.util.Base64.decode(uri, android.util.Base64.DEFAULT)
+                        android.graphics.BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
+                    } else {
+                        null
+                    }
+                } catch (e: Exception) {
+                    null
+                }
+            }
+
             // Astro themed avatar circle
             Box(
                 modifier = Modifier
@@ -5152,15 +5377,43 @@ fun ProfileScreenBody(
                     .border(2.dp, CosmicSecondary, androidx.compose.foundation.shape.CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.Person,
-                    contentDescription = "صورة الحساب",
-                    tint = CosmicSecondary,
-                    modifier = Modifier.size(68.dp)
-                )
+                if (decodedBitmap != null) {
+                    Image(
+                        bitmap = decodedBitmap.asImageBitmap(),
+                        contentDescription = "صورة الحساب",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = "صورة الحساب",
+                        tint = CosmicSecondary,
+                        modifier = Modifier.size(68.dp)
+                    )
+                }
             }
             
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = { cameraLauncher.launch(null) },
+                    modifier = Modifier.background(Color.White.copy(0.08f), androidx.compose.foundation.shape.CircleShape).size(36.dp)
+                ) {
+                    Icon(Icons.Default.CameraAlt, "التقاط صورة الكاميرا", tint = CosmicSecondary, modifier = Modifier.size(16.dp))
+                }
+                IconButton(
+                    onClick = { galleryLauncher.launch("image/*") },
+                    modifier = Modifier.background(Color.White.copy(0.08f), androidx.compose.foundation.shape.CircleShape).size(36.dp)
+                ) {
+                    Icon(Icons.Default.PhotoLibrary, "اختيار من المعرض", tint = CosmicSecondary, modifier = Modifier.size(16.dp))
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
             
             Text(
                 text = activeProfile?.name?.ifEmpty { "عميل كوزموس" } ?: "عميل كوزموس",
@@ -5168,6 +5421,23 @@ fun ProfileScreenBody(
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
+            )
+
+            val roleName = when {
+                activeProfile?.email?.trim()?.lowercase() == "mawiaosman0@gmail.com" -> "المدير العام للمجرة 👑"
+                isGeneralAdmin -> "المدير العام للمجرة 👑"
+                isAdmin -> "مدير إداري 🏛️"
+                isCourier -> "مندوب توصيل 🚴"
+                isSeller -> "بائع المجرة 🛒"
+                isPharmacist -> "صيدلي معتمد 💊"
+                else -> "عميل المجرة 🌌"
+            }
+            Text(
+                text = roleName,
+                color = CosmicSecondary,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(top = 4.dp)
             )
             
             Text(
@@ -5393,6 +5663,10 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
     val allAdminManagers by viewModel.allAdminManagers.collectAsStateWithLifecycle()
     val isAdministrativeManager by viewModel.isAdministrativeManager.collectAsStateWithLifecycle()
 
+    val pharmacies by viewModel.allPharmacies.collectAsStateWithLifecycle()
+    val pharmacyOrders by viewModel.allPharmacyOrders.collectAsStateWithLifecycle()
+    val allRestaurantOrders by viewModel.allRestaurantOrders.collectAsStateWithLifecycle()
+
     val pendingCourierOrdersCount = remember(allOrders) {
         val grouped = allOrders.groupBy { it.orderId }
         grouped.keys.count { orderId ->
@@ -5406,6 +5680,39 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
 
     val pendingProductsCount = remember(allProducts) {
         allProducts.count { !it.isApproved }
+    }
+
+    val pendingPharmacyCount = remember(pharmacies, pharmacyOrders) {
+        pharmacies.count { !it.isApproved } + pharmacyOrders.count { it.status == "بانتظار المدير" || it.status == "بانتظار الصيدلي" }
+    }
+
+    val pendingRestaurantOrdersCount = remember(allRestaurantOrders) {
+        allRestaurantOrders.count { it.status == "معلق" }
+    }
+
+    var lastPendingCourierOrdersCount by remember { mutableStateOf(pendingCourierOrdersCount) }
+    var lastPendingProductsCount by remember { mutableStateOf(pendingProductsCount) }
+    var lastPendingPharmacyCount by remember { mutableStateOf(pendingPharmacyCount) }
+    var lastPendingRestaurantOrdersCount by remember { mutableStateOf(pendingRestaurantOrdersCount) }
+
+    LaunchedEffect(pendingCourierOrdersCount, pendingProductsCount, pendingPharmacyCount, pendingRestaurantOrdersCount) {
+        if (pendingCourierOrdersCount > lastPendingCourierOrdersCount ||
+            pendingProductsCount > lastPendingProductsCount ||
+            pendingPharmacyCount > lastPendingPharmacyCount ||
+            pendingRestaurantOrdersCount > lastPendingRestaurantOrdersCount
+        ) {
+            try {
+                val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+                val r = android.media.RingtoneManager.getRingtone(context, alertUri)
+                r?.play()
+            } catch (e: Exception) {
+                // Fallback
+            }
+        }
+        lastPendingCourierOrdersCount = pendingCourierOrdersCount
+        lastPendingProductsCount = pendingProductsCount
+        lastPendingPharmacyCount = pendingPharmacyCount
+        lastPendingRestaurantOrdersCount = pendingRestaurantOrdersCount
     }
 
     if (activeDetailDialog != null) {
@@ -5895,7 +6202,8 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                 add("المنتجات🛍️" to 2)
                 add("إضافة ➕" to 1)
                 add("مفاتيح الربط🔑" to 5)
-                add("الصيدليات 💊" to 9)
+                add((if (pendingPharmacyCount > 0) "الصيدليات 💊 ($pendingPharmacyCount)" else "الصيدليات 💊") to 9)
+                add((if (pendingRestaurantOrdersCount > 0) "طلبات المطاعم 🍔 ($pendingRestaurantOrdersCount)" else "طلبات المطاعم 🍔") to 11)
                 if (isGeneralAdmin) {
                     add("المدراء 👑" to 10)
                 }
@@ -6275,6 +6583,7 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                 Triple("estate_cars", "كوكب بيع العقارات والسيارات", "estate_cars"),
                                 Triple("rentals", "كوكب الإيجارات", "rentals"),
                                 Triple("pharmacy", "كوكب صيدلية", "pharmacy"),
+                                Triple("restaurant", "كوكب مطاعم", "restaurant"),
                                 Triple("kids", "كوكب مستلزمات أطفال", "kids"),
                                 Triple("women", "كوكب للنساء", "women"),
                                 Triple("men", "كوكب للرجال", "men"),
@@ -8879,6 +9188,9 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                 10 -> {
                     AdminManagersSection(viewModel = viewModel)
                 }
+                11 -> {
+                    com.example.ui.screens.RestaurantsPlanetSection(viewModel = viewModel, forceAdminPortal = true)
+                }
             }
         }
     }
@@ -9419,6 +9731,7 @@ fun SellerDashboardScreenBody(viewModel: MajarahViewModel) {
         "estate_cars" to "كوكب بيع العقارات والسيارات",
         "rentals" to "كوكب الإيجارات",
         "pharmacy" to "كوكب صيدلية",
+        "restaurant" to "كوكب مطاعم",
         "kids" to "كوكب مستلزمات أطفال",
         "women" to "كوكب للنساء",
         "men" to "كوكب للرجال",
