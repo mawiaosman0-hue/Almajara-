@@ -33,7 +33,7 @@ sealed class Screen {
 }
 
 class MajarahViewModel(application: Application) : AndroidViewModel(application) {
-    private val database = AppDatabase.getDatabase(application)
+    val database = AppDatabase.getDatabase(application)
     private val repository = MajarahRepository(
         database.productDao(),
         database.cartDao(),
@@ -240,7 +240,21 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
 
     fun applyCoupon(code: String): Boolean {
         val uppercaseCode = code.trim().uppercase()
-        if (uppercaseCode == "COSMIC10" || uppercaseCode == "MAJARAH15" || uppercaseCode == "SUDAN50") {
+        val staticCodes = listOf("COSMIC10", "MAJARAH15", "SUDAN50")
+        
+        if (uppercaseCode in staticCodes) {
+            _appliedCoupon.value = uppercaseCode
+            _couponError.value = null
+            return true
+        }
+        
+        // Check dynamic coupons from database
+        val dbCoupon = allCouponsFlow.value.find { it.code.trim().uppercase() == uppercaseCode }
+        if (dbCoupon != null) {
+            if (dbCoupon.isUsed) {
+                _couponError.value = "هذا الكوبون تم استخدامه مسبقاً ❌"
+                return false
+            }
             _appliedCoupon.value = uppercaseCode
             _couponError.value = null
             return true
@@ -256,11 +270,24 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun getCouponDiscountPercentage(coupon: String?): Int {
-        return when (coupon) {
+        if (coupon == null) return 0
+        val uppercaseCoupon = coupon.trim().uppercase()
+        return when (uppercaseCoupon) {
             "COSMIC10" -> 10
             "MAJARAH15" -> 15
             "SUDAN50" -> 50
-            else -> 0
+            else -> {
+                val dbCoupon = allCouponsFlow.value.find { it.code.trim().uppercase() == uppercaseCoupon }
+                if (dbCoupon != null) {
+                    if (dbCoupon.isBogo) {
+                        50 // 50% discount for Buy 1 Get 1 equivalent discount
+                    } else if (dbCoupon.isFreeDelivery) {
+                        0 // free delivery gets 0% product discount but free delivery charge
+                    } else {
+                        dbCoupon.discountPercent.toInt()
+                    }
+                } else 0
+            }
         }
     }
 
@@ -273,6 +300,66 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
     // Success dialog state after order placement
     private val _checkoutSuccessMessage = MutableStateFlow<String?>(null)
     val checkoutSuccessMessage: StateFlow<String?> = _checkoutSuccessMessage.asStateFlow()
+
+    fun loginGoogleVerifiedAccountDirect(email: String, onComplete: (String?, Boolean) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val remoteProfs = com.example.data.network.SupabaseClient.api.getProfilesByEmail(emailFilter = "eq.${email.trim()}")
+                if (remoteProfs.isNotEmpty()) {
+                    val p = remoteProfs.first()
+                    val profileEntity = com.example.data.db.ProfileEntity(
+                        id = p.id ?: java.util.UUID.randomUUID().toString(),
+                        name = p.name ?: "مستخدم جوجل",
+                        phone = p.phone ?: "",
+                        email = p.email ?: email,
+                        password = "google_authenticated_bypass_1782"
+                    )
+                    database.profileDao().clearProfiles()
+                    database.profileDao().insertProfile(profileEntity)
+                    
+                    val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
+                    sharedPrefs.edit().putBoolean("is_logged_in_state", true).apply()
+                    
+                    activeProfile.value = profileEntity
+                    _isLoggedIn.value = true
+                    checkoutName.value = profileEntity.name
+                    checkoutPhone.value = profileEntity.phone
+
+                    // Resolve roles or current screen
+                    val cleanP = profileEntity.phone.trim().replace("+", "").replace(" ", "")
+                    val matchesCourier = database.courierDao().getAllCouriersSnapshot().any { c ->
+                        c.phone.trim().replace("+", "").replace(" ", "") == cleanP || c.phone.trim() == profileEntity.phone.trim()
+                    }
+                    val matchesSeller = database.sellerDao().getAllSellersSnapshot().any { s ->
+                        s.email.trim().lowercase() == profileEntity.email.trim().lowercase()
+                    }
+                    val role = sharedPrefs.getString("user_role_${profileEntity.email.trim().lowercase()}", "")
+                    val isPharmacistUser = role == "pharmacist"
+                    val isAdminUser = profileEntity.email.trim().lowercase() == "mawiaosman0@gmail.com" || role == "admin"
+
+                    if (isAdminUser) {
+                        _currentScreen.value = Screen.Admin
+                    } else if (matchesCourier) {
+                        _currentScreen.value = Screen.Courier
+                    } else if (matchesSeller) {
+                        _currentScreen.value = Screen.Seller
+                    } else if (isPharmacistUser) {
+                        _selectedCategory.value = "pharmacy"
+                        _currentScreen.value = Screen.Home
+                    } else {
+                        _currentScreen.value = Screen.Home
+                    }
+                    
+                    onComplete(null, true) // exists, logged in successfully!
+                } else {
+                    onComplete(null, false) // doesn't exist, need registration
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                onComplete(e.message ?: "خطأ غير معروف", false)
+            }
+        }
+    }
 
     fun performLogin(onSuccess: (String?) -> Unit) {
         val name = if (isRegisterMode.value) loginName.value.trim() else ""
@@ -757,6 +844,10 @@ $couponMessage---------------------------
             }
             
             // Reset form & coupon details
+            val usedCoupon = _appliedCoupon.value
+            if (usedCoupon != null) {
+                database.appCouponDao().markCouponAsUsed(usedCoupon)
+            }
             _appliedCoupon.value = null
             _couponError.value = null
             checkoutAddress.value = ""
@@ -1282,7 +1373,7 @@ $couponMessage---------------------------
         emptyList()
     )
 
-    fun addRestaurant(name: String, phone: String, menuImageUri: String?, onComplete: (String?) -> Unit) {
+    fun addRestaurant(name: String, phone: String, menuImageUri: String?, logoImageUri: String? = null, onComplete: (String?) -> Unit) {
         isGlobalLoading.value = true
         viewModelScope.launch {
             var error: String? = null
@@ -1290,7 +1381,8 @@ $couponMessage---------------------------
                 val restaurant = com.example.data.db.RestaurantEntity(
                     name = name,
                     phone = phone,
-                    menuImageUri = menuImageUri
+                    menuImageUri = menuImageUri,
+                    logoImageUri = logoImageUri
                 )
                 repository.insertRestaurant(restaurant)
             } catch (e: Exception) {
@@ -1404,6 +1496,194 @@ $couponMessage---------------------------
                 }
             } catch (e: Exception) {
                 onComplete(e.localizedMessage ?: "فشل تحديث صورة الملف الشخصي")
+            }
+        }
+    }
+
+    // --- NEW REAL-TIME CLASSIFICATIONS & COUPONS FLOWS ---
+    val isRestaurant: StateFlow<Boolean> = combine(activeProfile, _isLoggedIn, allRestaurants) { profile, loggedIn, restaurants ->
+        if (!loggedIn || profile == null) {
+            false
+        } else if (profile.email.trim().lowercase() == "mawiaosman0@gmail.com") {
+            false
+        } else {
+            val emailClean = profile.email.trim().lowercase()
+            val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
+            val isRestPref = sharedPrefs.getString("user_role_${profile.email}", "") == "restaurant"
+            isRestPref || restaurants.any { r -> r.phone.trim() == profile.phone.trim() || r.name.trim().lowercase() == profile.name.trim().lowercase() }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val userClassification: StateFlow<String> = combine(
+        listOf(
+            activeProfile,
+            _isLoggedIn,
+            isGeneralAdmin,
+            isAdministrativeManager,
+            isSeller,
+            isCourier,
+            isPharmacist,
+            isRestaurant,
+            orderHistory,
+            repository.allProducts,
+            allRestaurantOrders,
+            allPharmacyOrders,
+            allPharmacies,
+            allRestaurants
+        )
+    ) { array ->
+        val profile = array[0] as? com.example.data.db.ProfileEntity
+        val loggedIn = array[1] as? Boolean ?: false
+        val isGen = array[2] as? Boolean ?: false
+        val isAdm = array[3] as? Boolean ?: false
+        val isSel = array[4] as? Boolean ?: false
+        val isCou = array[5] as? Boolean ?: false
+        val isPhar = array[6] as? Boolean ?: false
+        val isRest = array[7] as? Boolean ?: false
+        val orders = array[8] as? List<com.example.data.db.OrderEntity> ?: emptyList()
+        val products = array[9] as? List<com.example.data.db.ProductEntity> ?: emptyList()
+        val restOrders = array[10] as? List<com.example.data.db.RestaurantOrderEntity> ?: emptyList()
+        val pharOrders = array[11] as? List<com.example.data.db.PharmacyOrderEntity> ?: emptyList()
+        val pharmacies = array[12] as? List<com.example.data.db.PharmacyEntity> ?: emptyList()
+        val restaurants = array[13] as? List<com.example.data.db.RestaurantEntity> ?: emptyList()
+
+        if (!loggedIn || profile == null) return@combine "زائر 🌌"
+        if (isGen) return@combine "مدير عام 👑"
+        if (isAdm) return@combine "مدير إداري 🧑‍💼"
+        
+        val emailClean = profile.email.trim().lowercase()
+        val phoneClean = profile.phone.trim().replace("+", "").replace(" ", "")
+        
+        if (isCou) {
+            val courierDeliveries = orders.filter { 
+                val cPhone = it.courierPhone.trim().replace("+", "").replace(" ", "")
+                (cPhone == phoneClean || it.courierPhone.trim() == profile.phone.trim()) && 
+                (it.statusArabic.contains("تم") || it.statusArabic.contains("توصيل") || it.statusArabic.contains("تمام"))
+            }.distinctBy { it.orderId }.size
+            
+            return@combine when {
+                courierDeliveries >= 9 -> "مندوب ذهبي 👑"
+                courierDeliveries >= 4 -> "مندوب مميز ⭐"
+                else -> "مندوب عادي 🚴"
+            }
+        }
+        
+        if (isSel) {
+            val sellerProducts = products.filter { it.sellerEmail.trim().lowercase() == emailClean }.size
+            return@combine when {
+                sellerProducts >= 10 -> "تاجر ذهبي 👑"
+                sellerProducts >= 5 -> "تاجر مميز ⭐"
+                else -> "تاجر عادي 🛍️"
+            }
+        }
+        
+        if (isRest) {
+            val rOrders = restOrders.filter { 
+                it.restaurantPhone.trim() == profile.phone.trim() || 
+                it.restaurantName.trim().lowercase() == profile.name.trim().lowercase() 
+            }.size
+            return@combine when {
+                rOrders >= 9 -> "مطعم ذهبي 👑"
+                rOrders >= 4 -> "مطعم مميز ⭐"
+                else -> "مطعم عادي 🍔"
+            }
+        }
+        
+        if (isPhar) {
+            val myPharmacy = pharmacies.find { it.pharmacistEmail.trim().lowercase() == emailClean }
+            val pOrders = if (myPharmacy != null) {
+                pharOrders.filter { it.pharmacyId == myPharmacy.id && it.status != "بانتظار الصيدلي" }.size
+            } else 0
+            
+            return@combine when {
+                pOrders >= 9 -> "صيدلي ذهبي 👑"
+                pOrders >= 4 -> "صيدلي مميز ⭐"
+                else -> "صيدلي عادي 💊"
+            }
+        }
+        
+        // Customer classification based on total completed orders
+        val myOrdersCount = orders.distinctBy { it.orderId }.size
+        return@combine when {
+            myOrdersCount >= 6 -> "عميل ذهبي 👑"
+            myOrdersCount >= 3 -> "عميل مميز ⭐"
+            else -> "عميل عادي 👤"
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "زائر 🌌")
+
+    val allRatingsFlow: StateFlow<List<com.example.data.db.AppRatingEntity>> = database.appRatingDao().getAllRatings()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val allCouponsFlow: StateFlow<List<com.example.data.db.AppCouponEntity>> = database.appCouponDao().getAllCoupons()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun submitAppRating(stars: Int, comment: String) {
+        viewModelScope.launch {
+            val profile = activeProfile.value
+            val rating = com.example.data.db.AppRatingEntity(
+                customerName = profile?.name ?: "عميل المجرة الكونية",
+                customerEmail = profile?.email ?: "guest@majarah.com",
+                ratingStars = stars,
+                comment = comment,
+                ratingDate = System.currentTimeMillis()
+            )
+            database.appRatingDao().insertRating(rating)
+            
+            // Generate customized promo coupon based on rating stars
+            val randSuffix = (1000..9999).random()
+            val couponCode = if (stars >= 5) "MAJARAH_FREE_$randSuffix" else "HAPPY_BOGO_$randSuffix"
+            val coupon = com.example.data.db.AppCouponEntity(
+                code = couponCode,
+                discountPercent = if (stars >= 5) 0.0 else 50.0,
+                isFreeDelivery = (stars >= 5),
+                isBogo = (stars < 5),
+                forUserEmail = profile?.email ?: "guest@majarah.com",
+                isUsed = false,
+                offerTitle = if (stars >= 5) "توصيل مجاني لتقييمك المتميز 🚚🌌" else "عرض اطلب واحد والثاني هدية لتقييمك الغالي 🎁🍔"
+            )
+            database.appCouponDao().insertCoupon(coupon)
+            
+            android.widget.Toast.makeText(
+                getApplication(), 
+                "شكراً لتقييمك! لقد فزت بكوبون عرض متميز: $couponCode 🌌✨", 
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    val allProfilesFlow = MutableStateFlow<List<com.example.data.db.ProfileEntity>>(emptyList())
+    
+    fun refreshAllProfiles() {
+        viewModelScope.launch {
+            val list = database.profileDao().getAllProfiles()
+            allProfilesFlow.value = list
+        }
+    }
+
+    fun deleteProfileAdmin(id: String, onResult: (String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                database.profileDao().deleteProfileById(id)
+                com.example.data.network.SupabaseClient.api.deleteProfile("eq." + id)
+                refreshAllProfiles()
+                onResult(null)
+            } catch (e: Exception) {
+                refreshAllProfiles()
+                onResult(e.localizedMessage)
+            }
+        }
+    }
+
+    fun addProfileAdmin(profile: com.example.data.db.ProfileEntity, onResult: (String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                database.profileDao().insertProfile(profile)
+                repository.registerUserProfile(profile.name, profile.phone, profile.email, profile.password)
+                refreshAllProfiles()
+                onResult(null)
+            } catch (e: Exception) {
+                refreshAllProfiles()
+                onResult(e.localizedMessage)
             }
         }
     }

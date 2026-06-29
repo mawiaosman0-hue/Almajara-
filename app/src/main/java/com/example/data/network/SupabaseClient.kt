@@ -221,6 +221,11 @@ interface SupabaseApi {
         @Body profile: SupabaseProfile
     ): List<SupabaseProfile>
 
+    @retrofit2.http.DELETE("rest/v1/profiles")
+    suspend fun deleteProfile(
+        @Query("id") idFilter: String
+    )
+
     @GET("rest/v1/couriers")
     suspend fun getCouriers(
         @Query("select") select: String = "*"

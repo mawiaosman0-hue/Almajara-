@@ -9,6 +9,7 @@ data class RestaurantEntity(
     val name: String,
     val phone: String,
     val menuImageUri: String? = null,
+    val logoImageUri: String? = null,
     val isApproved: Boolean = true,
     val createdAt: Long = System.currentTimeMillis()
 )

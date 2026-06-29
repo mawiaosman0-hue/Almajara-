@@ -110,6 +110,9 @@ interface ProfileDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertProfile(profile: ProfileEntity)
 
+    @Query("DELETE FROM profiles WHERE id = :id")
+    suspend fun deleteProfileById(id: String)
+
     @Query("DELETE FROM profiles")
     suspend fun clearProfiles()
 }

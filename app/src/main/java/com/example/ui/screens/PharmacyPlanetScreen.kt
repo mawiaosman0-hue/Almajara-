@@ -847,104 +847,272 @@ fun CustomerPharmacyView(
 ) {
     val context = LocalContext.current
     val activeProfile by viewModel.activeProfile.collectAsStateWithLifecycle()
+    val allOrders by viewModel.allPharmacyOrders.collectAsStateWithLifecycle()
     var selectedPharmacyForDetails by remember { mutableStateOf<PharmacyEntity?>(null) }
     var showPrescriptionFormForPharmacy by remember { mutableStateOf<PharmacyEntity?>(null) }
+    var activeSubTab by remember { mutableStateOf(0) } // 0: Pharmacies, 1: My Prescriptions
 
-    if (approvedPharmacies.isEmpty()) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = CosmicSurface),
-            border = BorderStroke(1.dp, CosmicSurfaceVariant),
-            shape = RoundedCornerShape(14.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 40.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.MedicalServices, null, tint = CosmicSecondary, modifier = Modifier.size(48.dp))
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text("لا توجد صيدليات نشطة حالياً في كوكب الصيدلية بالمجرة 📭", color = MediumContrastTextDark, fontSize = 12.sp, textAlign = TextAlign.Center)
-                }
-            }
+    val myPharmacyOrders = remember(allOrders, activeProfile) {
+        val email = activeProfile?.email?.trim()?.lowercase() ?: ""
+        val phone = activeProfile?.phone?.trim() ?: ""
+        allOrders.filter {
+            (email.isNotBlank() && it.customerEmail.trim().lowercase() == email) ||
+            (phone.isNotBlank() && it.customerPhone.trim() == phone)
         }
-    } else {
-        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(
-                text = "🏥 الصيدليات الطبية المعتمدة في المجرة الكونية:",
-                color = CosmicSecondary,
-                fontWeight = FontWeight.Bold,
-                fontSize = 12.sp,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Right
-            )
+    }
 
-            approvedPharmacies.forEach { pharmacy ->
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // Tab row for Customer Pharmacy View
+        TabRow(
+            selectedTabIndex = activeSubTab,
+            containerColor = CosmicDeepSpace,
+            contentColor = Color.White,
+            indicator = { tabPositions ->
+                TabRowDefaults.SecondaryIndicator(
+                    modifier = Modifier.tabIndicatorOffset(tabPositions[activeSubTab]),
+                    color = CosmicSecondary
+                )
+            },
+            modifier = Modifier.padding(bottom = 12.dp)
+        ) {
+            Tab(
+                selected = activeSubTab == 0,
+                onClick = { activeSubTab = 0 },
+                text = { Text("الصيدليات الطبية 🏥", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+            )
+            Tab(
+                selected = activeSubTab == 1,
+                onClick = { activeSubTab = 1 },
+                text = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (myPharmacyOrders.isNotEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .padding(end = 6.dp)
+                                    .size(16.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Red),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(myPharmacyOrders.size.toString(), color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        Text("روشتاتي وطلباتي 📋", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            )
+        }
+
+        if (activeSubTab == 0) {
+            if (approvedPharmacies.isEmpty()) {
                 Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { selectedPharmacyForDetails = pharmacy },
+                    modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = CosmicSurface),
                     border = BorderStroke(1.dp, CosmicSurfaceVariant),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(14.dp)
                 ) {
-                    Column(modifier = Modifier.padding(14.dp), horizontalAlignment = Alignment.End) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.ArrowBackIosNew, null, tint = CosmicSecondary, modifier = Modifier.size(16.dp))
-                            Text(pharmacy.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 40.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.MedicalServices, null, tint = CosmicSecondary, modifier = Modifier.size(48.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text("لا توجد صيدليات نشطة حالياً في كوكب الصيدلية بالمجرة 📭", color = MediumContrastTextDark, fontSize = 12.sp, textAlign = TextAlign.Center)
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("الدكتور المسؤول: د. ${pharmacy.doctorName} 🧑‍⚕️", color = MediumContrastTextDark, fontSize = 10.sp)
-                        Text("الموقع والفرع: ${pharmacy.location} 📍", color = Color.White.copy(0.7f), fontSize = 10.sp)
-                        
-                        Spacer(modifier = Modifier.height(10.dp))
+                    }
+                }
+            } else {
+                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = "🏥 الصيدليات الطبية المعتمدة في المجرة الكونية:",
+                        color = CosmicSecondary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Right
+                    )
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    approvedPharmacies.forEach { pharmacy ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedPharmacyForDetails = pharmacy },
+                            colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                            border = BorderStroke(1.dp, CosmicSurfaceVariant),
+                            shape = RoundedCornerShape(12.dp)
                         ) {
-                            Button(
-                                onClick = { showPrescriptionFormForPharmacy = pharmacy },
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(vertical = 8.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.CameraAlt, null, tint = Color.Black, modifier = Modifier.size(14.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("تصوير وإضافة روشتة 📸✍️", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                            Column(modifier = Modifier.padding(14.dp), horizontalAlignment = Alignment.End) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.ArrowBackIosNew, null, tint = CosmicSecondary, modifier = Modifier.size(16.dp))
+                                    Text(pharmacy.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("الدكتور المسؤول: د. ${pharmacy.doctorName} 🧑‍⚕️", color = MediumContrastTextDark, fontSize = 10.sp)
+                                Text("الموقع والفرع: ${pharmacy.location} 📍", color = Color.White.copy(0.7f), fontSize = 10.sp)
+                                
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Button(
+                                        onClick = { showPrescriptionFormForPharmacy = pharmacy },
+                                        modifier = Modifier.weight(1f),
+                                        colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary),
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = PaddingValues(vertical = 8.dp)
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.CameraAlt, null, tint = Color.Black, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("تصوير وإضافة روشتة 📸✍️", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                                        }
+                                    }
+
+                                    OutlinedButton(
+                                        onClick = {
+                                            try {
+                                                val cleanNum = pharmacy.phone.trim().replace(" ", "").replace("+", "")
+                                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                                                    data = android.net.Uri.parse("https://api.whatsapp.com/send?phone=$cleanNum")
+                                                }
+                                                context.startActivity(intent)
+                                            } catch (e: Exception) {
+                                                Toast.makeText(context, "الرقم غير صالح لـ WhatsApp: ${pharmacy.phone}", Toast.LENGTH_SHORT).show()
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = BorderStroke(1.dp, Color(0xFF25D366)),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF25D366)),
+                                        contentPadding = PaddingValues(vertical = 8.dp)
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Chat, null, tint = Color(0xFF25D366), modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("تواصل عبر واتساب 💬", fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                                        }
+                                    }
                                 }
                             }
+                        }
+                    }
+                }
+            }
+        } else {
+            // My Prescriptions / Submitted Orders
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (myPharmacyOrders.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("لا توجد روشتات أو طلبات طبية سابقة لك 📭", color = Color.Gray, fontSize = 13.sp)
+                        }
+                    }
+                } else {
+                    items(myPharmacyOrders) { order ->
+                        val pharm = approvedPharmacies.find { it.id == order.pharmacyId }
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                            border = BorderStroke(1.dp, CosmicSurfaceVariant),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp), horizontalAlignment = Alignment.End) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = order.status,
+                                        color = when (order.status) {
+                                            "بانتظار الصيدلي" -> Color.Red
+                                            "بانتظار المدير" -> Color(0xFFFF9800)
+                                            "تم التوصيل" -> Color.Green
+                                            else -> CosmicSecondary
+                                        },
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier
+                                            .background(
+                                                when (order.status) {
+                                                    "بانتظار الصيدلي" -> Color.Red.copy(0.12f)
+                                                    "بانتظار المدير" -> Color(0xFFFF9800).copy(0.12f)
+                                                    "تم التوصيل" -> Color.Green.copy(0.12f)
+                                                    else -> CosmicSecondary.copy(0.12f)
+                                                },
+                                                RoundedCornerShape(6.dp)
+                                            )
+                                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                                    )
+                                    Text(
+                                        text = "طلب روشتة #${order.id}",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp
+                                    )
+                                }
 
-                            OutlinedButton(
-                                onClick = {
-                                    try {
-                                        val cleanNum = pharmacy.phone.trim().replace(" ", "").replace("+", "")
-                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
-                                            data = android.net.Uri.parse("https://api.whatsapp.com/send?phone=$cleanNum")
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text("الصيدلية: ${pharm?.name ?: "صيدلية معتمدة بالمجرة"}", color = CosmicSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                
+                                if (order.medicinesJson.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("الأدوية المسعرة: ${order.medicinesJson}", color = Color.White.copy(0.8f), fontSize = 11.sp, textAlign = TextAlign.Right)
+                                    Text("قيمة العلاج: ${viewModel.formatPrice(order.medicinePrice)} SDG", color = CosmicSecondary, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                }
+
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("توصيل الدواء مجاني 🎉", color = Color.Green, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Text("رسوم التوصيل 🚚:", color = Color.White.copy(0.6f), fontSize = 10.sp)
+                                }
+
+                                if (order.courierName.isNotBlank()) {
+                                    Text("المندوب المعين: ${order.courierName} (${order.courierPhone}) 🚴", color = Color.White, fontSize = 10.sp)
+                                }
+
+                                // Display "بالشفاء العاجل لك إن شاء الله 🤲✨" when order.status == "تم التوصيل"
+                                if (order.status == "تم التوصيل") {
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = CardDefaults.cardColors(containerColor = Color.Green.copy(0.12f)),
+                                        border = BorderStroke(1.dp, Color.Green.copy(0.3f)),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(10.dp),
+                                            horizontalArrangement = Arrangement.Center,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "بالشفاء العاجل لك إن شاء الله 🤲✨",
+                                                color = Color.Green,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 12.sp,
+                                                textAlign = TextAlign.Center
+                                            )
                                         }
-                                        context.startActivity(intent)
-                                    } catch (e: Exception) {
-                                        Toast.makeText(context, "الرقم غير صالح لـ WhatsApp: ${pharmacy.phone}", Toast.LENGTH_SHORT).show()
                                     }
-                                },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(8.dp),
-                                border = BorderStroke(1.dp, Color(0xFF25D366)),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF25D366)),
-                                contentPadding = PaddingValues(vertical = 8.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Chat, null, tint = Color(0xFF25D366), modifier = Modifier.size(14.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("تواصل عبر واتساب 💬", fontWeight = FontWeight.Bold, fontSize = 10.sp)
                                 }
                             }
                         }
@@ -1214,7 +1382,7 @@ fun AdminPharmacyPortal(
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             val subTabs = listOf(
-                "الطلبات والروشتات 📥" to 2,
+                "طلبات الروشتات من الصيدلي للتوصيل 📥" to 2,
                 "الأدوية والمنتجات 🧪" to 1,
                 "توثيق الصيدليات 🏥" to 0
             )

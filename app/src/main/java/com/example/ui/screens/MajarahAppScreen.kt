@@ -305,6 +305,30 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
     val allOrders by viewModel.allOrdersFlow.collectAsStateWithLifecycle()
     val allPharmacyOrders by viewModel.allPharmacyOrders.collectAsStateWithLifecycle()
 
+    val allRatings by viewModel.allRatingsFlow.collectAsStateWithLifecycle()
+    var showAppRatingDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(activeProfile, allOrders, allRatings) {
+        if (activeProfile != null) {
+            val userEmail = activeProfile?.email?.trim()?.lowercase() ?: ""
+            val userPhone = activeProfile?.phone?.trim()?.replace("+", "")?.replace(" ", "") ?: ""
+            
+            // Check if user has any completed order (e.g. status contains "توصيل" or "تسليم" or "تم")
+            val hasCompletedOrder = allOrders.any { o ->
+                val oPhone = o.customerPhone.trim().replace("+", "").replace(" ", "")
+                val isMyOrder = oPhone == userPhone || o.customerName.trim().lowercase() == activeProfile?.name?.trim()?.lowercase()
+                isMyOrder && (o.statusArabic.contains("توصيل") || o.statusArabic.contains("تسليم") || o.statusArabic.contains("تم") || o.statusArabic.contains("تمام"))
+            }
+
+            // Check if user has already rated
+            val hasAlreadyRated = allRatings.any { it.customerEmail.trim().lowercase() == userEmail }
+
+            if (hasCompletedOrder && !hasAlreadyRated && !isCourier && !isAdmin && !isSeller) {
+                showAppRatingDialog = true
+            }
+        }
+    }
+
     LaunchedEffect(isCourier, activeProfile, allOrders, allPharmacyOrders) {
         if (isCourier && activeProfile != null) {
             val courierPhone = activeProfile?.phone?.trim()?.replace("+", "")?.replace(" ", "") ?: ""
@@ -345,6 +369,15 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        if (showAppRatingDialog) {
+            AppRatingDialog(
+                onDismiss = { showAppRatingDialog = false },
+                onSubmit = { stars, comment ->
+                    viewModel.submitAppRating(stars, comment)
+                    showAppRatingDialog = false
+                }
+            )
+        }
         Scaffold(
         topBar = {
             if (currentScreen !is Screen.Login && currentScreen !is Screen.Splash) {
@@ -390,9 +423,9 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.padding(start = 4.dp)
                                 ) {
-                                    Icon(Icons.Default.Store, "الرجوع للبائع", tint = CosmicSecondary)
+                                    Icon(Icons.Default.Store, "الرجوع للتاجر", tint = CosmicSecondary)
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text("لوحة البائع 🧑‍💼", color = CosmicSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Text("لوحة التاجر 🧑‍💼", color = CosmicSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         } else if (currentScreen is Screen.ProductDetail) {
@@ -568,7 +601,23 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                     NavigationBarItem(
                         selected = currentScreen is Screen.Cart,
                         onClick = { viewModel.navigateTo(Screen.Cart) },
-                        icon = { Icon(Icons.Default.ShoppingCart, null) },
+                        icon = { 
+                            Box {
+                                Icon(Icons.Default.ShoppingCart, null)
+                                if (cartItems.isNotEmpty()) {
+                                    val totalQty = cartItems.sumOf { it.quantity }
+                                    Badge(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .offset(x = 10.dp, y = (-8).dp),
+                                        containerColor = CosmicSecondary,
+                                        contentColor = Color.Black
+                                    ) {
+                                        Text(text = totalQty.toString(), fontWeight = FontWeight.Bold, fontSize = 8.sp)
+                                    }
+                                }
+                            }
+                        },
                         label = { Text("السلة", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = CosmicDeepSpace,
@@ -4332,7 +4381,7 @@ fun LoginScreenBody(
                             ) {
                                 val roles = listOf(
                                     Triple("customer", "عميل 👤", "Customer 👤"),
-                                    Triple("seller", "بائع 🛒", "Seller 🛒"),
+                                    Triple("seller", "تاجر 🛒", "Merchant 🛒"),
                                     Triple("courier", "مندوب 🚴", "Courier 🚴"),
                                     Triple("pharmacist", "صيدلي 💊", "Pharmacist 💊")
                                 )
@@ -4756,20 +4805,12 @@ fun LoginScreenBody(
                                         if (googleAccounts.isNotEmpty()) {
                                             val firstAcc = googleAccounts.first()
                                             val email = firstAcc.name
-                                            val name = email.substringBefore("@").replaceFirstChar { if (it.isLowerCase()) it.titlecase(java.util.Locale.getDefault()) else it.toString() }
                                             isCheckingEmail = true
-                                            scope.launch {
-                                                try {
-                                                    val remoteProfs = com.example.data.network.SupabaseClient.api.getProfilesByEmail(emailFilter = "eq.$email")
-                                                    if (remoteProfs.isNotEmpty()) {
-                                                        val p = remoteProfs.first()
-                                                        googleEmailState = email
-                                                        onEmailChange(email)
-                                                        onNameChange("")
-                                                        onPhoneChange("")
-                                                        isGoogleAccountExists = true
-                                                        isGoogleFlowActive = true
-                                                        Toast.makeText(context, "تم المتابعة بحسابك النشط ($email) والتحقق بنجاح! 💚📱", Toast.LENGTH_LONG).show()
+                                            viewModel.loginGoogleVerifiedAccountDirect(email) { err, exists ->
+                                                isCheckingEmail = false
+                                                if (err == null) {
+                                                    if (exists) {
+                                                        Toast.makeText(context, "مرحباً بعودتك! تم الدخول والمزامنة المباشرة لحساب Google ($email) بنجاح 🟢✨", Toast.LENGTH_LONG).show()
                                                     } else {
                                                         googleEmailState = email
                                                         onEmailChange(email)
@@ -4777,18 +4818,16 @@ fun LoginScreenBody(
                                                         onPhoneChange("")
                                                         isGoogleAccountExists = false
                                                         isGoogleFlowActive = true
-                                                        Toast.makeText(context, "حساب قوقل جديد مكتشف ($email)! يرجى إكمال إعداد الحساب 🛰️🌌", Toast.LENGTH_LONG).show()
+                                                        Toast.makeText(context, "حساب Google مكتشف ($email). يرجى كتابة الاسم ورقم الهاتف وتعيين كلمة مرور لإكمال التسجيل والربط سحابياً 🚀📲", Toast.LENGTH_LONG).show()
                                                     }
-                                                } catch (e: Exception) {
+                                                } else {
                                                     googleEmailState = email
                                                     onEmailChange(email)
                                                     onNameChange("")
                                                     onPhoneChange("")
                                                     isGoogleAccountExists = false
                                                     isGoogleFlowActive = true
-                                                    Toast.makeText(context, "تم الربط بحساب قوقل المكتشف ($email) 🌠", Toast.LENGTH_LONG).show()
-                                                } finally {
-                                                    isCheckingEmail = false
+                                                    Toast.makeText(context, "تم المتابعة بحساب Google المكتشف ($email) 🌠", Toast.LENGTH_LONG).show()
                                                 }
                                             }
                                         } else {
@@ -4905,27 +4944,12 @@ fun LoginScreenBody(
                                     OutlinedButton(
                                         onClick = {
                                             isCheckingEmail = true
-                                            scope.launch {
-                                                try {
-                                                    // Send real OTP via Supabase!
-                                                    try {
-                                                        val otpRequest = com.example.data.network.SupabaseOtpRequest(
-                                                            email = email.trim(),
-                                                            options = com.example.data.network.SupabaseOtpOptions(shouldCreateUser = true)
-                                                        )
-                                                        com.example.data.network.SupabaseClient.api.signInWithOtp(otpRequest)
-                                                    } catch (e: Exception) { e.printStackTrace() }
-
-                                                    val remoteProfs = com.example.data.network.SupabaseClient.api.getProfilesByEmail(emailFilter = "eq.$email")
-                                                    if (remoteProfs.isNotEmpty()) {
-                                                        val p = remoteProfs.first()
-                                                        googleEmailState = email
-                                                        onEmailChange(email)
-                                                        onNameChange("")
-                                                        onPhoneChange("")
-                                                        isGoogleAccountExists = true
-                                                        isGoogleFlowActive = true
-                                                        Toast.makeText(context, "تم إرسال رمز تحقق حقيقي إلى بريدك الإلكتروني ($email) بنجاح عبر Supabase! 📧✨", Toast.LENGTH_LONG).show()
+                                            showGoogleDialog = false
+                                            viewModel.loginGoogleVerifiedAccountDirect(email) { err, exists ->
+                                                isCheckingEmail = false
+                                                if (err == null) {
+                                                    if (exists) {
+                                                        Toast.makeText(context, "مرحباً بعودتك! تم الدخول والمزامنة المباشرة لحساب Google ($email) بنجاح 🟢✨", Toast.LENGTH_LONG).show()
                                                     } else {
                                                         googleEmailState = email
                                                         onEmailChange(email)
@@ -4933,22 +4957,16 @@ fun LoginScreenBody(
                                                         onPhoneChange("")
                                                         isGoogleAccountExists = false
                                                         isGoogleFlowActive = true
-                                                        Toast.makeText(context, "حساب قوقل جديد! تم إرسال رمز تحقق حقيقي إلى بريدك الإلكتروني ($email) عبر Supabase! 📧✨", Toast.LENGTH_LONG).show()
+                                                        Toast.makeText(context, "حساب Google مكتشف ($email). يرجى كتابة الاسم ورقم الهاتف وتعيين كلمة مرور لإكمال التسجيل والربط سحابياً 🚀📲", Toast.LENGTH_LONG).show()
                                                     }
-                                                } catch (e: Exception) {
+                                                } else {
                                                     googleEmailState = email
                                                     onEmailChange(email)
                                                     onNameChange("")
                                                     onPhoneChange("")
                                                     isGoogleAccountExists = false
                                                     isGoogleFlowActive = true
-                                                    Toast.makeText(context, "تم إرسال رمز تحقق حقيقي إلى بريدك الإلكتروني ($email) عبر Supabase! 📧✨", Toast.LENGTH_LONG).show()
-                                                } finally {
-                                                    isCheckingEmail = false
-                                                    showGoogleDialog = false
-                                                    // Open the verification dialog
-                                                    viewModel.otpVerificationEmail.value = email
-                                                    viewModel.showOtpVerification.value = true
+                                                    Toast.makeText(context, "تم المتابعة بحساب Google المكتشف ($email) 🌠", Toast.LENGTH_LONG).show()
                                                 }
                                             }
                                         },
@@ -5428,7 +5446,7 @@ fun ProfileScreenBody(
                 isGeneralAdmin -> "المدير العام للمجرة 👑"
                 isAdmin -> "مدير إداري 🏛️"
                 isCourier -> "مندوب توصيل 🚴"
-                isSeller -> "بائع المجرة 🛒"
+                isSeller -> "تاجر المجرة 🛒"
                 isPharmacist -> "صيدلي معتمد 💊"
                 else -> "عميل المجرة 🌌"
             }
@@ -6194,18 +6212,20 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
         ) {
             val tabs = buildList {
                 add("الملخص📊" to 0)
-                add((if (pendingCourierOrdersCount > 0) "الطلبات 📦 ($pendingCourierOrdersCount)" else "الطلبات📦") to 3)
+                add((if (pendingCourierOrdersCount > 0) "طلبات التجار 📦 ($pendingCourierOrdersCount)" else "طلبات التجار 📦") to 3)
                 add("المناديب🚴" to 4)
                 add("المخزون📦" to 7)
-                add("البائعين🧑‍💼" to 6)
-                add((if (pendingProductsCount > 0) "طلبات البائعين⏳ ($pendingProductsCount)" else "طلبات البائعين⏳") to 8)
+                add("التجار🧑‍💼" to 6)
+                add((if (pendingProductsCount > 0) "طلبات التجار⏳ ($pendingProductsCount)" else "طلبات التجار⏳") to 8)
                 add("المنتجات🛍️" to 2)
                 add("إضافة ➕" to 1)
                 add("مفاتيح الربط🔑" to 5)
-                add((if (pendingPharmacyCount > 0) "الصيدليات 💊 ($pendingPharmacyCount)" else "الصيدليات 💊") to 9)
+                add((if (pendingPharmacyCount > 0) "طلبات الصيدليات 💊 ($pendingPharmacyCount)" else "طلبات الصيدليات 💊") to 9)
                 add((if (pendingRestaurantOrdersCount > 0) "طلبات المطاعم 🍔 ($pendingRestaurantOrdersCount)" else "طلبات المطاعم 🍔") to 11)
                 if (isGeneralAdmin) {
                     add("المدراء 👑" to 10)
+                    add("التقييمات ⭐" to 12)
+                    add("إدارة المنظومة 👥" to 13)
                 }
             }
             LazyRow(
@@ -9191,6 +9211,12 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                 11 -> {
                     com.example.ui.screens.RestaurantsPlanetSection(viewModel = viewModel, forceAdminPortal = true)
                 }
+                12 -> {
+                    AdminRatingsSection(viewModel = viewModel)
+                }
+                13 -> {
+                    AdminSystemManagementSection(viewModel = viewModel)
+                }
             }
         }
     }
@@ -9391,6 +9417,691 @@ fun AdminManagersSection(viewModel: MajarahViewModel) {
                             Text(manager.email, color = MediumContrastTextDark, fontSize = 11.sp)
                             Spacer(modifier = Modifier.height(2.dp))
                             Text("هاتف: ${manager.phone}", color = CosmicSecondary, fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+fun AdminRatingsSection(viewModel: MajarahViewModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val ratings by viewModel.allRatingsFlow.collectAsStateWithLifecycle()
+    val coupons by viewModel.allCouponsFlow.collectAsStateWithLifecycle()
+    
+    var customCouponCode by remember { mutableStateOf("") }
+    var couponForEmail by remember { mutableStateOf("") }
+    var couponOfferTitle by remember { mutableStateOf("") }
+    var isFreeDelivery by remember { mutableStateOf(true) }
+    var isAddingCoupon by remember { mutableStateOf(false) }
+
+    LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 32.dp)
+    ) {
+        item {
+            Text(
+                "رصد وتقييمات العملاء للتطبيق ⭐🌌",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                textAlign = TextAlign.Right,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                "تراقب هذه الصفحة آراء وتقييمات العملاء من 7 نجوم. يمكنك إرسال كوبونات مخصصة للعملاء الفائزين لإسعادهم وتفعيل الخصومات لهم تلقائياً.",
+                color = MediumContrastTextDark,
+                fontSize = 11.sp,
+                textAlign = TextAlign.Right,
+                modifier = Modifier.fillMaxWidth(),
+                lineHeight = 15.sp
+            )
+        }
+
+        // Coupon Generator Form
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                border = BorderStroke(1.dp, CosmicSecondary.copy(alpha = 0.2f))
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Text(
+                        "إنشاء كوبون عرض للعميل الفائز 🎁",
+                        color = CosmicSecondary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Right,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    
+                    OutlinedTextField(
+                        value = couponForEmail,
+                        onValueChange = { couponForEmail = it },
+                        label = { Text("البريد الإلكتروني للمستلم") },
+                        textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Right),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CosmicSecondary,
+                            unfocusedBorderColor = CosmicSurfaceVariant,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = customCouponCode,
+                        onValueChange = { customCouponCode = it },
+                        label = { Text("كود الكوبون المخصص (مثال: WINNER77)") },
+                        textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Right),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CosmicSecondary,
+                            unfocusedBorderColor = CosmicSurfaceVariant,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = couponOfferTitle,
+                        onValueChange = { couponOfferTitle = it },
+                        label = { Text("عنوان العرض الترويجي (مثال: توصيل مجاني لمشاركتك)") },
+                        textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Right),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CosmicSecondary,
+                            unfocusedBorderColor = CosmicSurfaceVariant,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (isFreeDelivery) "نوع العرض: توصيل مجاني 🚚" else "نوع العرض: خصم 50% / قطعتين بسعر واحدة 🎁",
+                            color = Color.LightGray,
+                            fontSize = 11.sp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Switch(
+                            checked = isFreeDelivery,
+                            onCheckedChange = { isFreeDelivery = it },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = CosmicSecondary,
+                                checkedTrackColor = CosmicSecondary.copy(0.4f)
+                            )
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Button(
+                        onClick = {
+                            if (customCouponCode.isBlank() || couponForEmail.isBlank() || couponOfferTitle.isBlank()) {
+                                Toast.makeText(context, "الرجاء إدخال كافة حقول الكوبون ⚠️", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            isAddingCoupon = true
+                            coroutineScope.launch {
+                                val coupon = com.example.data.db.AppCouponEntity(
+                                    code = customCouponCode.trim().uppercase(),
+                                    discountPercent = if (isFreeDelivery) 0.0 else 50.0,
+                                    isFreeDelivery = isFreeDelivery,
+                                    isBogo = !isFreeDelivery,
+                                    forUserEmail = couponForEmail.trim().lowercase(),
+                                    isUsed = false,
+                                    offerTitle = couponOfferTitle.trim()
+                                )
+                                viewModel.database.appCouponDao().insertCoupon(coupon)
+                                isAddingCoupon = false
+                                Toast.makeText(context, "تم إرسال الكوبون بنجاح للعميل! 🌌🎁", Toast.LENGTH_SHORT).show()
+                                customCouponCode = ""
+                                couponForEmail = ""
+                                couponOfferTitle = ""
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isAddingCoupon
+                    ) {
+                        Text("إرسال الكوبون واعتماده سحابياً 🚀", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // Active Coupons List Header
+        item {
+            Text(
+                "الكوبونات والعروض النشطة حالياً 🎫",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                textAlign = TextAlign.Right,
+                modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
+            )
+        }
+
+        if (coupons.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = CosmicSurface.copy(alpha = 0.5f))
+                ) {
+                    Box(modifier = Modifier.padding(16.dp), contentAlignment = Alignment.Center) {
+                        Text("لا توجد كوبونات عروض نشطة حالياً. 🌌", color = Color.Gray, fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            }
+        } else {
+            items(coupons) { coupon ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                    border = BorderStroke(1.dp, Color.White.copy(0.05f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Left - Used Status
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (coupon.isUsed) Color.Red.copy(0.2f) else Color.Green.copy(0.2f))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = if (coupon.isUsed) "تم الاستخدام 🔒" else "نشط وغير مستخدم 🔓",
+                                color = if (coupon.isUsed) Color.Red else Color.Green,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        // Right - Coupon details
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("الكود: ${coupon.code}", color = CosmicSecondary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text("العرض: ${coupon.offerTitle}", color = Color.White, fontSize = 11.sp)
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text("مرتبط بالبريد: ${coupon.forUserEmail}", color = MediumContrastTextDark, fontSize = 10.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Ratings list
+        item {
+            Text(
+                "آراء وتقييمات العملاء (7 نجوم) ⭐",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                textAlign = TextAlign.Right,
+                modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
+            )
+        }
+
+        if (ratings.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = CosmicSurface.copy(alpha = 0.5f))
+                ) {
+                    Box(modifier = Modifier.padding(16.dp), contentAlignment = Alignment.Center) {
+                        Text("لم يقم أي عميل بتقييم التطبيق بعد. قيم طلبك القادم لتظهر هنا! ⭐", color = Color.Gray, fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            }
+        } else {
+            items(ratings) { item ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                    border = BorderStroke(1.dp, Color.White.copy(0.05f))
+                ) {
+                    Column(modifier = Modifier.padding(12.dp).fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Stars Display
+                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                for (i in 1..7) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Star,
+                                        contentDescription = null,
+                                        tint = if (i <= item.ratingStars) Color(0xFFFFD700) else Color.Gray.copy(alpha = 0.3f),
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
+                            // Name
+                            Text(
+                                text = item.customerName,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        }
+                        
+                        if (item.comment.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "💬 \"${item.comment}\"",
+                                color = Color.LightGray,
+                                fontSize = 11.sp,
+                                textAlign = TextAlign.Right,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(
+                                onClick = {
+                                    couponForEmail = item.customerEmail
+                                    customCouponCode = "OFFER_${(1000..9999).random()}"
+                                    couponOfferTitle = "عرض خاص لتقييمك الرائع 🌌🎁"
+                                },
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                Text("إرسال كوبون فوز بالهدية 🎁", color = CosmicSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Text(
+                                text = "بريد: ${item.customerEmail}",
+                                color = MediumContrastTextDark,
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AdminSystemManagementSection(viewModel: MajarahViewModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val allProfiles by viewModel.allProfilesFlow.collectAsStateWithLifecycle()
+    
+    val allOrders by viewModel.allOrdersFlow.collectAsStateWithLifecycle()
+    val allProducts by viewModel.allProducts.collectAsStateWithLifecycle()
+    val allRestaurantOrders by viewModel.allRestaurantOrders.collectAsStateWithLifecycle()
+    val allPharmacyOrders by viewModel.allPharmacyOrders.collectAsStateWithLifecycle()
+    
+    val couriers by viewModel.allCouriers.collectAsStateWithLifecycle()
+    val sellers by viewModel.allSellers.collectAsStateWithLifecycle()
+    val pharmacies by viewModel.allPharmacies.collectAsStateWithLifecycle()
+    val restaurants by viewModel.allRestaurants.collectAsStateWithLifecycle()
+
+    var userName by remember { mutableStateOf("") }
+    var userEmail by remember { mutableStateOf("") }
+    var userPhone by remember { mutableStateOf("") }
+    var userPassword by remember { mutableStateOf("") }
+    var selectedRole by remember { mutableStateOf("customer") } // customer, seller, restaurant, pharmacist, courier
+    var isAddingUser by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        viewModel.refreshAllProfiles()
+    }
+
+    LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 32.dp)
+    ) {
+        item {
+            Text(
+                "إدارة الحسابات وتصنيفات المنظومة 👥",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                textAlign = TextAlign.Right,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                "تمنحك هذه الصفحة (بصفتك المدير العام) صلاحية استعراض كافة الحسابات والعملاء وتصنيفاتهم التلقائية، بالإضافة لإمكانية إضافة مستخدمين جدد أو حذفهم.",
+                color = MediumContrastTextDark,
+                fontSize = 11.sp,
+                textAlign = TextAlign.Right,
+                modifier = Modifier.fillMaxWidth(),
+                lineHeight = 15.sp
+            )
+        }
+
+        // Add User Form Card
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                border = BorderStroke(1.dp, CosmicSecondary.copy(alpha = 0.2f))
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Text(
+                        "إضافة مستخدم جديد يدوياً بالمنظومة ➕👤",
+                        color = CosmicSecondary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Right,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedTextField(
+                        value = userName,
+                        onValueChange = { userName = it },
+                        label = { Text("الاسم الكامل") },
+                        textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Right),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CosmicSecondary,
+                            unfocusedBorderColor = CosmicSurfaceVariant,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = userPhone,
+                        onValueChange = { userPhone = it },
+                        label = { Text("رقم الهاتف") },
+                        textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Right),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CosmicSecondary,
+                            unfocusedBorderColor = CosmicSurfaceVariant,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = userEmail,
+                        onValueChange = { userEmail = it },
+                        label = { Text("البريد الإلكتروني") },
+                        textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Right),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CosmicSecondary,
+                            unfocusedBorderColor = CosmicSurfaceVariant,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = userPassword,
+                        onValueChange = { userPassword = it },
+                        label = { Text("كلمة المرور") },
+                        textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Right),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CosmicSecondary,
+                            unfocusedBorderColor = CosmicSurfaceVariant,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Role Picker Buttons
+                    Text(
+                        "اختر الدور / تصنيف تسجيل الدخول:",
+                        color = Color.LightGray,
+                        fontSize = 11.sp,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Right
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    
+                    val rolesList = listOf(
+                        "customer" to "عميل 👤",
+                        "seller" to "تاجر 🛍️",
+                        "restaurant" to "مطعم 🍔",
+                        "pharmacist" to "صيدلي 💊",
+                        "courier" to "مندوب 🚴"
+                    )
+                    
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)
+                    ) {
+                        items(rolesList) { (roleKey, label) ->
+                            val isSel = selectedRole == roleKey
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (isSel) CosmicSecondary else CosmicSurfaceVariant.copy(0.5f))
+                                    .clickable { selectedRole = roleKey }
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Text(label, color = if (isSel) Color.Black else Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Button(
+                        onClick = {
+                            if (userName.isBlank() || userPhone.isBlank() || userEmail.isBlank() || userPassword.isBlank()) {
+                                Toast.makeText(context, "الرجاء ملء كافة التفاصيل ⚠️", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            isAddingUser = true
+                            
+                            val profile = com.example.data.db.ProfileEntity(
+                                id = java.util.UUID.randomUUID().toString(),
+                                name = userName.trim(),
+                                phone = userPhone.trim(),
+                                email = userEmail.trim().lowercase(),
+                                password = userPassword.trim()
+                            )
+
+                            // Save user preference role
+                            val sharedPrefs = viewModel.getApplication<android.app.Application>()
+                                .getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
+                            sharedPrefs.edit().putString("user_role_${profile.email}", selectedRole).apply()
+
+                            viewModel.addProfileAdmin(profile) { err ->
+                                isAddingUser = false
+                                if (err == null) {
+                                    Toast.makeText(context, "تمت إضافة المستخدم وحفظه سحابياً بنجاح! 🎉", Toast.LENGTH_SHORT).show()
+                                    userName = ""
+                                    userPhone = ""
+                                    userEmail = ""
+                                    userPassword = ""
+                                } else {
+                                    Toast.makeText(context, "تم الحفظ محلياً وبانتظار المزامنة ⚡", Toast.LENGTH_SHORT).show()
+                                    userName = ""
+                                    userPhone = ""
+                                    userEmail = ""
+                                    userPassword = ""
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isAddingUser
+                    ) {
+                        Text("إعتماد وإضافة الحساب فورياً ✅", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // Users & Classifications List
+        item {
+            Text(
+                "جدول كافة الحسابات والتصنيفات التلقائية 📋",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                textAlign = TextAlign.Right,
+                modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
+            )
+        }
+
+        if (allProfiles.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = CosmicSurface.copy(alpha = 0.5f))
+                ) {
+                    Box(modifier = Modifier.padding(16.dp), contentAlignment = Alignment.Center) {
+                        Text("لا يوجد مستخدمون مسجلون في قاعدة البيانات المحلية.", color = Color.Gray, fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            }
+        } else {
+            items(allProfiles) { p ->
+                val emailClean = p.email.trim().lowercase()
+                val phoneClean = p.phone.trim().replace("+", "").replace(" ", "")
+
+                // Determine role of this profile
+                val sharedPrefs = viewModel.getApplication<android.app.Application>()
+                    .getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
+                val prefRole = sharedPrefs.getString("user_role_${p.email}", "customer") ?: "customer"
+
+                val isCou = couriers.any { it.phone.trim() == p.phone.trim() } || prefRole == "courier"
+                val isSel = sellers.any { it.phone.trim() == p.phone.trim() } || prefRole == "seller"
+                val isPhar = pharmacies.any { it.pharmacistEmail.trim().lowercase() == emailClean } || prefRole == "pharmacist"
+                val isRest = restaurants.any { it.phone.trim() == p.phone.trim() || it.name.trim().lowercase() == p.name.trim().lowercase() } || prefRole == "restaurant"
+
+                // Dynamic classification
+                val classification = when {
+                    isCou -> {
+                        val courierDeliveries = allOrders.filter { 
+                            val cPhone = it.courierPhone.trim().replace("+", "").replace(" ", "")
+                            (cPhone == phoneClean || it.courierPhone.trim() == p.phone.trim()) && 
+                            (it.statusArabic.contains("تم") || it.statusArabic.contains("توصيل") || it.statusArabic.contains("تمام"))
+                        }.distinctBy { it.orderId }.size
+                        when {
+                            courierDeliveries >= 9 -> "مندوب ذهبي 👑 ($courierDeliveries مهمة)"
+                            courierDeliveries >= 4 -> "مندوب مميز ⭐ ($courierDeliveries مهمة)"
+                            else -> "مندوب عادي 🚴 ($courierDeliveries مهمة)"
+                        }
+                    }
+                    isSel -> {
+                        val sellerProducts = allProducts.filter { it.sellerEmail.trim().lowercase() == emailClean }.size
+                        when {
+                            sellerProducts >= 10 -> "تاجر ذهبي 👑 ($sellerProducts منتج)"
+                            sellerProducts >= 5 -> "تاجر مميز ⭐ ($sellerProducts منتج)"
+                            else -> "تاجر عادي 🛍️ ($sellerProducts منتج)"
+                        }
+                    }
+                    isRest -> {
+                        val rOrders = allRestaurantOrders.filter { 
+                            it.restaurantPhone.trim() == p.phone.trim() || 
+                            it.restaurantName.trim().lowercase() == p.name.trim().lowercase() 
+                        }.size
+                        when {
+                            rOrders >= 9 -> "مطعم ذهبي 👑 ($rOrders طلب)"
+                            rOrders >= 4 -> "مطعم مميز ⭐ ($rOrders طلب)"
+                            else -> "مطعم عادي 🍔 ($rOrders طلب)"
+                        }
+                    }
+                    isPhar -> {
+                        val myPharmacy = pharmacies.find { it.pharmacistEmail.trim().lowercase() == emailClean }
+                        val pOrders = if (myPharmacy != null) {
+                            allPharmacyOrders.count { it.pharmacyId == myPharmacy.id && it.status != "بانتظار الصيدلي" }
+                        } else 0
+                        when {
+                            pOrders >= 9 -> "صيدلي ذهبي 👑 ($pOrders روشتة)"
+                            pOrders >= 4 -> "صيدلي مميز ⭐ ($pOrders روشتة)"
+                            else -> "صيدلي عادي 💊 ($pOrders روشتة)"
+                        }
+                    }
+                    else -> {
+                        val myOrdersCount = allOrders.filter { 
+                            val oPhone = it.customerPhone.trim().replace("+", "").replace(" ", "")
+                            oPhone == phoneClean || it.customerName.trim().lowercase() == p.name.trim().lowercase()
+                        }.distinctBy { it.orderId }.size
+                        when {
+                            myOrdersCount >= 6 -> "عميل ذهبي 👑 ($myOrdersCount طلب)"
+                            myOrdersCount >= 3 -> "عميل مميز ⭐ ($myOrdersCount طلب)"
+                            else -> "عميل عادي 👤 ($myOrdersCount طلب)"
+                        }
+                    }
+                }
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                    border = BorderStroke(1.dp, Color.White.copy(0.05f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Delete user button
+                        IconButton(
+                            onClick = {
+                                viewModel.deleteProfileAdmin(p.id) { err ->
+                                    if (err == null) {
+                                        Toast.makeText(context, "تم حذف الحساب بنجاح 🗑️", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        Toast.makeText(context, "تم الحذف بنجاح محلياً وسحابياً 🗑️✨", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = "حذف الحساب", tint = Color.Red)
+                        }
+
+                        // Info details
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(p.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text("البريد: ${p.email}", color = MediumContrastTextDark, fontSize = 11.sp)
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text("الهاتف: ${p.phone}", color = Color.White.copy(0.8f), fontSize = 11.sp)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            
+                            // Classification tag
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(CosmicSecondary.copy(0.15f))
+                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Text(classification, color = CosmicSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
@@ -11338,6 +12049,129 @@ fun SplashScreenBody() {
                 textAlign = TextAlign.Center,
                 fontWeight = FontWeight.Bold
             )
+        }
+    }
+}
+
+@Composable
+fun AppRatingDialog(
+    onDismiss: () -> Unit,
+    onSubmit: (Int, String) -> Unit
+) {
+    var ratingStars by remember { mutableStateOf(7) }
+    var commentText by remember { mutableStateOf("") }
+
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+            shape = RoundedCornerShape(20.dp),
+            border = BorderStroke(1.5.dp, CosmicSecondary.copy(alpha = 0.5f)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(20.dp)
+                    .fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "🌠🌌",
+                    fontSize = 32.sp,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                Text(
+                    text = "تقييم تجربة التسوق ⭐",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "تهانينا على استلاف طلبك بنجاح! 🎉 يسعدنا جداً تقييمك للتطبيق من 7 نجوم لمساعدتنا على تحسين الخدمة وإرسال كوبونات عروض مخصصة لك.",
+                    color = MediumContrastTextDark,
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 18.sp
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    (1..7).forEach { index ->
+                        IconButton(
+                            onClick = { ratingStars = index },
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Star,
+                                contentDescription = "Star $index",
+                                tint = if (index <= ratingStars) Color(0xFFFFD700) else Color.Gray.copy(alpha = 0.5f),
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(
+                    text = "$ratingStars من أصل 7 نجوم",
+                    color = CosmicSecondary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = commentText,
+                    onValueChange = { commentText = it },
+                    label = { Text("اكتب رأيك أو مقترحاتك هنا (اختياري)...") },
+                    textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Right),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = CosmicSecondary,
+                        unfocusedBorderColor = CosmicSurfaceVariant,
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 3
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Button(
+                        onClick = onDismiss,
+                        colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant, contentColor = Color.White),
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("إلغاء", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+
+                    Button(
+                        onClick = { onSubmit(ratingStars, commentText) },
+                        colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                        modifier = Modifier.weight(1.5f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("إرسال التقييم 🚀", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
+            }
         }
     }
 }
