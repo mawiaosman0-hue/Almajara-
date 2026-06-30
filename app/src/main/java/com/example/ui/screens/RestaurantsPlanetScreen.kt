@@ -63,6 +63,9 @@ fun RestaurantsPlanetSection(
     val isGeneralAdmin by viewModel.isGeneralAdmin.collectAsStateWithLifecycle()
     val isAdmin by viewModel.isAdmin.collectAsStateWithLifecycle()
     val isRestaurant by viewModel.isRestaurant.collectAsStateWithLifecycle()
+    val isCourier by viewModel.isCourier.collectAsStateWithLifecycle()
+    val isSeller by viewModel.isSeller.collectAsStateWithLifecycle()
+    val isPharmacist by viewModel.isPharmacist.collectAsStateWithLifecycle()
 
     // Find our restaurant if we are registered as a restaurant owner
     val profile = activeProfile
@@ -100,14 +103,20 @@ fun RestaurantsPlanetSection(
         }
     }
 
+    // Filter my past orders as a customer
+    val myCustomerOrders = remember(orders, profile) {
+        if (profile == null) emptyList()
+        else orders.filter { it.customerPhone == profile.phone }
+    }
+
     // Determine tabs based on role
-    val tabTitles = remember(isAdmin, isRestaurant) {
+    val tabTitles = remember(isAdmin, isRestaurant, myRestaurantOrders.size, myCustomerOrders.size, restaurants.size) {
         if (isRestaurant) {
-            listOf("المطاعم المتاحة 🍔", "طلبات مطعمي 📋", "إدارة مطعمي 🏪")
+            listOf("المطاعم المتاحة 🍔", "طلبات مطعمي (${myRestaurantOrders.size}) 📋", "إدارة مطعمي 🏪")
         } else if (isAdmin) {
-            listOf("المطاعم المتاحة 🍔", "طلباتي السابقة 📑", "إدارة المطاعم ⚙️")
+            listOf("المطاعم المتاحة 🍔", "طلباتي السابقة (${myCustomerOrders.size}) 📑", "إدارة المطاعم (${restaurants.size}) ⚙️")
         } else {
-            listOf("المطاعم المتاحة 🍔", "طلباتي السابقة 📑")
+            listOf("المطاعم المتاحة 🍔", "طلباتي السابقة (${myCustomerOrders.size}) 📑")
         }
     }
 
@@ -614,7 +623,7 @@ fun RestaurantsPlanetSection(
             restaurant = selectedRestaurantForOrder!!,
             activeProfile = activeProfile,
             onDismiss = { selectedRestaurantForOrder = null },
-            onSubmitOrder = { orderText, notesText, paymentMethod, receiptBase64 ->
+            onSubmitOrder = { orderText, notesText, deliveryLoc, paymentMethod, receiptBase64 ->
                 val name = activeProfile?.name ?: "عميل المجرة"
                 val phone = activeProfile?.phone ?: ""
                 val email = activeProfile?.email ?: ""
@@ -627,7 +636,7 @@ fun RestaurantsPlanetSection(
                     customerName = name,
                     customerPhone = phone,
                     customerEmail = email,
-                    itemsAndNotes = "$orderText\nملاحظات: $notesText",
+                    itemsAndNotes = "$orderText\nملاحظات: $notesText\nموقع التوصيل: $deliveryLoc",
                     paymentMethod = paymentMethod,
                     deliveryFee = deliveryFee,
                     bankReceiptImageUri = receiptBase64
@@ -1045,11 +1054,12 @@ fun OrderFromRestaurantDialog(
     restaurant: RestaurantEntity,
     activeProfile: com.example.data.db.ProfileEntity?,
     onDismiss: () -> Unit,
-    onSubmitOrder: (order: String, notes: String, payment: String, receiptBase64: String?) -> Unit
+    onSubmitOrder: (order: String, notes: String, deliveryLoc: String, payment: String, receiptBase64: String?) -> Unit
 ) {
     val context = LocalContext.current
     var orderText by remember { mutableStateOf("") }
     var notesText by remember { mutableStateOf("") }
+    var deliveryLocation by remember { mutableStateOf("") }
     var paymentMethod by remember { mutableStateOf("كاش") } // كاش , تحويل بنكي
     var receiptBase64 by remember { mutableStateOf<String?>(null) }
 
@@ -1147,6 +1157,22 @@ fun OrderFromRestaurantDialog(
                 }
 
                 item {
+                    Text("عنوان وموقع التوصيل بالتفصيل *", color = Color.White.copy(0.8f), fontSize = 11.sp)
+                    OutlinedTextField(
+                        value = deliveryLocation,
+                        onValueChange = { deliveryLocation = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("مثال: الخرطوم، حي الرياض، شارع 11 بجانب صيدلية النخبة", color = Color.White.copy(0.4f), fontSize = 12.sp) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = CosmicSecondary,
+                            unfocusedBorderColor = CosmicSurfaceVariant
+                        )
+                    )
+                }
+
+                item {
                     Text("طريقة الدفع الكونية 💳", color = CosmicSecondary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
@@ -1227,10 +1253,12 @@ fun OrderFromRestaurantDialog(
                 onClick = {
                     if (orderText.isBlank()) {
                         Toast.makeText(context, "الرجاء كتابة طلبك أولاً", Toast.LENGTH_SHORT).show()
+                    } else if (deliveryLocation.isBlank()) {
+                        Toast.makeText(context, "الرجاء كتابة عنوان التوصيل بالتفصيل", Toast.LENGTH_SHORT).show()
                     } else if (paymentMethod == "تحويل بنكي" && receiptBase64 == null) {
                         Toast.makeText(context, "الرجاء إرفاق صورة الإشعار البنكي لتأكيد الدفع", Toast.LENGTH_SHORT).show()
                     } else {
-                        onSubmitOrder(orderText, notesText, paymentMethod, receiptBase64)
+                        onSubmitOrder(orderText, notesText, deliveryLocation, paymentMethod, receiptBase64)
                     }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),

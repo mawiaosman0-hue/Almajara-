@@ -335,6 +335,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                     }
                     val role = sharedPrefs.getString("user_role_${profileEntity.email.trim().lowercase()}", "")
                     val isPharmacistUser = role == "pharmacist"
+                    val isRestaurantUser = role == "restaurant"
                     val isAdminUser = profileEntity.email.trim().lowercase() == "mawiaosman0@gmail.com" || role == "admin"
 
                     if (isAdminUser) {
@@ -345,6 +346,9 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                         _currentScreen.value = Screen.Seller
                     } else if (isPharmacistUser) {
                         _selectedCategory.value = "pharmacy"
+                        _currentScreen.value = Screen.Home
+                    } else if (isRestaurantUser) {
+                        _selectedCategory.value = "restaurant"
                         _currentScreen.value = Screen.Home
                     } else {
                         _currentScreen.value = Screen.Home
@@ -407,6 +411,8 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                             )
                         } else if (role == "pharmacist") {
                             sharedPrefs.edit().putString("user_role_${email.trim().lowercase()}", "pharmacist").apply()
+                        } else if (role == "restaurant") {
+                            sharedPrefs.edit().putString("user_role_${email.trim().lowercase()}", "restaurant").apply()
                         } else if (role == "admin") {
                             sharedPrefs.edit().putString("user_role_${email.trim().lowercase()}", "admin").apply()
                         }
@@ -439,6 +445,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                                 s.email.trim().lowercase() == p.email.trim().lowercase()
                             }
                             val isPharmacistUser = role == "pharmacist" || sharedPrefs.getString("user_role_${p.email.trim().lowercase()}", "") == "pharmacist"
+                            val isRestaurantUser = role == "restaurant" || sharedPrefs.getString("user_role_${p.email.trim().lowercase()}", "") == "restaurant"
                             val isAdminUser = p.email.trim().lowercase() == "mawiaosman0@gmail.com" || role == "admin" || sharedPrefs.getString("user_role_${p.email.trim().lowercase()}", "") == "admin"
 
                             if (isAdminUser) {
@@ -449,6 +456,9 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                                 _currentScreen.value = Screen.Seller
                             } else if (isPharmacistUser) {
                                 _selectedCategory.value = "pharmacy"
+                                _currentScreen.value = Screen.Home
+                            } else if (isRestaurantUser) {
+                                _selectedCategory.value = "restaurant"
                                 _currentScreen.value = Screen.Home
                             } else {
                                 _currentScreen.value = Screen.Home
@@ -478,6 +488,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                             checkoutPhone.value = fallbackProfile.phone
 
                             val isPharmacistUser = role == "pharmacist" || sharedPrefs.getString("user_role_${fallbackProfile.email.trim().lowercase()}", "") == "pharmacist"
+                            val isRestaurantUser = role == "restaurant" || sharedPrefs.getString("user_role_${fallbackProfile.email.trim().lowercase()}", "") == "restaurant"
                             val isAdminUser = fallbackProfile.email.trim().lowercase() == "mawiaosman0@gmail.com" || role == "admin" || sharedPrefs.getString("user_role_${fallbackProfile.email.trim().lowercase()}", "") == "admin"
 
                             if (isAdminUser) {
@@ -488,6 +499,9 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                                 _currentScreen.value = Screen.Seller
                             } else if (isPharmacistUser) {
                                 _selectedCategory.value = "pharmacy"
+                                _currentScreen.value = Screen.Home
+                            } else if (isRestaurantUser) {
+                                _selectedCategory.value = "restaurant"
                                 _currentScreen.value = Screen.Home
                             } else {
                                 _currentScreen.value = Screen.Home
@@ -521,6 +535,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                             s.email.trim().lowercase() == p?.email?.trim()?.lowercase()
                         }
                         val isPharmacistUser = sharedPrefs.getString("user_role_${p?.email?.trim()?.lowercase()}", "") == "pharmacist"
+                        val isRestaurantUser = sharedPrefs.getString("user_role_${p?.email?.trim()?.lowercase()}", "") == "restaurant"
                         val isAdminUser = p?.email?.trim()?.lowercase() == "mawiaosman0@gmail.com" || sharedPrefs.getString("user_role_${p?.email?.trim()?.lowercase()}", "") == "admin"
 
                         if (isAdminUser) {
@@ -531,6 +546,9 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                             _currentScreen.value = Screen.Seller
                         } else if (isPharmacistUser) {
                             _selectedCategory.value = "pharmacy"
+                            _currentScreen.value = Screen.Home
+                        } else if (isRestaurantUser) {
+                            _selectedCategory.value = "restaurant"
                             _currentScreen.value = Screen.Home
                         } else {
                             _currentScreen.value = Screen.Home
@@ -753,7 +771,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun addToCart(productId: Int, quantity: Int = 1) {
-        if (isSeller.value || isAdmin.value || isGeneralAdmin.value || isPharmacist.value) return
+        if (isSeller.value || isAdmin.value || isGeneralAdmin.value || isPharmacist.value || isCourier.value || isRestaurant.value || isAdministrativeManager.value) return
         viewModelScope.launch {
             repository.addToCart(productId, quantity)
         }

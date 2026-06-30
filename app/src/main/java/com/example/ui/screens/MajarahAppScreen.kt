@@ -251,6 +251,8 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
     val isGeneralAdmin by viewModel.isGeneralAdmin.collectAsStateWithLifecycle()
     val isCourier by viewModel.isCourier.collectAsStateWithLifecycle()
     val isSeller by viewModel.isSeller.collectAsStateWithLifecycle()
+    val isPharmacist by viewModel.isPharmacist.collectAsStateWithLifecycle()
+    val isRestaurant by viewModel.isRestaurant.collectAsStateWithLifecycle()
     val isEnglish by viewModel.isEnglish.collectAsStateWithLifecycle()
 
     val phoneState by viewModel.checkoutPhone.collectAsStateWithLifecycle()
@@ -307,27 +309,6 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
 
     val allRatings by viewModel.allRatingsFlow.collectAsStateWithLifecycle()
     var showAppRatingDialog by remember { mutableStateOf(false) }
-
-    LaunchedEffect(activeProfile, allOrders, allRatings) {
-        if (activeProfile != null) {
-            val userEmail = activeProfile?.email?.trim()?.lowercase() ?: ""
-            val userPhone = activeProfile?.phone?.trim()?.replace("+", "")?.replace(" ", "") ?: ""
-            
-            // Check if user has any completed order (e.g. status contains "توصيل" or "تسليم" or "تم")
-            val hasCompletedOrder = allOrders.any { o ->
-                val oPhone = o.customerPhone.trim().replace("+", "").replace(" ", "")
-                val isMyOrder = oPhone == userPhone || o.customerName.trim().lowercase() == activeProfile?.name?.trim()?.lowercase()
-                isMyOrder && (o.statusArabic.contains("توصيل") || o.statusArabic.contains("تسليم") || o.statusArabic.contains("تم") || o.statusArabic.contains("تمام"))
-            }
-
-            // Check if user has already rated
-            val hasAlreadyRated = allRatings.any { it.customerEmail.trim().lowercase() == userEmail }
-
-            if (hasCompletedOrder && !hasAlreadyRated && !isCourier && !isAdmin && !isSeller) {
-                showAppRatingDialog = true
-            }
-        }
-    }
 
     LaunchedEffect(isCourier, activeProfile, allOrders, allPharmacyOrders) {
         if (isCourier && activeProfile != null) {
@@ -563,7 +544,7 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
             }
         },
         bottomBar = {
-            if (currentScreen !is Screen.Login && currentScreen !is Screen.Splash) {
+            if (currentScreen !is Screen.Login && currentScreen !is Screen.Splash && !isCourier && !isSeller && !isPharmacist && !isRestaurant && !isAdmin) {
                 NavigationBar(
                     containerColor = CosmicDeepSpace,
                     tonalElevation = 8.dp,
@@ -757,51 +738,66 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                     )
                 }
                 is Screen.Categories -> {
-                    CategoriesScreenBody(
-                        selectedCategory = selectedCategory,
-                        onCategorySelect = { 
-                            viewModel.setCategory(it)
-                            viewModel.navigateTo(Screen.Home)
-                        }
-                    )
+                    if (isCourier || isSeller || isPharmacist || isRestaurant || isAdmin) {
+                        RestrictedAccessScreenBody(viewModel = viewModel)
+                    } else {
+                        CategoriesScreenBody(
+                            selectedCategory = selectedCategory,
+                            onCategorySelect = { 
+                                viewModel.setCategory(it)
+                                viewModel.navigateTo(Screen.Home)
+                            }
+                        )
+                    }
                 }
                 is Screen.Cart -> {
-                    CartScreenBody(
-                        cartItems = cartItems,
-                        totalSum = viewModel.calculateTotalSum(cartItems),
-                        phoneValue = phoneState,
-                        addressValue = addressState,
-                        nameValue = nameState,
-                        onPhoneChange = { viewModel.checkoutPhone.value = it },
-                        onAddressChange = { viewModel.checkoutAddress.value = it },
-                        onNameChange = { viewModel.checkoutName.value = it },
-                        onQtyIncrease = { viewModel.updateCartQuantity(it.product.id, it.quantity + 1) },
-                        onQtyDecrease = { viewModel.updateCartQuantity(it.product.id, it.quantity - 1) },
-                        onRemove = { viewModel.removeFromCart(it.product.id) },
-                        onSubmit = { method, txId -> viewModel.submitCheckout(method, txId) },
-                        formatPrice = { viewModel.formatPrice(it) },
-                        isLoggedIn = isLoggedIn,
-                        onRegisterPrompt = {
-                            viewModel.isRegisterMode.value = true
-                            viewModel.navigateTo(Screen.Login)
-                        },
-                        viewModel = viewModel
-                    )
+                    if (isCourier || isSeller || isPharmacist || isRestaurant || isAdmin) {
+                        RestrictedAccessScreenBody(viewModel = viewModel)
+                    } else {
+                        CartScreenBody(
+                            cartItems = cartItems,
+                            totalSum = viewModel.calculateTotalSum(cartItems),
+                            phoneValue = phoneState,
+                            addressValue = addressState,
+                            nameValue = nameState,
+                            onPhoneChange = { viewModel.checkoutPhone.value = it },
+                            onAddressChange = { viewModel.checkoutAddress.value = it },
+                            onNameChange = { viewModel.checkoutName.value = it },
+                            onQtyIncrease = { viewModel.updateCartQuantity(it.product.id, it.quantity + 1) },
+                            onQtyDecrease = { viewModel.updateCartQuantity(it.product.id, it.quantity - 1) },
+                            onRemove = { viewModel.removeFromCart(it.product.id) },
+                            onSubmit = { method, txId -> viewModel.submitCheckout(method, txId) },
+                            formatPrice = { viewModel.formatPrice(it) },
+                            isLoggedIn = isLoggedIn,
+                            onRegisterPrompt = {
+                                viewModel.isRegisterMode.value = true
+                                viewModel.navigateTo(Screen.Login)
+                            },
+                            viewModel = viewModel
+                        )
+                    }
                 }
                 is Screen.Favorites -> {
-                    FavoritesScreenBody(
-                        favorites = favoriteProducts,
-                        onProductClick = { viewModel.navigateTo(Screen.ProductDetail(it.id)) },
-                        onRemoveFavorite = { viewModel.toggleFavorite(it.id) }
-                    )
+                    if (isCourier || isSeller || isPharmacist || isRestaurant || isAdmin) {
+                        RestrictedAccessScreenBody(viewModel = viewModel)
+                    } else {
+                        FavoritesScreenBody(
+                            favorites = favoriteProducts,
+                            onProductClick = { viewModel.navigateTo(Screen.ProductDetail(it.id)) },
+                            onRemoveFavorite = { viewModel.toggleFavorite(it.id) }
+                        )
+                    }
                 }
                 is Screen.History -> {
-                    if (isLoggedIn) {
+                    if (isCourier || isSeller || isPharmacist || isRestaurant || isAdmin) {
+                        RestrictedAccessScreenBody(viewModel = viewModel)
+                    } else if (isLoggedIn) {
                         HistoryScreenBody(
                             orders = orderHistory,
                             onClearHistory = { viewModel.clearHistory() },
                             formatPrice = { viewModel.formatPrice(it) },
-                            viewModel = viewModel
+                            viewModel = viewModel,
+                            onRateAppClick = { showAppRatingDialog = true }
                         )
                     } else {
                         Box(
@@ -1378,7 +1374,7 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                                 shape = RoundedCornerShape(10.dp)
                             ) {
                                 if (isResettingInProgress) {
-                                    CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(20.dp))
+                                    CosmicMajarahLoader(logoSize = 24.dp)
                                 } else {
                                     Text("تحقق وإرسال رمز الاستعادة", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                 }
@@ -1419,11 +1415,14 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
                                 shape = RoundedCornerShape(10.dp),
-                                enabled = forgotNewPassword.isNotBlank()
+                                enabled = !isResettingInProgress && forgotNewPassword.isNotBlank()
                             ) {
-                                Text("حفظ وتعيين كلمة المرور الجديدة", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                if (isResettingInProgress) {
+                                    CosmicMajarahLoader(logoSize = 24.dp)
+                                } else {
+                                    Text("حفظ وتعيين كلمة المرور الجديدة", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
                             }
-                        }
                     },
                     dismissButton = {
                         TextButton(onClick = { showForgotPasswordDialog = false }) {
@@ -1990,6 +1989,22 @@ fun HomeScreenBody(
     onAddToCart: (ProductEntity) -> Unit,
     viewModel: MajarahViewModel
 ) {
+    val isPharmacist by viewModel.isPharmacist.collectAsStateWithLifecycle()
+    val isRestaurant by viewModel.isRestaurant.collectAsStateWithLifecycle()
+
+    if (isPharmacist) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            com.example.ui.screens.PharmacyPlanetSection(viewModel = viewModel)
+        }
+        return
+    }
+
+    if (isRestaurant) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            com.example.ui.screens.RestaurantsPlanetSection(viewModel = viewModel)
+        }
+        return
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -3127,7 +3142,8 @@ fun HistoryScreenBody(
     orders: List<com.example.data.db.OrderEntity>,
     onClearHistory: () -> Unit,
     formatPrice: (Double) -> String,
-    viewModel: MajarahViewModel
+    viewModel: MajarahViewModel,
+    onRateAppClick: () -> Unit
 ) {
     var isRefreshing by remember { mutableStateOf(false) }
 
@@ -3758,27 +3774,48 @@ fun HistoryScreenBody(
                         Spacer(modifier = Modifier.height(12.dp))
                         
                         if (isDelivered) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(Color.Gray.copy(0.12f), RoundedCornerShape(10.dp))
-                                    .border(1.dp, Color.Gray.copy(0.3f), RoundedCornerShape(10.dp))
-                                    .padding(12.dp),
-                                contentAlignment = Alignment.Center
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(Color.Gray.copy(0.12f), RoundedCornerShape(10.dp))
+                                        .border(1.dp, Color.Gray.copy(0.3f), RoundedCornerShape(10.dp))
+                                        .padding(12.dp),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(Icons.Default.Lock, null, tint = Color.LightGray, modifier = Modifier.size(14.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "هذه الفاتورة مكتملة ومغلقة كلياً وتعتبر نهائية غير قابلة للإرسال أو التعديل 🔒",
-                                        color = Color.LightGray,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        textAlign = TextAlign.Center
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(Icons.Default.Lock, null, tint = Color.LightGray, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "هذه الفاتورة مكتملة ومغلقة كلياً وتعتبر نهائية غير قابلة للإرسال أو التعديل 🔒",
+                                            color = Color.LightGray,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                }
+
+                                Button(
+                                    onClick = onRateAppClick,
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700), contentColor = Color.Black),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(Icons.Default.Star, null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("تقييم تجربة الاستلام والتطبيق ⭐", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    }
                                 }
                             }
                         } else {
@@ -4383,7 +4420,7 @@ fun LoginScreenBody(
                                     Triple("customer", "عميل 👤", "Customer 👤"),
                                     Triple("seller", "تاجر 🛒", "Merchant 🛒"),
                                     Triple("courier", "مندوب 🚴", "Courier 🚴"),
-                                    Triple("pharmacist", "صيدلي 💊", "Pharmacist 💊")
+                                    Triple("pharmacist", "صيدلي 💊", "Pharmacist 💊"), Triple("restaurant", "مطعم 🍔", "Restaurant 🍔")
                                 )
                                 roles.forEach { (roleKey, arLabel, enLabel) ->
                                     val isSelected = selectedRole == roleKey
@@ -4776,98 +4813,6 @@ fun LoginScreenBody(
                                     fontSize = 12.sp,
                                     textAlign = TextAlign.Center
                                 )
-                            }
-                        }
-
-                        item {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                androidx.compose.material3.HorizontalDivider(modifier = Modifier.weight(1f), color = CosmicSurfaceVariant.copy(0.5f))
-                                Text(
-                                    text = viewModel.t(" أو المتابعة السريعة عبر ", " Or quick continue via "),
-                                    color = MediumContrastTextDark,
-                                    fontSize = 11.sp,
-                                    modifier = Modifier.padding(horizontal = 8.dp)
-                                )
-                                androidx.compose.material3.HorizontalDivider(modifier = Modifier.weight(1f), color = CosmicSurfaceVariant.copy(0.5f))
-                            }
-                        }
-
-                        item {
-                            OutlinedButton(
-                                onClick = {
-                                    showManualGoogleInput = false
-                                    try {
-                                        val am = android.accounts.AccountManager.get(context)
-                                        val googleAccounts = am.getAccountsByType("com.google")
-                                        if (googleAccounts.isNotEmpty()) {
-                                            val firstAcc = googleAccounts.first()
-                                            val email = firstAcc.name
-                                            isCheckingEmail = true
-                                            viewModel.loginGoogleVerifiedAccountDirect(email) { err, exists ->
-                                                isCheckingEmail = false
-                                                if (err == null) {
-                                                    if (exists) {
-                                                        Toast.makeText(context, "مرحباً بعودتك! تم الدخول والمزامنة المباشرة لحساب Google ($email) بنجاح 🟢✨", Toast.LENGTH_LONG).show()
-                                                    } else {
-                                                        googleEmailState = email
-                                                        onEmailChange(email)
-                                                        onNameChange("")
-                                                        onPhoneChange("")
-                                                        isGoogleAccountExists = false
-                                                        isGoogleFlowActive = true
-                                                        Toast.makeText(context, "حساب Google مكتشف ($email). يرجى كتابة الاسم ورقم الهاتف وتعيين كلمة مرور لإكمال التسجيل والربط سحابياً 🚀📲", Toast.LENGTH_LONG).show()
-                                                    }
-                                                } else {
-                                                    googleEmailState = email
-                                                    onEmailChange(email)
-                                                    onNameChange("")
-                                                    onPhoneChange("")
-                                                    isGoogleAccountExists = false
-                                                    isGoogleFlowActive = true
-                                                    Toast.makeText(context, "تم المتابعة بحساب Google المكتشف ($email) 🌠", Toast.LENGTH_LONG).show()
-                                                }
-                                            }
-                                        } else {
-                                            showGoogleDialog = true
-                                        }
-                                    } catch (e: Exception) {
-                                        showGoogleDialog = true
-                                    }
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    containerColor = Color.White,
-                                    contentColor = Color.Black
-                                )
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(20.dp)
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .background(Color.White),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text("G", color = Color(0xFF4285F4), fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                    }
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Text(
-                                        text = viewModel.t("المتابعة باستخدام Google 🌠", "Continue with Google 🌠"),
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 12.sp,
-                                        color = Color.Black
-                                    )
-                                }
                             }
                         }
 
@@ -6212,11 +6157,11 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
         ) {
             val tabs = buildList {
                 add("الملخص📊" to 0)
-                add((if (pendingCourierOrdersCount > 0) "طلبات التجار 📦 ($pendingCourierOrdersCount)" else "طلبات التجار 📦") to 3)
+                add((if (pendingCourierOrdersCount > 0) "طلبات العملاء 📦 ($pendingCourierOrdersCount)" else "طلبات العملاء 📦") to 3)
                 add("المناديب🚴" to 4)
                 add("المخزون📦" to 7)
                 add("التجار🧑‍💼" to 6)
-                add((if (pendingProductsCount > 0) "طلبات التجار⏳ ($pendingProductsCount)" else "طلبات التجار⏳") to 8)
+                add((if (pendingProductsCount > 0) "منتجات قيد المراجعة⏳ ($pendingProductsCount)" else "منتجات قيد المراجعة⏳") to 8)
                 add("المنتجات🛍️" to 2)
                 add("إضافة ➕" to 1)
                 add("مفاتيح الربط🔑" to 5)
@@ -8659,7 +8604,7 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                     ) {
                         item {
                             Text(
-                                "إدارة بائعي المجرة وبرنامج العمولات 🧑‍💼 🌌",
+                                "إدارة تجار المجرة وبرنامج العمولات 🧑‍💼 🌌",
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp,
@@ -8680,7 +8625,7 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                     horizontalAlignment = Alignment.End
                                 ) {
                                     Text(
-                                        "تسجيل بائع / تاجر جديد في التطبيق ➕",
+                                        "تسجيل تاجر جديد في التطبيق ➕",
                                         fontWeight = FontWeight.Bold,
                                         color = CosmicSecondary,
                                         fontSize = 12.sp,
@@ -8692,7 +8637,7 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                     OutlinedTextField(
                                         value = newSellerName,
                                         onValueChange = { newSellerName = it },
-                                        label = { Text("اسم البائع الكامل", color = Color.Gray) },
+                                        label = { Text("اسم التاجر الكامل", color = Color.Gray) },
                                         modifier = Modifier.fillMaxWidth(),
                                         colors = OutlinedTextFieldDefaults.colors(
                                             focusedBorderColor = CosmicSecondary,
@@ -8758,7 +8703,7 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                         OutlinedTextField(
                                             value = newSellerClass,
                                             onValueChange = { newSellerClass = it },
-                                            label = { Text("تصنيف البائع", color = Color.Gray) },
+                                            label = { Text("تصنيف التاجر", color = Color.Gray) },
                                             modifier = Modifier.weight(1.5f),
                                             colors = OutlinedTextFieldDefaults.colors(
                                                 focusedBorderColor = CosmicSecondary,
@@ -8786,7 +8731,7 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                                     commissionRate = comm / 100.0
                                                 ) { err ->
                                                     if (err == null) {
-                                                        Toast.makeText(context, "تم تسجيل البائع ${newSellerName} بنجاح! 🎉", Toast.LENGTH_SHORT).show()
+                                                        Toast.makeText(context, "تم تسجيل التاجر ${newSellerName} بنجاح! 🎉", Toast.LENGTH_SHORT).show()
                                                         newSellerName = ""
                                                         newSellerEmail = ""
                                                         newSellerPhone = ""
@@ -8799,7 +8744,7 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                         colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Text("تسجيل البائع وحفظه سحابياً 🌌", fontWeight = FontWeight.Bold)
+                                        Text("تسجيل التاجر وحفظه سحابياً 🌌", fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
@@ -8807,7 +8752,7 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
 
                         item {
                             Text(
-                                "قائمة البائعين النشطين وإحصائيات العمولات 📊",
+                                "قائمة التجار النشطين وإحصائيات العمولات 📊",
                                 color = CosmicSecondary,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp,
@@ -8873,7 +8818,7 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                     colors = CardDefaults.cardColors(containerColor = CosmicSurface.copy(0.5f))
                                 ) {
                                     Text(
-                                        "لا يوجد أي بائعين مسجلين حالياً. 📭",
+                                        "لا يوجد أي تجار مسجلين حالياً. 📭",
                                         color = Color.LightGray,
                                         fontSize = 12.sp,
                                         modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -8956,7 +8901,7 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                             horizontalArrangement = Arrangement.SpaceAround
                                         ) {
                                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                                Text("صافي البائع 💰", color = Color.Green, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                Text("صافي التاجر 💰", color = Color.Green, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                                 Text("${viewModel.formatPrice(sellerNet)}", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                             }
                                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -8979,7 +8924,7 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                             Button(
                                                 onClick = {
                                                     val invoiceText = StringBuilder()
-                                                    invoiceText.append("🌌 *مبيعات البائع في المجرة الكونية* 🌌\n\n")
+                                                    invoiceText.append("🌌 *مبيعات التاجر في المجرة الكونية* 🌌\n\n")
                                                     invoiceText.append("👤 *التاجر:* ${seller.name}\n")
                                                     invoiceText.append("⭐ *التصنيف:* ${seller.classification}\n\n")
                                                     invoiceText.append("📋 *تفاصيل الطلبيات الخاضعة للفوترة الصافية:*\n")
@@ -8987,7 +8932,7 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                                         invoiceText.append("- ${item.productName} (العدد: ${item.quantity}) سعره: ${viewModel.formatPrice(item.priceAtOrder * item.quantity)}\n")
                                                     }
                                                     invoiceText.append("\n-----------------------------------\n")
-                                                    invoiceText.append("📊 *إجمالي قيمة مبيعات البائع:* ${viewModel.formatPrice(totalRevenue)}\n")
+                                                    invoiceText.append("📊 *إجمالي قيمة مبيعات التاجر:* ${viewModel.formatPrice(totalRevenue)}\n")
                                                     invoiceText.append("💵 *المبلغ المستحق لك بالكامل (دون عمولة التطبيق):* ${viewModel.formatPrice(sellerNet)}\n\n")
                                                     invoiceText.append("🚀 *تمت الفوترة والتصدير تلقائياً عبر نظام المجرة الذكي بنجاح!*")
 
@@ -9011,7 +8956,7 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                                 onClick = {
                                                     viewModel.removeSeller(seller.id) { err ->
                                                         if (err == null) {
-                                                            Toast.makeText(context, "تم حذف البائع بنجاح! 🗑️", Toast.LENGTH_SHORT).show()
+                                                            Toast.makeText(context, "تم حذف التاجر بنجاح! 🗑️", Toast.LENGTH_SHORT).show()
                                                         }
                                                     }
                                                 },
@@ -9139,7 +9084,7 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                             )
                                             if (product.sellerEmail.isNotEmpty()) {
                                                 Text(
-                                                    "البائع: ${product.sellerEmail}",
+                                                    "التاجر: ${product.sellerEmail}",
                                                     color = Color.LightGray,
                                                     fontSize = 9.sp,
                                                     textAlign = TextAlign.Right
@@ -10147,7 +10092,7 @@ fun PendingProductsReviewSection(viewModel: MajarahViewModel) {
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "عذراً، مراجعة وقبول طلبات المنتجات المعلقة للبائعين واعتمادها هي ميزة حصرية للمدير العام فقط لتنظيم الأسعار والعمولات.",
+                        text = "عذراً، مراجعة وقبول طلبات المنتجات المعلقة للتجار واعتمادها هي ميزة حصرية للمدير العام فقط لتنظيم الأسعار والعمولات.",
                         color = MediumContrastTextDark,
                         fontSize = 12.sp,
                         textAlign = TextAlign.Center,
@@ -10165,7 +10110,7 @@ fun PendingProductsReviewSection(viewModel: MajarahViewModel) {
     ) {
         item {
             Text(
-                "طلبات المنتجات المعلقة للبائعين 🧑‍💼⏳",
+                "طلبات المنتجات المعلقة للتجار 🧑‍💼⏳",
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
                 fontSize = 14.sp,
@@ -10173,7 +10118,7 @@ fun PendingProductsReviewSection(viewModel: MajarahViewModel) {
                 modifier = Modifier.fillMaxWidth()
             )
             Text(
-                "هنا يمكنك مراجعة وتعديل أسعار منتجات البائعين لإضافة عمولة/فائدة التطبيق ومن ثم الموافقة عليها ونشرها مباشرة للمشترين.",
+                "هنا يمكنك مراجعة وتعديل أسعار منتجات التجار لإضافة عمولة/فائدة التطبيق ومن ثم الموافقة عليها ونشرها مباشرة للمشترين.",
                 color = Color.Gray,
                 fontSize = 11.sp,
                 textAlign = TextAlign.Right,
@@ -10188,7 +10133,7 @@ fun PendingProductsReviewSection(viewModel: MajarahViewModel) {
                         Icon(Icons.Default.HourglassEmpty, null, tint = CosmicSecondary, modifier = Modifier.size(48.dp))
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            "لا توجد منتجات معلقة مضافة من البائعين حالياً! 🎉",
+                            "لا توجد منتجات معلقة مضافة من التجار حالياً! 🎉",
                             color = Color.LightGray,
                             fontSize = 12.sp,
                             textAlign = TextAlign.Center
@@ -10215,7 +10160,7 @@ fun PendingProductsReviewSection(viewModel: MajarahViewModel) {
                             shape = RoundedCornerShape(4.dp)
                         ) {
                             Text(
-                                "طلب معلق من: ${product.sellerEmail.ifBlank { "بائع خارجي" }}",
+                                "طلب معلق من: ${product.sellerEmail.ifBlank { "تاجر خارجي" }}",
                                 color = Color(0xFFFFB74D),
                                 fontSize = 10.sp,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
@@ -10513,8 +10458,9 @@ fun SellerDashboardScreenBody(viewModel: MajarahViewModel) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val myProductsCount = allProducts.count { it.sellerEmail.trim().lowercase() == activeProfile?.email?.trim()?.lowercase() }
             val tabs = listOf(
-                "منتجاتي 🛍️" to 0,
+                "منتجاتي ($myProductsCount) 🛍️" to 0,
                 "إضافة منتج ➕" to 1,
                 "الدعم والتواصل 💬" to 2
             )
@@ -11569,6 +11515,22 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                val groupedOrders = myAssignedOrders.groupBy { it.orderId }
+                val activeCount = groupedOrders.count { (_, itemsList) ->
+                    val statusText = itemsList.firstOrNull()?.statusArabic ?: ""
+                    val isActuallyCompleted = (statusText.contains("تمام") || statusText.contains("تم توصيل") || statusText.contains("تم التسليم")) && !statusText.contains("تم تسليم المندوب") && !statusText.contains("لمندوب")
+                    val isCancelled = statusText.contains("ملغي")
+                    !isActuallyCompleted && !isCancelled
+                }
+                val completedCount = groupedOrders.count { (_, itemsList) ->
+                    val statusText = itemsList.firstOrNull()?.statusArabic ?: ""
+                    (statusText.contains("تمام") || statusText.contains("تم توصيل") || statusText.contains("تم التسليم")) && !statusText.contains("تم تسليم المندوب") && !statusText.contains("لمندوب")
+                }
+                val cancelledCount = groupedOrders.count { (_, itemsList) ->
+                    val statusText = itemsList.firstOrNull()?.statusArabic ?: ""
+                    statusText.contains("ملغي")
+                }
+
                 // Dynamic Tab Selector for Courier Orders segregation
                 Row(
                     modifier = Modifier
@@ -11578,9 +11540,9 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     val tabData = listOf(
-                        Triple(0, "المهام النشطة 🚴", CosmicSecondary),
-                        Triple(1, "تم تنفيذها ✅", Color.Green),
-                        Triple(2, "الملغية ❌", Color.Red)
+                        Triple(0, "المهام النشطة 🚴 ($activeCount)", CosmicSecondary),
+                        Triple(1, "تم تنفيذها ✅ ($completedCount)", Color.Green),
+                        Triple(2, "الملغية ❌ ($cancelledCount)", Color.Red)
                     )
                     tabData.forEach { (tabIndex, title, colorVal) ->
                         val isSelected = courierOrdersTab == tabIndex
@@ -11601,7 +11563,6 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                val groupedOrders = myAssignedOrders.groupBy { it.orderId }
                 // Apply Tab-based sorting filtration
                 val filteredGroupedOrders = groupedOrders.filter { (_, itemsList) ->
                     val statusText = itemsList.firstOrNull()?.statusArabic ?: ""
@@ -12171,6 +12132,49 @@ fun AppRatingDialog(
                         Text("إرسال التقييم 🚀", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun RestrictedAccessScreenBody(viewModel: MajarahViewModel) {
+    Box(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+            border = androidx.compose.foundation.BorderStroke(1.dp, CosmicSecondary.copy(alpha = 0.3f))
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp).fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = null,
+                    tint = CosmicSecondary,
+                    modifier = Modifier.size(64.dp)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "عذراً! هذا القسم مخصص للزبائن فقط 🔐",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "حسابات الشركاء ومندوبي التوصيل والإدارة مخصصة لإدارة العمليات والخدمات الكونية ولا يمكنها تصفح الأقسام أو الشراء كعميل.",
+                    color = MediumContrastTextDark,
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 18.sp
+                )
             }
         }
     }

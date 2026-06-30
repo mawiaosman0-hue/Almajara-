@@ -1082,7 +1082,7 @@ fun CustomerPharmacyView(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text("توصيل الدواء مجاني 🎉", color = Color.Green, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Text("توصيل الدواء مجان 🌸", color = Color.Green, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                     Text("رسوم التوصيل 🚚:", color = Color.White.copy(0.6f), fontSize = 10.sp)
                                 }
 
@@ -1105,7 +1105,7 @@ fun CustomerPharmacyView(
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Text(
-                                                text = "بالشفاء العاجل لك إن شاء الله 🤲✨",
+                                                text = "بالشفاء العاجل لك ان شاء الله",
                                                 color = Color.Green,
                                                 fontWeight = FontWeight.Bold,
                                                 fontSize = 12.sp,
