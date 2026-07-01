@@ -308,7 +308,50 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
     val allPharmacyOrders by viewModel.allPharmacyOrders.collectAsStateWithLifecycle()
 
     val allRatings by viewModel.allRatingsFlow.collectAsStateWithLifecycle()
+    val allRestaurantOrders by viewModel.allRestaurantOrders.collectAsStateWithLifecycle()
     var showAppRatingDialog by remember { mutableStateOf(false) }
+
+    val ratingPrefs = remember { context.getSharedPreferences("majarah_prompted_ratings", android.content.Context.MODE_PRIVATE) }
+    var promptedRatings by remember {
+        mutableStateOf(
+            ratingPrefs.getStringSet("prompted_order_ids", emptySet()) ?: emptySet()
+        )
+    }
+
+    LaunchedEffect(allOrders, allPharmacyOrders, allRestaurantOrders, activeProfile, promptedRatings) {
+        val phone = activeProfile?.phone?.trim() ?: ""
+        val name = activeProfile?.name?.trim() ?: ""
+        if (phone.isEmpty() && name.isEmpty()) return@LaunchedEffect
+
+        val newlyDeliveredStd = allOrders.filter { o ->
+            (o.customerPhone.trim() == phone || o.customerName.trim() == name) &&
+            (o.statusArabic.contains("تم توصيل") || o.statusArabic.contains("تم التوصيل")) &&
+            "std_${o.orderId}" !in promptedRatings
+        }
+
+        val newlyDeliveredPharm = allPharmacyOrders.filter { po ->
+            (po.customerPhone?.trim() == phone || po.customerName?.trim() == name) &&
+            (po.status.contains("تم توصيل") || po.status.contains("تم التوصيل")) &&
+            "pharm_${po.id}" !in promptedRatings
+        }
+
+        val newlyDeliveredRest = allRestaurantOrders.filter { ro ->
+            (ro.customerPhone.trim() == phone || ro.customerName.trim() == name) &&
+            (ro.status.contains("تم توصيل") || ro.status.contains("تم التوصيل")) &&
+            "rest_${ro.id}" !in promptedRatings
+        }
+
+        val allNewlyDelivered = newlyDeliveredStd.map { "std_${it.orderId}" } +
+                                newlyDeliveredPharm.map { "pharm_${it.id}" } +
+                                newlyDeliveredRest.map { "rest_${it.id}" }
+
+        if (allNewlyDelivered.isNotEmpty()) {
+            val updated = promptedRatings + allNewlyDelivered
+            promptedRatings = updated
+            ratingPrefs.edit().putStringSet("prompted_order_ids", updated).apply()
+            showAppRatingDialog = true
+        }
+    }
 
     LaunchedEffect(isCourier, activeProfile, allOrders, allPharmacyOrders) {
         if (isCourier && activeProfile != null) {
@@ -627,26 +670,7 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                         selected = currentScreen is Screen.History,
                         onClick = { viewModel.navigateTo(Screen.History) },
                         icon = {
-                            Box {
-                                Icon(Icons.Default.History, null)
-                                val activeOrdersCount = orderHistory.distinctBy { it.orderId }.filter { !it.statusArabic.contains("تم") && !it.statusArabic.contains("توصيل") && !it.statusArabic.contains("تمام") }.size
-                                if (activeOrdersCount > 0) {
-                                    Badge(
-                                        modifier = Modifier
-                                            .align(Alignment.TopEnd)
-                                            .offset(x = 10.dp, y = (-6).dp)
-                                            .testTag("orders_badge"),
-                                        containerColor = CosmicSecondary,
-                                        contentColor = Color.Black
-                                    ) {
-                                        Text(
-                                            text = activeOrdersCount.toString(),
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 9.sp
-                                        )
-                                    }
-                                }
-                            }
+                            Icon(Icons.Default.History, null)
                         },
                         label = { Text("طلباتي", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                         colors = NavigationBarItemDefaults.colors(
@@ -1423,6 +1447,7 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                                     Text("حفظ وتعيين كلمة المرور الجديدة", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                 }
                             }
+                        }
                     },
                     dismissButton = {
                         TextButton(onClick = { showForgotPasswordDialog = false }) {
@@ -2062,164 +2087,164 @@ fun HomeScreenBody(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+        // Horizontal Category Tabs
+        val categories = listOf(
+            Pair("", "🚀 الكل"),
+            Pair("electronics", "💻 كوكب الإلكترونيات"),
+            Pair("fashion", "👕 كوكب الأزياء"),
+            Pair("furniture", "🏡 كوكب الأثاثات المنزلية"),
+            Pair("services", "🛠️ كوكب خدمات عامة"),
+            Pair("crafts", "🪚 كوكب أعمال حرفية"),
+            Pair("estate_cars", "🚗 كوكب بيع العقارات والسيارات"),
+            Pair("rentals", "🔑 كوكب الإيجارات"),
+            Pair("pharmacy", "💊 كوكب صيدلية"),
+            Pair("restaurant", "🍔 كوكب مطاعم"),
+            Pair("kids", "🍼 كوكب مستلزمات أطفال"),
+            Pair("women", "💅 كوكب للنساء"),
+            Pair("men", "💼 كوكب للرجال"),
+            Pair("travel", "✈️ كوكب وكالات سفر وسياحة"),
+            Pair("tickets", "🎟️ كوكب حجوزات تذاكر"),
+            Pair("hotels", "🏨 كوكب حجوزات فندقية"),
+            Pair("cosmic_deals", "⭐ كوكب العروض الكونية"),
+            Pair("foods", "🍎 كوكب الأغذية والمأكولات"),
+            Pair("cosmetics", "💄 كوكب عطور وتجميل"),
+            Pair("other", "📦 كوكب منتجات أخرى")
+        )
+
+        LazyRow(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+            reverseLayout = true // Standard Arabic layout direction
         ) {
-            // Starry Banner
-            item {
+            items(categories) { cat ->
+                val isSelected = selectedCategory == cat.first
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(
-                            brush = Brush.horizontalGradient(
-                                colors = listOf(CosmicPrimary, Color(0xFF3F1976))
-                            )
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(if (isSelected) CosmicSecondary else CosmicSurface)
+                        .border(
+                            width = 1.dp,
+                            color = if (isSelected) CosmicSecondary else CosmicSurfaceVariant,
+                            shape = RoundedCornerShape(20.dp)
                         )
-                        .padding(16.dp)
+                        .clickable { onCategorySelect(cat.first) }
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.End
-                    ) {
-                        Text(
-                            text = "🚀 عروض المجرة الحصرية للسودان",
-                            color = CosmicTertiary,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "منتجات تكنولوجية وعصرية بمواصفات خارقة وبأسعار تناسبكم بالجنيه السوداني مع توصيل فوري ومضمون.",
-                            color = Color.White,
-                            fontSize = 12.sp,
-                            textAlign = TextAlign.Right,
-                            maxLines = 3,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                    Text(
+                        text = cat.second,
+                        color = if (isSelected) Color.Black else Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
                 }
             }
+        }
 
-            // Horizontal Category Tabs
-            item {
-                val categories = listOf(
-                    Pair("", "🚀 الكل"),
-                    Pair("electronics", "💻 كوكب الإلكترونيات"),
-                    Pair("fashion", "👕 كوكب الأزياء"),
-                    Pair("furniture", "🏡 كوكب الأثاثات المنزلية"),
-                    Pair("services", "🛠️ كوكب خدمات عامة"),
-                    Pair("crafts", "🪚 كوكب أعمال حرفية"),
-                    Pair("estate_cars", "🚗 كوكب بيع العقارات والسيارات"),
-                    Pair("rentals", "🔑 كوكب الإيجارات"),
-                    Pair("pharmacy", "💊 كوكب صيدلية"),
-                    Pair("restaurant", "🍔 كوكب مطاعم"),
-                    Pair("kids", "🍼 كوكب مستلزمات أطفال"),
-                    Pair("women", "💅 كوكب للنساء"),
-                    Pair("men", "💼 كوكب للرجال"),
-                    Pair("travel", "✈️ كوكب وكالات سفر وسياحة"),
-                    Pair("tickets", "🎟️ كوكب حجوزات تذاكر"),
-                    Pair("hotels", "🏨 كوكب حجوزات فندقية"),
-                    Pair("cosmic_deals", "⭐ كوكب العروض الكونية"),
-                    Pair("foods", "🍎 كوكب الأغذية والمأكولات"),
-                    Pair("cosmetics", "💄 كوكب عطور وتجميل"),
-                    Pair("other", "📦 كوكب منتجات أخرى")
-                )
+        Spacer(modifier = Modifier.height(8.dp))
 
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-                    reverseLayout = true // Standard Arabic layout direction
-                ) {
-                    items(categories) { cat ->
-                        val isSelected = selectedCategory == cat.first
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(if (isSelected) CosmicSecondary else CosmicSurface)
-                                .border(
-                                    width = 1.dp,
-                                    color = if (isSelected) CosmicSecondary else CosmicSurfaceVariant,
-                                    shape = RoundedCornerShape(20.dp)
+        if (selectedCategory == "pharmacy") {
+            Box(modifier = Modifier.fillMaxSize().weight(1f)) {
+                com.example.ui.screens.PharmacyPlanetSection(viewModel = viewModel)
+            }
+        } else if (selectedCategory == "restaurant") {
+            Box(modifier = Modifier.fillMaxSize().weight(1f)) {
+                com.example.ui.screens.RestaurantsPlanetSection(viewModel = viewModel)
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Starry Banner
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(CosmicPrimary, Color(0xFF3F1976))
                                 )
-                                .clickable { onCategorySelect(cat.first) }
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                            )
+                            .padding(16.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.End
                         ) {
                             Text(
-                                text = cat.second,
-                                color = if (isSelected) Color.Black else Color.White,
+                                text = "🚀 عروض المجرة الحصرية للسودان",
+                                color = CosmicTertiary,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp
+                                fontSize = 16.sp
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "منتجات تكنولوجية وعصرية بمواصفات خارقة وبأسعار تناسبكم بالجنيه السوداني مع توصيل فوري ومضمون.",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                textAlign = TextAlign.Right,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
                 }
-            }
 
-            // Horizontal Sorting Tabs
-            item {
-                val sortBySelected by viewModel.sortBy.collectAsStateWithLifecycle()
-                val sortingOptions = listOf(
-                    Pair("default", "⭐ المقترح"),
-                    Pair("newest", "🚀 الأحدث"),
-                    Pair("price_asc", "📈 الأقل سعراً"),
-                    Pair("price_desc", "📉 الأعلى سعراً")
-                )
-                
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                    horizontalAlignment = Alignment.End
-                ) {
-                    Text(
-                        text = "ترتيب حسب العروض والنقاط:",
-                        color = MediumContrastTextDark,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 6.dp)
+                // Horizontal Sorting Tabs
+                item {
+                    val sortBySelected by viewModel.sortBy.collectAsStateWithLifecycle()
+                    val sortingOptions = listOf(
+                        Pair("default", "⭐ المقترح"),
+                        Pair("newest", "🚀 الأحدث"),
+                        Pair("price_asc", "📈 الأقل سعراً"),
+                        Pair("price_desc", "📉 الأعلى سعراً")
                     )
                     
-                    LazyRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-                        reverseLayout = true
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                        horizontalAlignment = Alignment.End
                     ) {
-                        items(sortingOptions) { option ->
-                            val isSelected = sortBySelected == option.first
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(20.dp))
-                                    .background(if (isSelected) CosmicSecondary else CosmicSurface)
-                                    .border(
-                                        width = 1.dp,
-                                        color = if (isSelected) CosmicSecondary else CosmicSurfaceVariant,
-                                        shape = RoundedCornerShape(20.dp)
+                        Text(
+                            text = "ترتيب حسب العروض والنقاط:",
+                            color = MediumContrastTextDark,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+                        
+                        LazyRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                            reverseLayout = true
+                        ) {
+                            items(sortingOptions) { option ->
+                                val isSelected = sortBySelected == option.first
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(20.dp))
+                                        .background(if (isSelected) CosmicSecondary else CosmicSurface)
+                                        .border(
+                                            width = 1.dp,
+                                            color = if (isSelected) CosmicSecondary else CosmicSurfaceVariant,
+                                            shape = RoundedCornerShape(20.dp)
+                                        )
+                                        .clickable { viewModel.updateSortBy(option.first) }
+                                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                                ) {
+                                    Text(
+                                        text = option.second,
+                                        color = if (isSelected) Color.Black else Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp
                                     )
-                                    .clickable { viewModel.updateSortBy(option.first) }
-                                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                            ) {
-                                Text(
-                                    text = option.second,
-                                    color = if (isSelected) Color.Black else Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp
-                                )
+                                }
                             }
                         }
                     }
                 }
-            }
 
-        // Main Product List Feed
-        if (selectedCategory == "pharmacy") {
-            item {
-                com.example.ui.screens.PharmacyPlanetSection(viewModel = viewModel)
-            }
-        } else if (selectedCategory == "restaurant") {
-            item {
-                com.example.ui.screens.RestaurantsPlanetSection(viewModel = viewModel)
-            }
-        } else if (products.isEmpty()) {
+        if (products.isEmpty()) {
             item {
                 Box(
                     modifier = Modifier
@@ -2258,6 +2283,7 @@ fun HomeScreenBody(
             Spacer(modifier = Modifier.height(16.dp))
         }
     }
+}
 }
 }
 
@@ -3146,6 +3172,30 @@ fun HistoryScreenBody(
     onRateAppClick: () -> Unit
 ) {
     var isRefreshing by remember { mutableStateOf(false) }
+    val activeProfile by viewModel.activeProfile.collectAsStateWithLifecycle()
+    val allRatings by viewModel.allRatingsFlow.collectAsStateWithLifecycle()
+
+    LaunchedEffect(activeProfile, orders, allRatings) {
+        if (activeProfile != null) {
+            val userEmail = activeProfile?.email?.trim()?.lowercase() ?: ""
+            val userPhone = activeProfile?.phone?.trim()?.replace("+", "")?.replace(" ", "") ?: ""
+            
+            // Check if user has any completed order (e.g. status contains "توصيل" or "تسليم" or "تم" or "تمام")
+            val hasCompletedOrder = orders.any { o ->
+                val oPhone = o.customerPhone.trim().replace("+", "").replace(" ", "")
+                val isMyOrder = oPhone == userPhone || o.customerName.trim().lowercase() == activeProfile?.name?.trim()?.lowercase()
+                val isCompleted = o.statusArabic.contains("توصيل") || o.statusArabic.contains("تسليم") || o.statusArabic.contains("تم") || o.statusArabic.contains("تمام")
+                isMyOrder && isCompleted
+            }
+
+            // Check if user has already rated
+            val hasAlreadyRated = allRatings.any { it.customerEmail.trim().lowercase() == userEmail }
+
+            if (hasCompletedOrder && !hasAlreadyRated) {
+                onRateAppClick()
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         if (orders.isEmpty()) {
@@ -3296,9 +3346,13 @@ fun HistoryScreenBody(
                 
                 val dateStr = java.text.SimpleDateFormat("yyyy/MM/dd HH:mm", java.util.Locale.US).format(java.util.Date(orderDateMillis))
                 val totalItemsSum = orderItems.sumOf { it.priceAtOrder * it.quantity }
+                val isPharmacyOrder = orderItems.any { item ->
+                    val prod = viewModel.allProducts.value.find { it.id == item.productId }
+                    prod?.category == "pharmacy" || prod?.categoryArabic?.contains("صيدلي") == true || item.productName.contains("دواء") || item.productName.contains("روشتة")
+                }
                 val showDeliveryPrice = orderStatus.contains("تسليم المندوب") || orderStatus.contains("تسليم لمندوب") || isDelivered || courierName.isNotBlank()
-                val deliveryPrice = if ((firstItem?.deliveryFee ?: 0.0) <= 0.0) 5000.0 else firstItem!!.deliveryFee
-                val grandTotal = if (showDeliveryPrice) (totalItemsSum + deliveryPrice) else totalItemsSum
+                val deliveryPrice = if (isPharmacyOrder) 0.0 else (if ((firstItem?.deliveryFee ?: 0.0) <= 0.0) 5000.0 else firstItem!!.deliveryFee)
+                val grandTotal = if (isPharmacyOrder) totalItemsSum else (if (showDeliveryPrice) (totalItemsSum + deliveryPrice) else totalItemsSum)
                 
                 val context = androidx.compose.ui.platform.LocalContext.current
                 val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
@@ -3318,7 +3372,7 @@ fun HistoryScreenBody(
                         ) {
                             Column(horizontalAlignment = Alignment.Start) {
                                 Text(
-                                    text = "رقم الطلب: $orderId",
+                                    text = "كود الطلب: $orderId",
                                     fontWeight = FontWeight.Bold,
                                     color = CosmicSecondary,
                                     fontSize = 15.sp
@@ -3430,7 +3484,12 @@ fun HistoryScreenBody(
                                             .background(CosmicSecondary),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text("1", color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(12.dp),
+                                            tint = Color.Black
+                                        )
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text("تم الطلب", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
@@ -3451,7 +3510,12 @@ fun HistoryScreenBody(
                                             .background(if (isShipped) CosmicSecondary else CosmicSurfaceVariant),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text("2", color = if (isShipped) Color.Black else Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        Icon(
+                                            imageVector = if (isShipped) Icons.Default.Check else Icons.Default.DirectionsBike,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(12.dp),
+                                            tint = if (isShipped) Color.Black else Color.White
+                                        )
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text("تم تسليم المندوب", color = if (isShipped) Color.White else MediumContrastTextDark, fontSize = 9.sp)
@@ -3472,7 +3536,12 @@ fun HistoryScreenBody(
                                             .background(if (isDelivered) CosmicSecondary else CosmicSurfaceVariant),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text("3", color = if (isDelivered) Color.Black else Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        Icon(
+                                            imageVector = if (isDelivered) Icons.Default.Check else Icons.Default.Home,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(12.dp),
+                                            tint = if (isDelivered) Color.Black else Color.White
+                                        )
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text("تم التوصيل", color = if (isDelivered) Color.White else MediumContrastTextDark, fontSize = 9.sp)
@@ -3562,10 +3631,10 @@ fun HistoryScreenBody(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = if (showDeliveryPrice) "${formatPrice(deliveryPrice)} ج.س" else viewModel.t("يحدد عند تسليم المندوب 🚴", "To be determined upon delivery 🚴"),
-                                color = if (showDeliveryPrice) Color.White else CosmicSecondary,
+                                text = if (isPharmacyOrder) "توصيل الدواء مجان 🌸" else (if (showDeliveryPrice) "${formatPrice(deliveryPrice)} ج.س" else viewModel.t("يحدد عند تسليم المندوب 🚴", "To be determined upon delivery 🚴")),
+                                color = if (isPharmacyOrder) Color.Green else (if (showDeliveryPrice) Color.White else CosmicSecondary),
                                 fontSize = 12.sp,
-                                fontWeight = if (showDeliveryPrice) FontWeight.Normal else FontWeight.Bold
+                                fontWeight = if (isPharmacyOrder || !showDeliveryPrice) FontWeight.Bold else FontWeight.Normal
                             )
                             Text("رسوم التوصيل:", color = MediumContrastTextDark, fontSize = 12.sp)
                         }
@@ -3778,6 +3847,28 @@ fun HistoryScreenBody(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
+                                if (isPharmacyOrder) {
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                                        colors = CardDefaults.cardColors(containerColor = Color.Green.copy(0.12f)),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.Green.copy(0.3f)),
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
+                                            Text(
+                                                text = "🤲 بالشفاء العاجل لك إن شاء الله 🤲✨",
+                                                color = Color.Green,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 14.sp,
+                                                textAlign = TextAlign.Center
+                                            )
+                                        }
+                                    }
+                                }
+
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -5315,7 +5406,34 @@ fun ProfileScreenBody(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         item {
-            Spacer(modifier = Modifier.height(32.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp),
+                horizontalArrangement = Arrangement.Start,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = { viewModel.navigateTo(Screen.Home) },
+                    modifier = Modifier.background(Color.White.copy(0.08f), androidx.compose.foundation.shape.CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "رجوع",
+                        tint = CosmicSecondary
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "رجوع للرئيسية",
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable { viewModel.navigateTo(Screen.Home) }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
             
             val decodedBitmap = remember(activeProfile?.profileImageUri) {
                 try {
@@ -5504,6 +5622,145 @@ fun ProfileScreenBody(
                         lineHeight = 16.sp,
                         modifier = Modifier.align(Alignment.Start)
                     )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Change Password Card
+            var currentPasswordInput by remember { mutableStateOf("") }
+            var newPasswordInput by remember { mutableStateOf("") }
+            var confirmPasswordInput by remember { mutableStateOf("") }
+            var isChangingPassword by remember { mutableStateOf(false) }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF161F30)),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = "تغيير كلمة المرور الكونية 🔐",
+                        color = CosmicSecondary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.align(Alignment.Start)
+                    )
+
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+
+                    // Current Password
+                    OutlinedTextField(
+                        value = currentPasswordInput,
+                        onValueChange = { currentPasswordInput = it },
+                        label = { Text("كلمة المرور الحالية", color = Color.White.copy(alpha = 0.6f)) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            cursorColor = CosmicSecondary,
+                            focusedBorderColor = CosmicSecondary,
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+                            focusedLabelColor = CosmicSecondary
+                        ),
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        leadingIcon = {
+                            Icon(Icons.Default.Lock, null, tint = CosmicSecondary)
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("profile_current_password_input")
+                    )
+
+                    // New Password
+                    OutlinedTextField(
+                        value = newPasswordInput,
+                        onValueChange = { newPasswordInput = it },
+                        label = { Text("كلمة المرور الجديدة", color = Color.White.copy(alpha = 0.6f)) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            cursorColor = CosmicSecondary,
+                            focusedBorderColor = CosmicSecondary,
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+                            focusedLabelColor = CosmicSecondary
+                        ),
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        leadingIcon = {
+                            Icon(Icons.Default.Lock, null, tint = CosmicSecondary)
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("profile_new_password_input")
+                    )
+
+                    // Confirm New Password
+                    OutlinedTextField(
+                        value = confirmPasswordInput,
+                        onValueChange = { confirmPasswordInput = it },
+                        label = { Text("تأكيد كلمة المرور الجديدة", color = Color.White.copy(alpha = 0.6f)) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            cursorColor = CosmicSecondary,
+                            focusedBorderColor = CosmicSecondary,
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+                            focusedLabelColor = CosmicSecondary
+                        ),
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        leadingIcon = {
+                            Icon(Icons.Default.Lock, null, tint = CosmicSecondary)
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("profile_confirm_password_input")
+                    )
+
+                    Button(
+                        onClick = {
+                            if (currentPasswordInput.isBlank() || newPasswordInput.isBlank() || confirmPasswordInput.isBlank()) {
+                                Toast.makeText(context, "الرجاء ملء جميع حقول كلمة المرور", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            val actualPassword = activeProfile?.password ?: ""
+                            if (currentPasswordInput != actualPassword) {
+                                Toast.makeText(context, "كلمة المرور الحالية غير صحيحة", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            if (newPasswordInput != confirmPasswordInput) {
+                                Toast.makeText(context, "كلمتا المرور الجديدتان غير متطابقتين", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            isChangingPassword = true
+                            viewModel.updatePassword(newPasswordInput) { err ->
+                                isChangingPassword = false
+                                if (err == null) {
+                                    Toast.makeText(context, "تم تغيير كلمة المرور بنجاح! 🔐✨", Toast.LENGTH_LONG).show()
+                                    currentPasswordInput = ""
+                                    newPasswordInput = ""
+                                    confirmPasswordInput = ""
+                                } else {
+                                    Toast.makeText(context, "فشل تغيير كلمة المرور: $err", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .testTag("profile_change_password_button"),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = CosmicSecondary,
+                            contentColor = Color.Black
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        enabled = !isChangingPassword
+                    ) {
+                        if (isChangingPassword) {
+                            CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(24.dp))
+                        } else {
+                            Text("تحديث وحفظ كلمة المرور 🔐", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+                    }
                 }
             }
             
@@ -9947,59 +10204,78 @@ fun AdminSystemManagementSection(viewModel: MajarahViewModel) {
                 val isPhar = pharmacies.any { it.pharmacistEmail.trim().lowercase() == emailClean } || prefRole == "pharmacist"
                 val isRest = restaurants.any { it.phone.trim() == p.phone.trim() || it.name.trim().lowercase() == p.name.trim().lowercase() } || prefRole == "restaurant"
 
-                // Dynamic classification
+                // Dynamic classification based on weekly stats (last 7 days)
+                val oneWeekAgo = System.currentTimeMillis() - 7 * 24 * 60 * 60 * 1000L
                 val classification = when {
                     isCou -> {
-                        val courierDeliveries = allOrders.filter { 
+                        val courierDeliveriesThisWeek = allOrders.filter { 
                             val cPhone = it.courierPhone.trim().replace("+", "").replace(" ", "")
                             (cPhone == phoneClean || it.courierPhone.trim() == p.phone.trim()) && 
+                            it.orderDate >= oneWeekAgo &&
                             (it.statusArabic.contains("تم") || it.statusArabic.contains("توصيل") || it.statusArabic.contains("تمام"))
-                        }.distinctBy { it.orderId }.size
+                        }.distinctBy { it.orderId }.size + allPharmacyOrders.count {
+                            val cpPhone = it.courierPhone.trim().replace("+", "").replace(" ", "")
+                            (cpPhone == phoneClean || it.courierPhone.trim() == p.phone.trim()) &&
+                            it.createdAt >= oneWeekAgo &&
+                            it.status == "تم التوصيل"
+                        }
                         when {
-                            courierDeliveries >= 9 -> "مندوب ذهبي 👑 ($courierDeliveries مهمة)"
-                            courierDeliveries >= 4 -> "مندوب مميز ⭐ ($courierDeliveries مهمة)"
-                            else -> "مندوب عادي 🚴 ($courierDeliveries مهمة)"
+                            courierDeliveriesThisWeek >= 20 -> "مندوب ذهبي 👑 ($courierDeliveriesThisWeek مهمة هذا الأسبوع)"
+                            courierDeliveriesThisWeek >= 10 -> "مندوب مميز ⭐ ($courierDeliveriesThisWeek مهمة هذا الأسبوع)"
+                            else -> "مندوب عادي 🚴 ($courierDeliveriesThisWeek مهمة هذا الأسبوع)"
                         }
                     }
                     isSel -> {
-                        val sellerProducts = allProducts.filter { it.sellerEmail.trim().lowercase() == emailClean }.size
+                        val sellerProductIds = allProducts.filter { it.sellerEmail.trim().lowercase() == emailClean }.map { it.id }.toSet()
+                        val sellerSalesThisWeek = allOrders.filter { 
+                            it.productId in sellerProductIds && 
+                            it.orderDate >= oneWeekAgo &&
+                            (it.statusArabic.contains("تم") || it.statusArabic.contains("توصيل") || it.statusArabic.contains("تمام"))
+                        }.sumOf { it.quantity }
                         when {
-                            sellerProducts >= 10 -> "تاجر ذهبي 👑 ($sellerProducts منتج)"
-                            sellerProducts >= 5 -> "تاجر مميز ⭐ ($sellerProducts منتج)"
-                            else -> "تاجر عادي 🛍️ ($sellerProducts منتج)"
+                            sellerSalesThisWeek >= 20 -> "تاجر ذهبي 👑 ($sellerSalesThisWeek مبيعات هذا الأسبوع)"
+                            sellerSalesThisWeek >= 10 -> "تاجر مميز ⭐ ($sellerSalesThisWeek مبيعات هذا الأسبوع)"
+                            else -> "تاجر عادي 🛍️ ($sellerSalesThisWeek مبيعات هذا الأسبوع)"
                         }
                     }
                     isRest -> {
-                        val rOrders = allRestaurantOrders.filter { 
-                            it.restaurantPhone.trim() == p.phone.trim() || 
-                            it.restaurantName.trim().lowercase() == p.name.trim().lowercase() 
+                        val restaurantOrdersThisWeek = allRestaurantOrders.filter { 
+                            (it.restaurantPhone.trim() == p.phone.trim() || it.restaurantName.trim().lowercase() == p.name.trim().lowercase()) &&
+                            it.createdAt >= oneWeekAgo &&
+                            it.status == "تم التسليم"
                         }.size
                         when {
-                            rOrders >= 9 -> "مطعم ذهبي 👑 ($rOrders طلب)"
-                            rOrders >= 4 -> "مطعم مميز ⭐ ($rOrders طلب)"
-                            else -> "مطعم عادي 🍔 ($rOrders طلب)"
+                            restaurantOrdersThisWeek >= 20 -> "مطعم ذهبي 👑 ($restaurantOrdersThisWeek طلب هذا الأسبوع)"
+                            restaurantOrdersThisWeek >= 10 -> "مطعم مميز ⭐ ($restaurantOrdersThisWeek طلب هذا الأسبوع)"
+                            else -> "مطعم عادي 🍔 ($restaurantOrdersThisWeek طلب هذا الأسبوع)"
                         }
                     }
                     isPhar -> {
                         val myPharmacy = pharmacies.find { it.pharmacistEmail.trim().lowercase() == emailClean }
-                        val pOrders = if (myPharmacy != null) {
-                            allPharmacyOrders.count { it.pharmacyId == myPharmacy.id && it.status != "بانتظار الصيدلي" }
+                        val pharmacyOrdersThisWeek = if (myPharmacy != null) {
+                            allPharmacyOrders.count { 
+                                it.pharmacyId == myPharmacy.id && 
+                                it.createdAt >= oneWeekAgo && 
+                                it.status == "تم التوصيل" 
+                            }
                         } else 0
                         when {
-                            pOrders >= 9 -> "صيدلي ذهبي 👑 ($pOrders روشتة)"
-                            pOrders >= 4 -> "صيدلي مميز ⭐ ($pOrders روشتة)"
-                            else -> "صيدلي عادي 💊 ($pOrders روشتة)"
+                            pharmacyOrdersThisWeek >= 20 -> "صيدلي ذهبي 👑 ($pharmacyOrdersThisWeek روشتة هذا الأسبوع)"
+                            pharmacyOrdersThisWeek >= 10 -> "صيدلي مميز ⭐ ($pharmacyOrdersThisWeek روشتة هذا الأسبوع)"
+                            else -> "صيدلي عادي 💊 ($pharmacyOrdersThisWeek روشتة هذا الأسبوع)"
                         }
                     }
                     else -> {
-                        val myOrdersCount = allOrders.filter { 
+                        val clientOrdersThisWeek = allOrders.filter { 
                             val oPhone = it.customerPhone.trim().replace("+", "").replace(" ", "")
-                            oPhone == phoneClean || it.customerName.trim().lowercase() == p.name.trim().lowercase()
+                            (oPhone == phoneClean || it.customerName.trim().lowercase() == p.name.trim().lowercase()) &&
+                            it.orderDate >= oneWeekAgo &&
+                            (it.statusArabic.contains("تم") || it.statusArabic.contains("توصيل") || it.statusArabic.contains("تمام") || it.statusArabic.contains("استلام"))
                         }.distinctBy { it.orderId }.size
                         when {
-                            myOrdersCount >= 6 -> "عميل ذهبي 👑 ($myOrdersCount طلب)"
-                            myOrdersCount >= 3 -> "عميل مميز ⭐ ($myOrdersCount طلب)"
-                            else -> "عميل عادي 👤 ($myOrdersCount طلب)"
+                            clientOrdersThisWeek >= 20 -> "عميل ذهبي 👑 ($clientOrdersThisWeek طلب هذا الأسبوع)"
+                            clientOrdersThisWeek >= 10 -> "عميل مميز ⭐ ($clientOrdersThisWeek طلب هذا الأسبوع)"
+                            else -> "عميل عادي 👤 ($clientOrdersThisWeek طلب هذا الأسبوع)"
                         }
                     }
                 }

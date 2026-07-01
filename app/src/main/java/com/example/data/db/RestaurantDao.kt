@@ -20,6 +20,9 @@ interface RestaurantDao {
 
     @Query("DELETE FROM restaurants WHERE id = :id")
     suspend fun deleteRestaurant(id: Int)
+
+    @Query("UPDATE restaurants SET isApproved = :approved WHERE id = :id")
+    suspend fun updateRestaurantApproval(id: Int, approved: Boolean)
 }
 
 @Dao

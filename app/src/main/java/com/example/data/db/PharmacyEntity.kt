@@ -12,5 +12,7 @@ data class PharmacyEntity(
     val location: String,
     val pharmacistEmail: String, // linked pharmacist user
     val isApproved: Boolean = false,
+    val imageBase64: String = "",
+    val hasCosmetics: Boolean = false,
     val createdAt: Long = System.currentTimeMillis()
 )

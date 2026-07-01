@@ -56,6 +56,10 @@ class MajarahRepository(
         restaurantDao.deleteRestaurant(id)
     }
 
+    suspend fun updateRestaurantApproval(id: Int, approved: Boolean) {
+        restaurantDao.updateRestaurantApproval(id, approved)
+    }
+
     suspend fun insertRestaurantOrder(order: com.example.data.db.RestaurantOrderEntity): Long {
         return restaurantOrderDao.insertOrder(order)
     }
@@ -1367,6 +1371,23 @@ class MajarahRepository(
         } catch (e: Exception) {
             e.printStackTrace()
             e.message
+        }
+    }
+
+    suspend fun updateUserPassword(password: String): String? {
+        return try {
+            val profiles = profileDao.getAllProfiles()
+            if (profiles.isNotEmpty()) {
+                val current = profiles.first()
+                val updated = current.copy(password = password)
+                profileDao.insertProfile(updated)
+                null
+            } else {
+                "لا يوجد ملف شخصي مسجل حالياً لتغيير كلمة المرور"
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            e.localizedMessage
         }
     }
 }

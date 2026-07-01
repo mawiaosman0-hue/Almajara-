@@ -682,6 +682,19 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun updatePassword(password: String, onResult: (String?) -> Unit) {
+        viewModelScope.launch {
+            val error = repository.updateUserPassword(password)
+            if (error == null) {
+                val profiles = database.profileDao().getAllProfiles()
+                if (profiles.isNotEmpty()) {
+                    activeProfile.value = profiles.first()
+                }
+            }
+            onResult(error)
+        }
+    }
+
     init {
         // Initialize the app with Room products seed and local session loading
         viewModelScope.launch {
@@ -1199,7 +1212,7 @@ $couponMessage---------------------------
         }
     }
 
-    fun addPharmacy(name: String, doctorName: String, phone: String, location: String, pharmacistEmail: String, onComplete: (String?) -> Unit) {
+    fun addPharmacy(name: String, doctorName: String, phone: String, location: String, pharmacistEmail: String, imageBase64: String = "", hasCosmetics: Boolean = false, onComplete: (String?) -> Unit) {
         isGlobalLoading.value = true
         viewModelScope.launch {
             var error: String? = null
@@ -1210,7 +1223,9 @@ $couponMessage---------------------------
                     phone = phone,
                     location = location,
                     pharmacistEmail = pharmacistEmail,
-                    isApproved = false
+                    isApproved = false,
+                    imageBase64 = imageBase64,
+                    hasCosmetics = hasCosmetics
                 )
                 repository.insertPharmacy(p)
             } catch (e: Exception) {
@@ -1391,12 +1406,13 @@ $couponMessage---------------------------
         emptyList()
     )
 
-    fun addRestaurant(name: String, phone: String, menuImageUri: String?, logoImageUri: String? = null, onComplete: (String?) -> Unit) {
+    fun addRestaurant(id: Int = 0, name: String, phone: String, menuImageUri: String?, logoImageUri: String? = null, onComplete: (String?) -> Unit) {
         isGlobalLoading.value = true
         viewModelScope.launch {
             var error: String? = null
             try {
                 val restaurant = com.example.data.db.RestaurantEntity(
+                    id = id,
                     name = name,
                     phone = phone,
                     menuImageUri = menuImageUri,
@@ -1418,6 +1434,21 @@ $couponMessage---------------------------
             var error: String? = null
             try {
                 repository.deleteRestaurant(id)
+            } catch (e: Exception) {
+                error = e.localizedMessage
+            } finally {
+                isGlobalLoading.value = false
+                onComplete(error)
+            }
+        }
+    }
+
+    fun approveRestaurant(id: Int, onComplete: (String?) -> Unit) {
+        isGlobalLoading.value = true
+        viewModelScope.launch {
+            var error: String? = null
+            try {
+                repository.updateRestaurantApproval(id, true)
             } catch (e: Exception) {
                 error = e.localizedMessage
             } finally {

@@ -184,6 +184,55 @@ fun PharmacistAddPharmacyForm(
     var doctorName by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var location by remember { mutableStateOf("") }
+    var selectedImageBase64 by remember { mutableStateOf<String?>(null) }
+    var hasCosmetics by remember { mutableStateOf(false) }
+
+    // Camera Launcher
+    val cameraLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (bitmap != null) {
+            val base64 = try {
+                val outputStream = java.io.ByteArrayOutputStream()
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 75, outputStream)
+                val byteArray = outputStream.toByteArray()
+                android.util.Base64.encodeToString(byteArray, android.util.Base64.DEFAULT)
+            } catch (e: Exception) {
+                null
+            }
+            if (base64 != null) {
+                selectedImageBase64 = base64
+                Toast.makeText(context, "تم التقاط صورة الصيدلية بنجاح! 📸", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    // Gallery Launcher
+    val galleryLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            val base64 = try {
+                val bitmap = if (android.os.Build.VERSION.SDK_INT >= 29) {
+                    val source = android.graphics.ImageDecoder.createSource(context.contentResolver, uri)
+                    android.graphics.ImageDecoder.decodeBitmap(source)
+                } else {
+                    @Suppress("DEPRECATION")
+                    android.provider.MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+                }
+                val outputStream = java.io.ByteArrayOutputStream()
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, outputStream)
+                val byteArray = outputStream.toByteArray()
+                android.util.Base64.encodeToString(byteArray, android.util.Base64.DEFAULT)
+            } catch (e: Exception) {
+                null
+            }
+            if (base64 != null) {
+                selectedImageBase64 = base64
+                Toast.makeText(context, "تم اختيار صورة الصيدلية بنجاح! 🖼️", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -279,6 +328,93 @@ fun PharmacistAddPharmacyForm(
                 )
             )
 
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Pharmacy Image Picker Section
+            Text(
+                text = "🖼️ صورة لشكل الصيدلية من الخارج أو الداخل:",
+                color = CosmicSecondary,
+                fontWeight = FontWeight.Bold,
+                fontSize = 11.sp,
+                textAlign = TextAlign.Right
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+
+            if (selectedImageBase64 != null) {
+                val bytes = try {
+                    android.util.Base64.decode(selectedImageBase64, android.util.Base64.DEFAULT)
+                } catch (e: Exception) {
+                    null
+                }
+                if (bytes != null) {
+                    val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    if (bitmap != null) {
+                        Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = "صورة الصيدلية المحددة",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(120.dp)
+                                .clip(RoundedCornerShape(10.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = { galleryLauncher.launch("image/*") },
+                    colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant, contentColor = Color.White),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("المعرض 🖼️", fontSize = 11.sp)
+                }
+
+                Button(
+                    onClick = { cameraLauncher.launch(null) },
+                    colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant, contentColor = Color.White),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("الكاميرا 📸", fontSize = 11.sp)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Cosmetics Option
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { hasCosmetics = !hasCosmetics }
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "تفعيل خيار بيع الكوزمتك ومستحضرات التجميل بالصيدلية 💄🌸",
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Right
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                androidx.compose.material3.Checkbox(
+                    checked = hasCosmetics,
+                    onCheckedChange = { hasCosmetics = it },
+                    colors = androidx.compose.material3.CheckboxDefaults.colors(
+                        checkedColor = CosmicSecondary,
+                        uncheckedColor = CosmicSurfaceVariant
+                    )
+                )
+            }
+
             Spacer(modifier = Modifier.height(14.dp))
 
             Button(
@@ -291,10 +427,12 @@ fun PharmacistAddPharmacyForm(
                             doctorName = doctorName.trim(),
                             phone = phone.trim(),
                             location = location.trim(),
-                            pharmacistEmail = userEmail
+                            pharmacistEmail = userEmail,
+                            imageBase64 = selectedImageBase64 ?: "",
+                            hasCosmetics = hasCosmetics
                         ) { err ->
                             if (err == null) {
-                                Toast.makeText(context, "تم حفظ الصيدلية بنجاح وبانتظار الموافقة! 🎉🏥", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, "تم حفظ الصيدلية بنجاح وبانتظار موافقة مدير المجرة للنشر والعمل الفوري! 🎉🏥", Toast.LENGTH_LONG).show()
                             } else {
                                 Toast.makeText(context, "حدث خطأ: $err", Toast.LENGTH_SHORT).show()
                             }
@@ -305,7 +443,7 @@ fun PharmacistAddPharmacyForm(
                 colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary),
                 shape = RoundedCornerShape(10.dp)
             ) {
-                Text("توثيق وحفظ صيدليتك سحابياً 🌌", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Text("توثيق وحفظ صيدليتك سحابياً وبانتظار موافقة المدير 🌌", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
             }
         }
     }

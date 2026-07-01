@@ -173,7 +173,10 @@ fun RestaurantsPlanetSection(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    val filtered = restaurants.filter { it.name.contains(searchQuery, ignoreCase = true) }
+                    val filtered = restaurants.filter { 
+                        (it.isApproved || isAdmin || isRestaurant) && 
+                        it.name.contains(searchQuery, ignoreCase = true) 
+                    }
                     if (filtered.isEmpty()) {
                         Box(
                             modifier = Modifier.fillMaxWidth().padding(32.dp),
@@ -337,28 +340,28 @@ fun RestaurantsPlanetSection(
                                                         onClick = {
                                                             viewModel.updateRestaurantOrderStatus(ord.id, "قيد التحضير بالمطعم 🍳") { err ->
                                                                 if (err == null) {
-                                                                    Toast.makeText(context, "تم قبول وبدء تحضير الطلب! 🍳🧑‍🍳", Toast.LENGTH_SHORT).show()
+                                                                    Toast.makeText(context, "تم قبول وبدء التجهيز والتحضير! 🍳🧑‍🍳", Toast.LENGTH_SHORT).show()
                                                                 }
                                                             }
                                                         },
                                                         colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
                                                         shape = RoundedCornerShape(8.dp)
                                                     ) {
-                                                        Text("قبول وتحضير الطلب 🧑‍🍳", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                        Text("قبول وبدء التجهيز 🍳🧑‍🍳", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                                     }
                                                 } else if (ord.status == "قيد التحضير بالمطعم 🍳") {
                                                     Button(
                                                         onClick = {
                                                             viewModel.updateRestaurantOrderStatus(ord.id, "جاهز للتوصيل (بانتظار المدير) 🛵") { err ->
                                                                 if (err == null) {
-                                                                    Toast.makeText(context, "تم تجهيز الوجبة وإرسالها للمدير للتوصيل! 🚀🛵", Toast.LENGTH_SHORT).show()
+                                                                    Toast.makeText(context, "تم تجهيز الوجبة وإرسالها للمدير لتعيين مندوب! 🚀🛵", Toast.LENGTH_SHORT).show()
                                                                 }
                                                             }
                                                         },
                                                         colors = ButtonDefaults.buttonColors(containerColor = Color.Green, contentColor = Color.Black),
                                                         shape = RoundedCornerShape(8.dp)
                                                     ) {
-                                                        Text("إرسال للمدير للتوصيل 🛵", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                        Text("تم التجهيز وإرسال للمدير لتعيين مندوب 🛵", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                                     }
                                                 } else {
                                                     Text(
@@ -559,62 +562,231 @@ fun RestaurantsPlanetSection(
                     }
                 } else {
                     // Admin Portal
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        item {
-                            Button(
-                                onClick = { showAddRestaurantDialog = true },
-                                colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(Icons.Default.Add, "إضافة مطعم", modifier = Modifier.size(20.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("إضافة مطعم جديد 🏪", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                            }
-                        }
-
-                        item {
-                            Text(
-                                "طلبات المطاعم الواردة للمجرة 🌌",
-                                color = CosmicSecondary,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp,
-                                modifier = Modifier.padding(top = 8.dp)
+                    var adminSubSection by remember { mutableStateOf(0) } // 0: Orders, 1: Restaurant Verification
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            val subSections = listOf(
+                                "توثيق المطاعم الجديدة 🏪" to 1,
+                                "طلبات زبائن المطاعم 🍔" to 0
                             )
-                        }
-
-                        if (orders.isEmpty()) {
-                            item {
+                            subSections.forEach { (label, index) ->
+                                val isSelected = adminSubSection == index
                                 Box(
-                                    modifier = Modifier.fillMaxWidth().padding(24.dp),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(if (isSelected) CosmicSecondary else CosmicSurface)
+                                        .clickable { adminSubSection = index }
+                                        .padding(vertical = 10.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text("لا توجد طلبات مطاعم حالياً 🍔", color = Color.Gray, fontSize = 13.sp)
+                                    Text(
+                                        label,
+                                        color = if (isSelected) Color.Black else Color.White,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        if (adminSubSection == 0) {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                item {
+                                    Button(
+                                        onClick = { showAddRestaurantDialog = true },
+                                        colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(Icons.Default.Add, "إضافة مطعم", modifier = Modifier.size(20.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("إضافة مطعم جديد 🏪", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    }
+                                }
+
+                                item {
+                                    Text(
+                                        "طلبات المطاعم الواردة للمجرة 🌌",
+                                        color = CosmicSecondary,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp,
+                                        modifier = Modifier.padding(top = 8.dp)
+                                    )
+                                }
+
+                                if (orders.isEmpty()) {
+                                    item {
+                                        Box(
+                                            modifier = Modifier.fillMaxWidth().padding(24.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text("لا توجد طلبات مطاعم حالياً 🍔", color = Color.Gray, fontSize = 13.sp)
+                                        }
+                                    }
+                                } else {
+                                    items(orders) { ord ->
+                                        RestaurantOrderCard(
+                                            order = ord,
+                                            onShowInvoice = { selectedOrderForInvoice = ord },
+                                            isAdmin = true,
+                                            onStatusChange = { newStatus ->
+                                                viewModel.updateRestaurantOrderStatus(ord.id, newStatus) { err ->
+                                                    if (err == null) {
+                                                        Toast.makeText(context, "تم تحديث حالة الطلب بنجاح! 🟢", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                }
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         } else {
-                            items(orders) { ord ->
-                                RestaurantOrderCard(
-                                    order = ord,
-                                    onShowInvoice = { selectedOrderForInvoice = ord },
-                                    isAdmin = true,
-                                    onStatusChange = { newStatus ->
-                                        viewModel.updateRestaurantOrderStatus(ord.id, newStatus) { err ->
-                                            if (err == null) {
-                                                Toast.makeText(context, "تم تحديث حالة الطلب بنجاح! 🟢", Toast.LENGTH_SHORT).show()
+                            // Verification / Approvals of restaurants
+                            val pendingRestaurants = restaurants.filter { !it.isApproved }
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                item {
+                                    Text(
+                                        "طلبات توثيق المطاعم الجديدة 🏪📥",
+                                        color = CosmicSecondary,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp,
+                                        modifier = Modifier.padding(top = 8.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        "هنا تظهر كافة طلبات التسجيل الجديدة للمطاعم. بمجرد قبولك وتوثيقك لها، سيتم نشرها وظهورها لكافة عملاء المجرة.",
+                                        color = Color.Gray,
+                                        fontSize = 11.sp,
+                                        lineHeight = 16.sp
+                                    )
+                                }
+                                
+                                if (pendingRestaurants.isEmpty()) {
+                                    item {
+                                        Box(
+                                            modifier = Modifier.fillMaxWidth().padding(32.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text("لا توجد طلبات توثيق معلقة حالياً لشركاء مطاعم 🏪💤", color = Color.Gray, fontSize = 13.sp)
+                                        }
+                                    }
+                                } else {
+                                    items(pendingRestaurants) { rest ->
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                                            border = BorderStroke(1.dp, CosmicSurfaceVariant),
+                                            shape = RoundedCornerShape(12.dp)
+                                        ) {
+                                            Column(modifier = Modifier.padding(14.dp), horizontalAlignment = Alignment.End) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .clip(RoundedCornerShape(6.dp))
+                                                            .background(Color.Red.copy(0.15f))
+                                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    ) {
+                                                        Text("بانتظار الموافقة ⏳", color = Color.Red, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                    Text(rest.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                                }
+                                                
+                                                Spacer(modifier = Modifier.height(6.dp))
+                                                Text("رقم هاتف تلقي الطلبات: ${rest.phone} 💬", color = Color.White.copy(0.7f), fontSize = 11.sp)
+                                                Text("تاريخ التسجيل: ${java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault()).format(java.util.Date(rest.createdAt))}", color = Color.Gray, fontSize = 10.sp)
+                                                
+                                                Spacer(modifier = Modifier.height(12.dp))
+                                                
+                                                // Menu preview if available
+                                                val menuBmp = remember(rest.menuImageUri) {
+                                                    if (rest.menuImageUri == null) null
+                                                    else {
+                                                        try {
+                                                            val decodedBytes = Base64.decode(rest.menuImageUri, Base64.DEFAULT)
+                                                            BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
+                                                        } catch (e: Exception) { null }
+                                                    }
+                                                }
+                                                if (menuBmp != null) {
+                                                    Text("صورة المنيو وقائمة الطعام:", color = Color.White.copy(0.8f), fontSize = 11.sp)
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .height(120.dp)
+                                                            .clip(RoundedCornerShape(8.dp))
+                                                            .border(1.dp, CosmicSurfaceVariant, RoundedCornerShape(8.dp))
+                                                    ) {
+                                                        Image(
+                                                            bitmap = menuBmp.asImageBitmap(),
+                                                            contentDescription = "المنيو",
+                                                            modifier = Modifier.fillMaxSize(),
+                                                            contentScale = ContentScale.Crop
+                                                        )
+                                                    }
+                                                    Spacer(modifier = Modifier.height(12.dp))
+                                                }
+                                                
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    Button(
+                                                        onClick = {
+                                                            viewModel.deleteRestaurant(rest.id) { err ->
+                                                                if (err == null) {
+                                                                    Toast.makeText(context, "تم رفض وحذف المطعم بنجاح 🗑️", Toast.LENGTH_SHORT).show()
+                                                                }
+                                                            }
+                                                        },
+                                                        modifier = Modifier.weight(1.5f),
+                                                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red.copy(0.2f), contentColor = Color.Red),
+                                                        shape = RoundedCornerShape(8.dp)
+                                                    ) {
+                                                        Text("رفض وحذف 🗑️", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                    
+                                                    Button(
+                                                        onClick = {
+                                                            viewModel.approveRestaurant(rest.id) { err ->
+                                                                if (err == null) {
+                                                                    Toast.makeText(context, "تم قبول واعتماد المطعم بنجاح ونشره بالمنظومة! 🎉🍔", Toast.LENGTH_SHORT).show()
+                                                                }
+                                                            }
+                                                        },
+                                                        modifier = Modifier.weight(1.5f),
+                                                        colors = ButtonDefaults.buttonColors(containerColor = Color.Green, contentColor = Color.Black),
+                                                        shape = RoundedCornerShape(8.dp)
+                                                    ) {
+                                                        Text("قبول ونشر المطعم ✅", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                }
                                             }
                                         }
                                     }
-                                )
+                                }
                             }
                         }
                     }
-                }
             }
         }
+    }
     }
 
     // Dialog for ordering from a specific restaurant
@@ -700,9 +872,16 @@ fun RestaurantsPlanetSection(
     // Dialog for adding a restaurant (Admin Portal / Restaurant Owner Portal)
     if (showAddRestaurantDialog) {
         AddRestaurantDialog(
+            initialRestaurant = myRestaurant,
             onDismiss = { showAddRestaurantDialog = false },
             onAdd = { name, phone, menuImageBase64, logoImageBase64 ->
-                viewModel.addRestaurant(name, phone, menuImageBase64, logoImageBase64) { err ->
+                viewModel.addRestaurant(
+                    id = myRestaurant?.id ?: 0,
+                    name = name,
+                    phone = phone,
+                    menuImageUri = menuImageBase64,
+                    logoImageUri = logoImageBase64
+                ) { err ->
                     if (err == null) {
                         Toast.makeText(context, "تم حفظ بيانات المطعم بنجاح! 🏪🎉", Toast.LENGTH_LONG).show()
                         showAddRestaurantDialog = false
@@ -1082,6 +1261,20 @@ fun OrderFromRestaurantDialog(
         }
     }
 
+    val receiptPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            try {
+                cameraLauncher.launch(null)
+            } catch (e: Exception) {
+                Toast.makeText(context, "تعذر تشغيل الكاميرا: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            Toast.makeText(context, "يجب منح إذن الكاميرا لالتقاط صورة الإشعار! ⚠️", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
@@ -1219,7 +1412,17 @@ fun OrderFromRestaurantDialog(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     Button(
-                                        onClick = { cameraLauncher.launch(null) },
+                                        onClick = {
+                                            if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                                                try {
+                                                    cameraLauncher.launch(null)
+                                                } catch (e: Exception) {
+                                                    Toast.makeText(context, "تعذر فتح الكاميرا: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                                                }
+                                            } else {
+                                                receiptPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+                                            }
+                                        },
                                         colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant, contentColor = Color.White),
                                         shape = RoundedCornerShape(8.dp)
                                     ) {
@@ -1406,14 +1609,17 @@ fun InvoiceRow(label: String, value: String) {
 
 @Composable
 fun AddRestaurantDialog(
+    initialRestaurant: RestaurantEntity? = null,
     onDismiss: () -> Unit,
     onAdd: (name: String, phone: String, menuImageBase64: String?, logoImageBase64: String?) -> Unit
 ) {
     val context = LocalContext.current
-    var name by remember { mutableStateOf("") }
-    var phone by remember { mutableStateOf("") }
-    var menuImageBase64 by remember { mutableStateOf<String?>(null) }
-    var logoImageBase64 by remember { mutableStateOf<String?>(null) }
+    var name by remember { mutableStateOf(initialRestaurant?.name ?: "") }
+    var phone by remember { mutableStateOf(initialRestaurant?.phone ?: "") }
+    var menuImageBase64 by remember { mutableStateOf<String?>(initialRestaurant?.menuImageUri) }
+    var logoImageBase64 by remember { mutableStateOf<String?>(initialRestaurant?.logoImageUri) }
+
+    var pendingCameraTarget by remember { mutableStateOf<String?>(null) } // "logo" or "menu"
 
     // Launchers for menu image
     val menuCameraLauncher = rememberLauncherForActivityResult(
@@ -1495,6 +1701,25 @@ fun AddRestaurantDialog(
         }
     }
 
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            try {
+                if (pendingCameraTarget == "logo") {
+                    logoCameraLauncher.launch(null)
+                } else if (pendingCameraTarget == "menu") {
+                    menuCameraLauncher.launch(null)
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "تعذر تشغيل الكاميرا: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            Toast.makeText(context, "يجب منح إذن الكاميرا لالتقاط صورة المطعم! ⚠️", Toast.LENGTH_SHORT).show()
+        }
+        pendingCameraTarget = null
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -1549,7 +1774,18 @@ fun AddRestaurantDialog(
                         modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
                     ) {
                         Button(
-                            onClick = { logoCameraLauncher.launch(null) },
+                            onClick = {
+                                if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                                    try {
+                                        logoCameraLauncher.launch(null)
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "تعذر فتح الكاميرا: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                                    }
+                                } else {
+                                    pendingCameraTarget = "logo"
+                                    cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+                                }
+                            },
                             colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant, contentColor = Color.White),
                             shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.weight(1f)
@@ -1581,7 +1817,18 @@ fun AddRestaurantDialog(
                         modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
                     ) {
                         Button(
-                            onClick = { menuCameraLauncher.launch(null) },
+                            onClick = {
+                                if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                                    try {
+                                        menuCameraLauncher.launch(null)
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "تعذر فتح الكاميرا: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                                    }
+                                } else {
+                                    pendingCameraTarget = "menu"
+                                    cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+                                }
+                            },
                             colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant, contentColor = Color.White),
                             shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.weight(1f)
