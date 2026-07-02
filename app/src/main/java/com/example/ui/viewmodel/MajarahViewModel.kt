@@ -581,33 +581,69 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                 val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
                 sharedPrefs.edit().putBoolean("is_logged_in_state", true).apply()
 
-                val profiles = database.profileDao().getAllProfiles()
-                var p = profiles.firstOrNull { it.email.trim().lowercase() == email.lowercase() }
+                val dbProfiles = database.profileDao().getAllProfiles()
+                val p = dbProfiles.firstOrNull { it.email.trim().lowercase() == email.lowercase() }
                 if (p == null) {
-                    p = com.example.data.db.ProfileEntity(
+                    val fallbackName = if (name.isBlank()) "عميل المجرة ✨" else name
+                    val newProfile = com.example.data.db.ProfileEntity(
                         id = java.util.UUID.randomUUID().toString(),
-                        name = if (name.isBlank()) "عميل المجرة ✨" else name,
+                        name = fallbackName,
                         phone = phone,
                         email = email,
                         password = password,
                         createdAt = System.currentTimeMillis()
                     )
-                    database.profileDao().insertProfile(p)
+                    database.profileDao().insertProfile(newProfile)
+                    activeProfile.value = newProfile
+                } else {
+                    activeProfile.value = p
                 }
-                activeProfile.value = p
+                val finalProfile = activeProfile.value!!
                 _isLoggedIn.value = true
-                checkoutName.value = p.name
-                checkoutPhone.value = p.phone
+                checkoutName.value = finalProfile.name
+                checkoutPhone.value = finalProfile.phone
 
                 showOtpVerification.value = false
-                val cleanP = p.phone.trim().replace("+", "").replace(" ", "")
+                val role = registrationRole.value
+                sharedPrefs.edit().putString("user_role_${email.trim().lowercase()}", role).apply()
+                
+                if (role == "seller") {
+                    repository.insertSeller(
+                        com.example.data.db.SellerEntity(
+                            name = finalProfile.name,
+                            email = finalProfile.email,
+                            phone = finalProfile.phone,
+                            classification = "تاجر ذهبي ⭐",
+                            commissionRate = 0.10
+                        )
+                    )
+                } else if (role == "courier") {
+                    repository.insertCourier(
+                        com.example.data.db.CourierEntity(
+                            name = finalProfile.name,
+                            phone = finalProfile.phone,
+                            stateInfo = "ولاية بورتسودان",
+                            status = "نشط ومتوفر 🟢"
+                        )
+                    )
+                }
+
+                val cleanP = finalProfile.phone.trim().replace("+", "").replace(" ", "")
                 val matchesCourier = repository.allCouriers.stateIn(viewModelScope).value.any { c ->
-                    c.phone.trim().replace("+", "").replace(" ", "") == cleanP || c.phone.trim() == p.phone.trim()
+                    c.phone.trim().replace("+", "").replace(" ", "") == cleanP || c.phone.trim() == finalProfile.phone.trim()
                 }
                 if (email.trim().lowercase() == "mawiaosman0@gmail.com") {
                     _currentScreen.value = Screen.Admin
-                } else if (matchesCourier) {
+                } else if (matchesCourier || role == "courier") {
                     _currentScreen.value = Screen.Courier
+                } else if (role == "seller") {
+                    _currentScreen.value = Screen.Seller
+                } else if (role == "pharmacist") {
+                    _selectedCategory.value = "pharmacy"
+                    _currentScreen.value = Screen.Home
+                } else if (role == "restaurant") {
+                    _selectedCategory.value = "restaurant"
+                    _currentScreen.value = Screen.Home
                 } else {
                     _currentScreen.value = Screen.Home
                 }
@@ -1173,6 +1209,53 @@ $couponMessage---------------------------
         }
     }
 
+    fun updateOrderPayment(orderId: String, paymentMethod: String, receiptBase64: String?, onComplete: (String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                database.orderDao().updateOrderPayment(orderId, paymentMethod, receiptBase64)
+                
+                // Sync to Supabase remotely
+                val updateFields = mutableMapOf<String, String>()
+                updateFields["payment_method"] = paymentMethod
+                if (receiptBase64 != null) {
+                    updateFields["bank_receipt_image_uri"] = receiptBase64
+                }
+                try {
+                    com.example.data.network.SupabaseClient.api.updateOrderStatus("eq.$orderId", updateFields)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                
+                syncOrders {}
+                onComplete(null)
+            } catch (e: Exception) {
+                onComplete(e.localizedMessage ?: e.toString())
+            }
+        }
+    }
+
+    fun updateRestaurantOrderPayment(id: Int, paymentMethod: String, receiptBase64: String?, onComplete: (String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                database.restaurantOrderDao().updateRestaurantOrderPayment(id, paymentMethod, receiptBase64)
+                onComplete(null)
+            } catch (e: Exception) {
+                onComplete(e.localizedMessage ?: e.toString())
+            }
+        }
+    }
+
+    fun updatePharmacyOrderPayment(id: Int, paymentMethod: String, receiptBase64: String?, onComplete: (String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                database.pharmacyOrderDao().updatePharmacyOrderPayment(id, paymentMethod, receiptBase64)
+                onComplete(null)
+            } catch (e: Exception) {
+                onComplete(e.localizedMessage ?: e.toString())
+            }
+        }
+    }
+
     // --- Planet Pharmacy State Flows ---
     val allPharmacies = repository.allPharmacies.stateIn(
         viewModelScope,
@@ -1200,7 +1283,7 @@ $couponMessage---------------------------
         } else {
             val emailClean = profile.email.trim().lowercase()
             val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
-            val isPharmPref = sharedPrefs.getString("user_role_${profile.email}", "") == "pharmacist"
+            val isPharmPref = sharedPrefs.getString("user_role_${profile.email.trim().lowercase()}", "") == "pharmacist"
             isPharmPref || pharmacies.any { p -> p.pharmacistEmail.trim().lowercase() == emailClean }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
@@ -1515,6 +1598,21 @@ $couponMessage---------------------------
         }
     }
 
+    fun assignCourierToRestaurantOrder(id: Int, status: String, courierName: String, courierPhone: String, deliveryFee: Double, onComplete: (String?) -> Unit) {
+        isGlobalLoading.value = true
+        viewModelScope.launch {
+            var error: String? = null
+            try {
+                repository.assignCourierToRestaurantOrder(id, status, courierName, courierPhone, deliveryFee)
+            } catch (e: Exception) {
+                error = e.localizedMessage
+            } finally {
+                isGlobalLoading.value = false
+                onComplete(error)
+            }
+        }
+    }
+
     fun deleteRestaurantOrder(id: Int, onComplete: (String?) -> Unit) {
         isGlobalLoading.value = true
         viewModelScope.launch {
@@ -1558,7 +1656,7 @@ $couponMessage---------------------------
         } else {
             val emailClean = profile.email.trim().lowercase()
             val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
-            val isRestPref = sharedPrefs.getString("user_role_${profile.email}", "") == "restaurant"
+            val isRestPref = sharedPrefs.getString("user_role_${profile.email.trim().lowercase()}", "") == "restaurant"
             isRestPref || restaurants.any { r -> r.phone.trim() == profile.phone.trim() || r.name.trim().lowercase() == profile.name.trim().lowercase() }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)

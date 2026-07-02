@@ -28,5 +28,7 @@ data class RestaurantOrderEntity(
     val paymentMethod: String = "كاش", // كاش, تحويل بنكي
     val deliveryFee: Double = 0.0,
     val bankReceiptImageUri: String? = null,
+    val courierName: String = "",
+    val courierPhone: String = "",
     val createdAt: Long = System.currentTimeMillis()
 )

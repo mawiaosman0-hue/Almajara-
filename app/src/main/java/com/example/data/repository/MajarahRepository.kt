@@ -68,6 +68,10 @@ class MajarahRepository(
         restaurantOrderDao.updateOrderStatus(id, status)
     }
 
+    suspend fun assignCourierToRestaurantOrder(id: Int, status: String, courierName: String, courierPhone: String, deliveryFee: Double) {
+        restaurantOrderDao.assignCourierToRestaurantOrder(id, status, courierName, courierPhone, deliveryFee)
+    }
+
     suspend fun deleteRestaurantOrder(id: Int) {
         restaurantOrderDao.deleteOrder(id)
     }
@@ -795,7 +799,9 @@ class MajarahRepository(
                     customerAddress = it.customerAddress ?: "العنوان",
                     courierName = it.courierName ?: "",
                     courierPhone = it.courierPhone ?: "",
-                    deliveryFee = if ((it.deliveryFee ?: 0.0) <= 0.0) 5000.0 else it.deliveryFee!!
+                    deliveryFee = if ((it.deliveryFee ?: 0.0) <= 0.0) 5000.0 else it.deliveryFee!!,
+                    paymentMethod = it.paymentMethod ?: "كاش",
+                    bankReceiptImageUri = it.bankReceiptImageUri
                 )
             }
             orderDao.syncOrdersTransaction(roomOrders)
@@ -901,7 +907,9 @@ class MajarahRepository(
                     customerName = it.customerName,
                     customerPhone = it.customerPhone,
                     customerAddress = it.customerAddress,
-                    deliveryFee = it.deliveryFee
+                    deliveryFee = it.deliveryFee,
+                    paymentMethod = it.paymentMethod,
+                    bankReceiptImageUri = it.bankReceiptImageUri
                 )
             }
             com.example.data.network.SupabaseClient.api.insertOrders(supabaseOrders)

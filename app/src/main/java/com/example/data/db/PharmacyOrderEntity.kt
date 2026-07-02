@@ -17,5 +17,7 @@ data class PharmacyOrderEntity(
     val courierName: String = "", // Courier assigned by Admin
     val courierPhone: String = "",
     val status: String = "بانتظار الصيدلي", // "بانتظار الصيدلي", "بانتظار المدير", "تم تحديد السعر النهائي", "جاري التجهيز للتوصيل", "تم التوصيل"
+    val paymentMethod: String = "كاش",
+    val bankReceiptImageUri: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 )

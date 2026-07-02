@@ -1228,7 +1228,7 @@ fun CustomerPharmacyView(
                                     Text("المندوب المعين: ${order.courierName} (${order.courierPhone}) 🚴", color = Color.White, fontSize = 10.sp)
                                 }
 
-                                // Display "بالشفاء العاجل لك إن شاء الله 🤲✨" when order.status == "تم التوصيل"
+                                 // Display "بالشفاء العاجل لك إن شاء الله 🤲✨" when order.status == "تم التوصيل"
                                 if (order.status == "تم التوصيل") {
                                     Spacer(modifier = Modifier.height(12.dp))
                                     Card(
@@ -1249,6 +1249,71 @@ fun CustomerPharmacyView(
                                                 fontSize = 12.sp,
                                                 textAlign = TextAlign.Center
                                             )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    val savedPaymentMethod = order.paymentMethod ?: ""
+                                    val savedReceiptBase64 = order.bankReceiptImageUri
+                                    val localContext = androidx.compose.ui.platform.LocalContext.current
+
+                                    var receiptToShow by remember { mutableStateOf<String?>(null) }
+                                    if (receiptToShow != null) {
+                                        ViewReceiptDialog(receiptToShow!!) { receiptToShow = null }
+                                    }
+
+                                    if (savedPaymentMethod.isBlank()) {
+                                        OrderPostDeliveryPaymentBlock(
+                                            currentPaymentMethod = "",
+                                            currentReceiptBase64 = null,
+                                            onSavePayment = { method, base64 ->
+                                                viewModel.updatePharmacyOrderPayment(order.id, method, base64) { err ->
+                                                    if (err == null) {
+                                                        android.widget.Toast.makeText(localContext, "تم تأكيد الدفع وإرسال الإشعار بنجاح! 🎉", android.widget.Toast.LENGTH_SHORT).show()
+                                                    } else {
+                                                        android.widget.Toast.makeText(localContext, "فشل حفظ الدفع: $err", android.widget.Toast.LENGTH_LONG).show()
+                                                    }
+                                                }
+                                            }
+                                        )
+                                    } else {
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                            colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                                            border = BorderStroke(1.dp, Color.Green.copy(0.3f)),
+                                            shape = RoundedCornerShape(10.dp)
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.padding(10.dp).fillMaxWidth(),
+                                                horizontalAlignment = Alignment.End
+                                            ) {
+                                                Text(
+                                                    text = "✅ تم تأكيد طريقة الدفع للصيدلية",
+                                                    color = Color.Green,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 11.sp,
+                                                    modifier = Modifier.padding(bottom = 4.dp)
+                                                )
+                                                Text(
+                                                    text = "طريقة السداد: $savedPaymentMethod",
+                                                    color = Color.White,
+                                                    fontSize = 11.sp
+                                                )
+                                                if (!savedReceiptBase64.isNullOrBlank()) {
+                                                    Spacer(modifier = Modifier.height(6.dp))
+                                                    Button(
+                                                        onClick = { receiptToShow = savedReceiptBase64 },
+                                                        colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                                                        shape = RoundedCornerShape(8.dp),
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    ) {
+                                                        Icon(Icons.Default.Image, null, modifier = Modifier.size(14.dp))
+                                                        Spacer(modifier = Modifier.width(4.dp))
+                                                        Text("عرض إشعار التحويل المرفق 📄", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }

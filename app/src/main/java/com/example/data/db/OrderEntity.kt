@@ -17,5 +17,7 @@ data class OrderEntity(
     val customerAddress: String = "السودان",
     val courierName: String = "",
     val courierPhone: String = "",
-    val deliveryFee: Double = 0.0
+    val deliveryFee: Double = 0.0,
+    val paymentMethod: String = "كاش",
+    val bankReceiptImageUri: String? = null
 )

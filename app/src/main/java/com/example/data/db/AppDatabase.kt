@@ -22,7 +22,7 @@ import androidx.room.RoomDatabase
         AppRatingEntity::class,
         AppCouponEntity::class
     ],
-    version = 12,
+    version = 14,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

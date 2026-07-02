@@ -84,6 +84,9 @@ interface PharmacyOrderDao {
     @Query("UPDATE pharmacy_orders SET status = :status WHERE id = :id")
     suspend fun updateOrderStatus(id: Int, status: String)
 
+    @Query("UPDATE pharmacy_orders SET paymentMethod = :paymentMethod, bankReceiptImageUri = :receiptUri WHERE id = :id")
+    suspend fun updatePharmacyOrderPayment(id: Int, paymentMethod: String, receiptUri: String?)
+
     @Query("DELETE FROM pharmacy_orders WHERE id = :id")
     suspend fun deleteOrder(id: Int)
 }

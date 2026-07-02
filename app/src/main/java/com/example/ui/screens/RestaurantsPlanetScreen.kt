@@ -127,6 +127,8 @@ fun RestaurantsPlanetSection(
     var selectedRestaurantForOrder by remember { mutableStateOf<RestaurantEntity?>(null) }
     var showAddRestaurantDialog by remember { mutableStateOf(false) }
     var selectedOrderForInvoice by remember { mutableStateOf<RestaurantOrderEntity?>(null) }
+    var selectedOrderForApprove by remember { mutableStateOf<RestaurantOrderEntity?>(null) }
+    val couriers by viewModel.allCouriers.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -399,7 +401,16 @@ fun RestaurantsPlanetSection(
                                     order = ord,
                                     onShowInvoice = { selectedOrderForInvoice = ord },
                                     isAdmin = false,
-                                    onStatusChange = null
+                                    onStatusChange = null,
+                                    onUpdatePayment = { method, base64 ->
+                                        viewModel.updateRestaurantOrderPayment(ord.id, method, base64) { err ->
+                                            if (err == null) {
+                                                Toast.makeText(context, "تم تأكيد السداد وإرسال الإشعار بنجاح! 🎉", Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                Toast.makeText(context, "فشل تأكيد الدفع: $err", Toast.LENGTH_LONG).show()
+                                            }
+                                        }
+                                    }
                                 )
                             }
                         }
@@ -644,7 +655,8 @@ fun RestaurantsPlanetSection(
                                                         Toast.makeText(context, "تم تحديث حالة الطلب بنجاح! 🟢", Toast.LENGTH_SHORT).show()
                                                     }
                                                 }
-                                            }
+                                            },
+                                            onAssignCourier = { selectedOrderForApprove = ord }
                                         )
                                     }
                                 }
@@ -892,6 +904,109 @@ fun RestaurantsPlanetSection(
             }
         )
     }
+
+    // Dialog for assigning courier and delivery fee to a restaurant order
+    if (selectedOrderForApprove != null) {
+        val ord = selectedOrderForApprove!!
+        var feeInput by remember { mutableStateOf("") }
+        var courierSelection by remember { mutableStateOf("") } // Name
+        var courierPhoneSelection by remember { mutableStateOf("") } // Phone
+        var expandedCouriersDropdown by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = { selectedOrderForApprove = null },
+            containerColor = CosmicSurface,
+            title = { Text("تعيين المندوب ورسوم التوصيل 🚴🏆", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Right, modifier = Modifier.fillMaxWidth()) },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
+                    Text("وجبات العميل: ${ord.itemsAndNotes}", color = MediumContrastTextDark, fontSize = 11.sp, textAlign = TextAlign.Right)
+                    Text("العميل: ${ord.customerName}", color = Color.White, fontSize = 11.sp, textAlign = TextAlign.Right)
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    OutlinedTextField(
+                        value = feeInput,
+                        onValueChange = { feeInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("رسوم التوصيل بالجنيه السوداني (ج.س) 💰", color = CosmicSecondary, fontSize = 11.sp) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Courier Dropdown selection
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = { expandedCouriersDropdown = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, CosmicSecondary),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                        ) {
+                            Text(
+                                text = if (courierSelection.isBlank()) "اختر مندوب التوصيل الكوني 🚴" else "$courierSelection ($courierPhoneSelection)",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = expandedCouriersDropdown,
+                            onDismissRequest = { expandedCouriersDropdown = false },
+                            modifier = Modifier.background(CosmicSurface)
+                        ) {
+                            if (couriers.isEmpty()) {
+                                DropdownMenuItem(
+                                    text = { Text("لا يوجد مناديب مسجلين", color = Color.White) },
+                                    onClick = { expandedCouriersDropdown = false }
+                                )
+                            } else {
+                                couriers.forEach { courier ->
+                                    DropdownMenuItem(
+                                        text = { Text("${courier.name} (${courier.stateInfo}) [${courier.status}]", color = Color.White) },
+                                        onClick = {
+                                            courierSelection = courier.name
+                                            courierPhoneSelection = courier.phone
+                                            expandedCouriersDropdown = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val fee = feeInput.toDoubleOrNull() ?: 0.0
+                        if (courierSelection.isBlank() || fee <= 0.0) {
+                            Toast.makeText(context, "الرجاء اختيار المندوب وتحديد رسوم توصيل صالحة ⚠️", Toast.LENGTH_SHORT).show()
+                        } else {
+                            viewModel.assignCourierToRestaurantOrder(ord.id, "تم تعيين المندوب وقيد التوصيل 🚴", courierSelection, courierPhoneSelection, fee) { err ->
+                                if (err == null) {
+                                    Toast.makeText(context, "تم تعيين المندوب ونشر الفاتورة بنجاح! 🎉🚴", Toast.LENGTH_LONG).show()
+                                    selectedOrderForApprove = null
+                                } else {
+                                    Toast.makeText(context, "خطأ: $err", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary)
+                ) {
+                    Text("اعتماد ونشر الفاتورة 🚀", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { selectedOrderForApprove = null }) {
+                    Text("إلغاء", color = Color.White)
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -1081,7 +1196,9 @@ fun RestaurantOrderCard(
     order: RestaurantOrderEntity,
     onShowInvoice: () -> Unit,
     isAdmin: Boolean,
-    onStatusChange: ((String) -> Unit)?
+    onStatusChange: ((String) -> Unit)?,
+    onAssignCourier: (() -> Unit)? = null,
+    onUpdatePayment: ((String, String?) -> Unit)? = null
 ) {
     val context = LocalContext.current
     Card(
@@ -1103,10 +1220,11 @@ fun RestaurantOrderCard(
                     fontSize = 14.sp
                 )
                 
-                val statusColor = when (order.status) {
-                    "معلق" -> Color(0xFFFFB300)
-                    "قيد التحضير" -> CosmicSecondary
-                    else -> Color.Green
+                val statusColor = when {
+                    order.status == "معلق" -> Color(0xFFFFB300)
+                    order.status == "قيد التحضير" -> CosmicSecondary
+                    order.status.contains("تم") || order.status.contains("تسليم") -> Color.Green
+                    else -> CosmicSecondary
                 }
                 Text(
                     text = order.status,
@@ -1117,6 +1235,28 @@ fun RestaurantOrderCard(
                         .background(statusColor.copy(0.12f), RoundedCornerShape(6.dp))
                         .padding(horizontal = 8.dp, vertical = 3.dp)
                 )
+            }
+
+            if (order.courierName.isNotBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "المندوب المعين: ${order.courierName} (${order.courierPhone}) 🚴",
+                    color = CosmicSecondary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Right
+                )
+                if (order.deliveryFee > 0) {
+                    Text(
+                        text = "رسوم التوصيل المقدرة: ${order.deliveryFee} SDG 🚚",
+                        color = CosmicTertiary,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Right
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -1134,7 +1274,7 @@ fun RestaurantOrderCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "طريقة الدفع: ${order.paymentMethod}",
+                    text = if (order.paymentMethod.isNotBlank()) "طريقة الدفع: ${order.paymentMethod}" else "طريقة الدفع: لم تحدد بعد",
                     color = Color.White.copy(0.6f),
                     fontSize = 11.sp
                 )
@@ -1143,6 +1283,69 @@ fun RestaurantOrderCard(
                     color = Color.White.copy(0.6f),
                     fontSize = 11.sp
                 )
+            }
+
+            var receiptToShow by remember { mutableStateOf<String?>(null) }
+            if (receiptToShow != null) {
+                ViewReceiptDialog(receiptToShow!!) { receiptToShow = null }
+            }
+
+            val isDelivered = order.status.contains("تم") || order.status.contains("تسليم")
+            if (!isAdmin && isDelivered) {
+                if (order.paymentMethod.isBlank()) {
+                    OrderPostDeliveryPaymentBlock(
+                        currentPaymentMethod = "",
+                        currentReceiptBase64 = null,
+                        onSavePayment = { method, base64 ->
+                            onUpdatePayment?.invoke(method, base64)
+                        }
+                    )
+                } else {
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        colors = CardDefaults.cardColors(containerColor = CosmicSurfaceVariant.copy(0.3f)),
+                        border = BorderStroke(1.dp, Color.Green.copy(0.3f)),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(10.dp).fillMaxWidth(),
+                            horizontalAlignment = Alignment.End
+                        ) {
+                            Text(
+                                text = "✅ تم تأكيد طريقة الدفع للمطعم",
+                                color = Color.Green,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(bottom = 4.dp)
+                            )
+                            if (!order.bankReceiptImageUri.isNullOrBlank()) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Button(
+                                    onClick = { receiptToShow = order.bankReceiptImageUri },
+                                    colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.Image, null, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("عرض إشعار التحويل المرفق 📄", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if (isAdmin && !order.bankReceiptImageUri.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = { receiptToShow = order.bankReceiptImageUri },
+                    colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.ReceiptLong, null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("عرض إشعار التحويل المرفق بالطلب 📄", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -1209,6 +1412,17 @@ fun RestaurantOrderCard(
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                         ) {
                             Text("تم التسليم ✅", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    if (onAssignCourier != null && order.courierName.isBlank()) {
+                        Button(
+                            onClick = onAssignCourier,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Yellow, contentColor = Color.Black),
+                            shape = RoundedCornerShape(6.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text("تعيين مندوب 🚴", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

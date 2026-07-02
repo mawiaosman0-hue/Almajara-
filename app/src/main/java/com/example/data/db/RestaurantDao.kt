@@ -42,6 +42,12 @@ interface RestaurantOrderDao {
     @Query("UPDATE restaurant_orders SET status = :status WHERE id = :id")
     suspend fun updateOrderStatus(id: Int, status: String)
 
+    @Query("UPDATE restaurant_orders SET paymentMethod = :paymentMethod, bankReceiptImageUri = :receiptUri WHERE id = :id")
+    suspend fun updateRestaurantOrderPayment(id: Int, paymentMethod: String, receiptUri: String?)
+
+    @Query("UPDATE restaurant_orders SET status = :status, courierName = :courierName, courierPhone = :courierPhone, deliveryFee = :deliveryFee WHERE id = :id")
+    suspend fun assignCourierToRestaurantOrder(id: Int, status: String, courierName: String, courierPhone: String, deliveryFee: Double)
+
     @Query("DELETE FROM restaurant_orders WHERE id = :id")
     suspend fun deleteOrder(id: Int)
 }

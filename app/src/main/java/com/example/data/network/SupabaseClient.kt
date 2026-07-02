@@ -47,7 +47,9 @@ data class SupabaseOrder(
     @Json(name = "customer_address") val customerAddress: String? = null,
     @Json(name = "courier_name") val courierName: String? = "",
     @Json(name = "courier_phone") val courierPhone: String? = "",
-    @Json(name = "delivery_fee") val deliveryFee: Double? = 0.0
+    @Json(name = "delivery_fee") val deliveryFee: Double? = 0.0,
+    @Json(name = "payment_method") val paymentMethod: String? = "كاش",
+    @Json(name = "bank_receipt_image_uri") val bankReceiptImageUri: String? = null
 )
 
 @JsonClass(generateAdapter = true)

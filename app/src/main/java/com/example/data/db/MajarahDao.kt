@@ -84,6 +84,9 @@ interface OrderDao {
     @Query("DELETE FROM orders")
     suspend fun clearOrderHistory()
 
+    @Query("UPDATE orders SET paymentMethod = :paymentMethod, bankReceiptImageUri = :receiptUri WHERE orderId = :orderId")
+    suspend fun updateOrderPayment(orderId: String, paymentMethod: String, receiptUri: String?)
+
     @androidx.room.Transaction
     suspend fun syncOrdersTransaction(orders: List<OrderEntity>) {
         if (orders.isNotEmpty()) {
