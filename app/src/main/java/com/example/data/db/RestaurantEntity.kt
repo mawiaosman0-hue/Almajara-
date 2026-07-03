@@ -26,6 +26,7 @@ data class RestaurantOrderEntity(
     val itemsAndNotes: String,
     val status: String = "معلق", // معلق, قيد التحضير, تم التسليم
     val paymentMethod: String = "كاش", // كاش, تحويل بنكي
+    val foodPrice: Double = 0.0,
     val deliveryFee: Double = 0.0,
     val bankReceiptImageUri: String? = null,
     val courierName: String = "",

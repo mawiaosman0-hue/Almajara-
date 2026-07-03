@@ -68,6 +68,18 @@ class MajarahRepository(
         restaurantOrderDao.updateOrderStatus(id, status)
     }
 
+    suspend fun updateRestaurant(restaurant: com.example.data.db.RestaurantEntity) {
+        restaurantDao.updateRestaurant(restaurant)
+    }
+
+    suspend fun updateRestaurantOrderPriceAndStatus(id: Int, status: String, foodPrice: Double) {
+        restaurantOrderDao.updateRestaurantOrderPriceAndStatus(id, status, foodPrice)
+    }
+
+    suspend fun updateRestaurantOrderPayment(id: Int, paymentMethod: String, bankReceiptImageUri: String?) {
+        restaurantOrderDao.updateRestaurantOrderPayment(id, paymentMethod, bankReceiptImageUri)
+    }
+
     suspend fun assignCourierToRestaurantOrder(id: Int, status: String, courierName: String, courierPhone: String, deliveryFee: Double) {
         restaurantOrderDao.assignCourierToRestaurantOrder(id, status, courierName, courierPhone, deliveryFee)
     }
@@ -85,6 +97,10 @@ class MajarahRepository(
 
     suspend fun insertPharmacy(pharmacy: com.example.data.db.PharmacyEntity): Long {
         return pharmacyDao.insertPharmacy(pharmacy)
+    }
+
+    suspend fun updatePharmacy(pharmacy: com.example.data.db.PharmacyEntity) {
+        pharmacyDao.updatePharmacy(pharmacy)
     }
 
     suspend fun updatePharmacyApproval(id: Int, isApproved: Boolean) {

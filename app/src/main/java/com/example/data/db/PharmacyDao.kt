@@ -24,6 +24,9 @@ interface PharmacyDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPharmacy(pharmacy: PharmacyEntity): Long
 
+    @Update
+    suspend fun updatePharmacy(pharmacy: PharmacyEntity)
+
     @Query("UPDATE pharmacies SET isApproved = :isApproved WHERE id = :id")
     suspend fun updatePharmacyApproval(id: Int, isApproved: Boolean)
 

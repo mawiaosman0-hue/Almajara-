@@ -423,8 +423,28 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                             )
                         } else if (role == "pharmacist") {
                             sharedPrefs.edit().putString("user_role_${email.trim().lowercase()}", "pharmacist").apply()
+                            repository.insertPharmacy(
+                                com.example.data.db.PharmacyEntity(
+                                    name = "صيدلية $name",
+                                    doctorName = name,
+                                    phone = phone,
+                                    location = "ولاية بورتسودان",
+                                    pharmacistEmail = email.trim().lowercase(),
+                                    isApproved = false,
+                                    imageBase64 = ""
+                                )
+                            )
                         } else if (role == "restaurant") {
                             sharedPrefs.edit().putString("user_role_${email.trim().lowercase()}", "restaurant").apply()
+                            repository.insertRestaurant(
+                                com.example.data.db.RestaurantEntity(
+                                    name = name,
+                                    phone = phone,
+                                    menuImageUri = null,
+                                    logoImageUri = null,
+                                    isApproved = false
+                                )
+                            )
                         } else if (role == "admin") {
                             sharedPrefs.edit().putString("user_role_${email.trim().lowercase()}", "admin").apply()
                         }
@@ -1330,6 +1350,21 @@ $couponMessage---------------------------
         }
     }
 
+    fun updatePharmacy(pharmacy: com.example.data.db.PharmacyEntity, onComplete: (String?) -> Unit) {
+        isGlobalLoading.value = true
+        viewModelScope.launch {
+            var error: String? = null
+            try {
+                repository.updatePharmacy(pharmacy)
+            } catch (e: Exception) {
+                error = e.localizedMessage ?: "حدث خطأ أثناء تعديل بيانات الصيدلية"
+            } finally {
+                isGlobalLoading.value = false
+                onComplete(error)
+            }
+        }
+    }
+
     fun approvePharmacy(id: Int, onComplete: (String?) -> Unit) {
         isGlobalLoading.value = true
         viewModelScope.launch {
@@ -1599,6 +1634,21 @@ $couponMessage---------------------------
             var error: String? = null
             try {
                 repository.updateRestaurantOrderStatus(id, status)
+            } catch (e: Exception) {
+                error = e.localizedMessage
+            } finally {
+                isGlobalLoading.value = false
+                onComplete(error)
+            }
+        }
+    }
+
+    fun updateRestaurantOrderPriceAndStatus(id: Int, status: String, foodPrice: Double, onComplete: (String?) -> Unit) {
+        isGlobalLoading.value = true
+        viewModelScope.launch {
+            var error: String? = null
+            try {
+                repository.updateRestaurantOrderPriceAndStatus(id, status, foodPrice)
             } catch (e: Exception) {
                 error = e.localizedMessage
             } finally {

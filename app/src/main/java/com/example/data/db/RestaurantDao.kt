@@ -18,6 +18,9 @@ interface RestaurantDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRestaurant(restaurant: RestaurantEntity): Long
 
+    @Update
+    suspend fun updateRestaurant(restaurant: RestaurantEntity)
+
     @Query("DELETE FROM restaurants WHERE id = :id")
     suspend fun deleteRestaurant(id: Int)
 
@@ -41,6 +44,9 @@ interface RestaurantOrderDao {
 
     @Query("UPDATE restaurant_orders SET status = :status WHERE id = :id")
     suspend fun updateOrderStatus(id: Int, status: String)
+
+    @Query("UPDATE restaurant_orders SET status = :status, foodPrice = :foodPrice WHERE id = :id")
+    suspend fun updateRestaurantOrderPriceAndStatus(id: Int, status: String, foodPrice: Double)
 
     @Query("UPDATE restaurant_orders SET paymentMethod = :paymentMethod, bankReceiptImageUri = :receiptUri WHERE id = :id")
     suspend fun updateRestaurantOrderPayment(id: Int, paymentMethod: String, receiptUri: String?)

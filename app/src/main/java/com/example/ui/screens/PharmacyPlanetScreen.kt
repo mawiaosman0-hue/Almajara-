@@ -109,6 +109,33 @@ fun PharmacyPlanetSection(
             val userEmail = activeProfile?.email?.trim()?.lowercase() ?: ""
             val myPharmacy = allPharmacies.find { it.pharmacistEmail.trim().lowercase() == userEmail }
 
+            var showEditPharmacyDialog by remember { mutableStateOf(false) }
+
+            if (showEditPharmacyDialog && myPharmacy != null) {
+                EditPharmacyDialog(
+                    pharmacy = myPharmacy,
+                    onDismiss = { showEditPharmacyDialog = false },
+                    onSave = { name, doctorName, phone, location, imageBase64, hasCosmetics ->
+                        val updated = myPharmacy.copy(
+                            name = name,
+                            doctorName = doctorName,
+                            phone = phone,
+                            location = location,
+                            imageBase64 = imageBase64,
+                            hasCosmetics = hasCosmetics
+                        )
+                        viewModel.updatePharmacy(updated) { err ->
+                            if (err == null) {
+                                Toast.makeText(context, "تم تحديث بيانات الصيدلية بنجاح! ✅", Toast.LENGTH_SHORT).show()
+                                showEditPharmacyDialog = false
+                            } else {
+                                Toast.makeText(context, "حدث خطأ: $err", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                )
+            }
+
             if (myPharmacy == null) {
                 // Pharmacist has no pharmacy yet -> Ask them to add pharmacy
                 PharmacistAddPharmacyForm(viewModel = viewModel, userEmail = userEmail)
@@ -148,6 +175,53 @@ fun PharmacyPlanetSection(
                                 textAlign = TextAlign.Center,
                                 lineHeight = 16.sp
                             )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+                            HorizontalDivider(color = CosmicSurfaceVariant)
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            // Pharmacy Logo and Details
+                            if (myPharmacy.imageBase64.isNotBlank()) {
+                                val bitmap = remember(myPharmacy.imageBase64) {
+                                    try {
+                                        val clean = if (myPharmacy.imageBase64.contains(",")) myPharmacy.imageBase64.substringAfter(",") else myPharmacy.imageBase64
+                                        val bytes = android.util.Base64.decode(clean, android.util.Base64.DEFAULT)
+                                        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                    } catch (e: Exception) {
+                                        null
+                                    }
+                                }
+                                if (bitmap != null) {
+                                    Image(
+                                        bitmap = bitmap.asImageBitmap(),
+                                        contentDescription = "لوقو الصيدلية",
+                                        modifier = Modifier
+                                            .size(80.dp)
+                                            .clip(RoundedCornerShape(8.dp)),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                }
+                            }
+
+                            Text("اسم الصيدلية: ${myPharmacy.name}", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("الدكتور المسؤول: ${myPharmacy.doctorName}", color = Color.White.copy(0.8f), fontSize = 11.sp)
+                            Text("رقم التواصل: ${myPharmacy.phone}", color = Color.White.copy(0.8f), fontSize = 11.sp)
+                            Text("العنوان: ${myPharmacy.location}", color = Color.White.copy(0.8f), fontSize = 11.sp)
+                            if (myPharmacy.hasCosmetics) {
+                                Text("🧴 يتوفر مستحضرات تجميل وعناية بالبشرة", color = CosmicSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Button(
+                                onClick = { showEditPharmacyDialog = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Icon(Icons.Default.Edit, null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("تعديل بيانات الصيدلية واللوقو ✏️", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 } else {
@@ -480,6 +554,33 @@ fun PharmacistDashboard(
         previousPendingCount = pendingCount
     }
 
+    var showEditPharmacyDialog by remember { mutableStateOf(false) }
+
+    if (showEditPharmacyDialog) {
+        EditPharmacyDialog(
+            pharmacy = pharmacy,
+            onDismiss = { showEditPharmacyDialog = false },
+            onSave = { name, doctorName, phone, location, imageBase64, hasCosmetics ->
+                val updated = pharmacy.copy(
+                    name = name,
+                    doctorName = doctorName,
+                    phone = phone,
+                    location = location,
+                    imageBase64 = imageBase64,
+                    hasCosmetics = hasCosmetics
+                )
+                viewModel.updatePharmacy(updated) { err ->
+                    if (err == null) {
+                        Toast.makeText(context, "تم تحديث بيانات الصيدلية بنجاح! ✅", Toast.LENGTH_SHORT).show()
+                        showEditPharmacyDialog = false
+                    } else {
+                        Toast.makeText(context, "حدث خطأ: $err", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        )
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = CosmicSurface),
@@ -493,13 +594,21 @@ fun PharmacistDashboard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color.Green.copy(0.15f))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Text("نشط وموثق 🟢", color = Color.Green, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color.Green.copy(0.15f))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text("نشط وموثق 🟢", color = Color.Green, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    }
+                    IconButton(
+                        onClick = { showEditPharmacyDialog = true },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(Icons.Default.Edit, contentDescription = "تعديل", tint = CosmicSecondary, modifier = Modifier.size(16.dp))
+                    }
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text(pharmacy.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
@@ -2009,4 +2118,226 @@ fun AdminPharmacyPortal(
             }
         }
     }
+}
+
+@Composable
+fun EditPharmacyDialog(
+    pharmacy: com.example.data.db.PharmacyEntity,
+    onDismiss: () -> Unit,
+    onSave: (name: String, doctorName: String, phone: String, location: String, imageBase64: String, hasCosmetics: Boolean) -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var name by remember { mutableStateOf(pharmacy.name) }
+    var doctorName by remember { mutableStateOf(pharmacy.doctorName) }
+    var phone by remember { mutableStateOf(pharmacy.phone) }
+    var location by remember { mutableStateOf(pharmacy.location) }
+    var hasCosmetics by remember { mutableStateOf(pharmacy.hasCosmetics) }
+    var imageBase64 by remember { mutableStateOf(pharmacy.imageBase64) }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (bitmap != null) {
+            try {
+                val outputStream = java.io.ByteArrayOutputStream()
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, outputStream)
+                val bytes = outputStream.toByteArray()
+                imageBase64 = android.util.Base64.encodeToString(bytes, android.util.Base64.DEFAULT)
+                Toast.makeText(context, "تم التقاط صورة اللوقو! 📸", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, "حدث خطأ أثناء معالجة الصورة", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                val bitmap = if (android.os.Build.VERSION.SDK_INT >= 29) {
+                    val source = android.graphics.ImageDecoder.createSource(context.contentResolver, uri)
+                    android.graphics.ImageDecoder.decodeBitmap(source)
+                } else {
+                    @Suppress("DEPRECATION")
+                    android.provider.MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+                }
+                val outputStream = java.io.ByteArrayOutputStream()
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, outputStream)
+                val bytes = outputStream.toByteArray()
+                imageBase64 = android.util.Base64.encodeToString(bytes, android.util.Base64.DEFAULT)
+                Toast.makeText(context, "تم اختيار صورة اللوقو! 🖼️", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, "حدث خطأ أثناء معالجة الصورة", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                "تعديل بيانات الصيدلية واللوقو 💊",
+                color = CosmicSecondary,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+        },
+        text = {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                item {
+                    Text("اسم الصيدلية:", color = Color.White.copy(0.8f), fontSize = 11.sp)
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = CosmicSecondary,
+                            unfocusedBorderColor = CosmicSurfaceVariant
+                        )
+                    )
+                }
+
+                item {
+                    Text("اسم الدكتور الصيدلي المسؤول:", color = Color.White.copy(0.8f), fontSize = 11.sp)
+                    OutlinedTextField(
+                        value = doctorName,
+                        onValueChange = { doctorName = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = CosmicSecondary,
+                            unfocusedBorderColor = CosmicSurfaceVariant
+                        )
+                    )
+                }
+
+                item {
+                    Text("رقم التواصل (واتساب):", color = Color.White.copy(0.8f), fontSize = 11.sp)
+                    OutlinedTextField(
+                        value = phone,
+                        onValueChange = { phone = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = CosmicSecondary,
+                            unfocusedBorderColor = CosmicSurfaceVariant
+                        )
+                    )
+                }
+
+                item {
+                    Text("العنوان والموقع بالتفصيل:", color = Color.White.copy(0.8f), fontSize = 11.sp)
+                    OutlinedTextField(
+                        value = location,
+                        onValueChange = { location = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = CosmicSecondary,
+                            unfocusedBorderColor = CosmicSurfaceVariant
+                        )
+                    )
+                }
+
+                item {
+                    Text("تعديل لوقو / صورة الصيدلية:", color = CosmicSecondary, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    if (imageBase64.isNotBlank()) {
+                        val bitmap = remember(imageBase64) {
+                            try {
+                                val clean = if (imageBase64.contains(",")) imageBase64.substringAfter(",") else imageBase64
+                                val bytes = android.util.Base64.decode(clean, android.util.Base64.DEFAULT)
+                                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                            } catch (e: Exception) {
+                                null
+                            }
+                        }
+                        if (bitmap != null) {
+                            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                Image(
+                                    bitmap = bitmap.asImageBitmap(),
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .size(80.dp)
+                                        .clip(RoundedCornerShape(8.dp)),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { galleryLauncher.launch("image/*") },
+                            colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant, contentColor = Color.White),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("المعرض 🖼️", fontSize = 10.sp)
+                        }
+
+                        Button(
+                            onClick = { cameraLauncher.launch(null) },
+                            colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant, contentColor = Color.White),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("الكاميرا 📸", fontSize = 10.sp)
+                        }
+                    }
+                }
+
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { hasCosmetics = !hasCosmetics }
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("توفر مستحضرات التجميل والعناية بالبشرة 🧴", color = Color.White, fontSize = 11.sp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Checkbox(
+                            checked = hasCosmetics,
+                            onCheckedChange = { hasCosmetics = it },
+                            colors = CheckboxDefaults.colors(checkedColor = CosmicSecondary)
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (name.isBlank() || doctorName.isBlank() || phone.isBlank() || location.isBlank()) {
+                        Toast.makeText(context, "الرجاء تعبئة كافة الحقول المطلوبة ⚠️", Toast.LENGTH_SHORT).show()
+                    } else {
+                        onSave(name, doctorName, phone, location, imageBase64, hasCosmetics)
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black)
+            ) {
+                Text("حفظ التعديلات 💾", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("إلغاء", color = Color.White)
+            }
+        }
+    )
 }
