@@ -1738,6 +1738,13 @@ DROP TABLE IF EXISTS public.products CASCADE;
 DROP TABLE IF EXISTS public.couriers CASCADE;
 DROP TABLE IF EXISTS public.profiles CASCADE;
 DROP TABLE IF EXISTS public.sellers CASCADE;
+DROP TABLE IF EXISTS public.pharmacies CASCADE;
+DROP TABLE IF EXISTS public.pharmacy_products CASCADE;
+DROP TABLE IF EXISTS public.pharmacy_orders CASCADE;
+DROP TABLE IF EXISTS public.restaurants CASCADE;
+DROP TABLE IF EXISTS public.restaurant_orders CASCADE;
+DROP TABLE IF EXISTS public.app_ratings CASCADE;
+DROP TABLE IF EXISTS public.app_coupons CASCADE;
 
 -- 1. إنشاء جدول المنتجات (products)
 CREATE TABLE public.products (
@@ -1804,12 +1811,119 @@ CREATE TABLE public.sellers (
     created_at BIGINT
 );
 
+-- 6. إنشاء جدول الصيدليات (pharmacies)
+CREATE TABLE public.pharmacies (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    doctor_name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    location TEXT NOT NULL,
+    pharmacist_email TEXT NOT NULL,
+    is_approved BOOLEAN DEFAULT false,
+    image_base64 TEXT DEFAULT '',
+    has_cosmetics BOOLEAN DEFAULT false,
+    created_at BIGINT
+);
+
+-- 7. إنشاء جدول منتجات الصيدليات (pharmacy_products)
+CREATE TABLE public.pharmacy_products (
+    id SERIAL PRIMARY KEY,
+    pharmacy_id INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    name TEXT NOT NULL,
+    company TEXT,
+    price DOUBLE PRECISION NOT NULL,
+    image_base64 TEXT DEFAULT '',
+    is_approved BOOLEAN DEFAULT false,
+    created_at BIGINT
+);
+
+-- 8. إنشاء جدول طلبات الصيدليات والروشتات (pharmacy_orders)
+CREATE TABLE public.pharmacy_orders (
+    id SERIAL PRIMARY KEY,
+    pharmacy_id INTEGER NOT NULL,
+    customer_name TEXT NOT NULL,
+    customer_phone TEXT NOT NULL,
+    customer_email TEXT DEFAULT '',
+    prescription_image_base64 TEXT DEFAULT '',
+    medicines_json TEXT DEFAULT '',
+    medicine_price DOUBLE PRECISION DEFAULT 0.0,
+    delivery_fee DOUBLE PRECISION DEFAULT 0.0,
+    courier_name TEXT DEFAULT '',
+    courier_phone TEXT DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'بانتظار الصيدلي',
+    payment_method TEXT DEFAULT 'كاش',
+    bank_receipt_image_uri TEXT DEFAULT '',
+    created_at BIGINT
+);
+
+-- 9. إنشاء جدول المطاعم (restaurants)
+CREATE TABLE public.restaurants (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    menu_image_uri TEXT DEFAULT '',
+    logo_image_uri TEXT DEFAULT '',
+    is_approved BOOLEAN DEFAULT false,
+    created_at BIGINT
+);
+
+-- 10. إنشاء جدول طلبات المطاعم (restaurant_orders)
+CREATE TABLE public.restaurant_orders (
+    id SERIAL PRIMARY KEY,
+    restaurant_id INTEGER NOT NULL,
+    restaurant_name TEXT NOT NULL,
+    restaurant_phone TEXT NOT NULL,
+    customer_name TEXT NOT NULL,
+    customer_email TEXT NOT NULL,
+    customer_phone TEXT NOT NULL,
+    items_and_notes TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'معلق',
+    payment_method TEXT NOT NULL DEFAULT 'كاش',
+    delivery_fee DOUBLE PRECISION DEFAULT 0.0,
+    bank_receipt_image_uri TEXT DEFAULT '',
+    courier_name TEXT DEFAULT '',
+    courier_phone TEXT DEFAULT '',
+    created_at BIGINT
+);
+
+-- 11. إنشاء جدول تقييمات التطبيق (app_ratings)
+CREATE TABLE public.app_ratings (
+    id SERIAL PRIMARY KEY,
+    customer_name TEXT NOT NULL,
+    customer_email TEXT NOT NULL,
+    customer_phone TEXT DEFAULT '',
+    customer_classification TEXT DEFAULT 'عميل عادي 👤',
+    rating_stars INTEGER NOT NULL,
+    comment TEXT,
+    rating_date BIGINT
+);
+
+-- 12. إنشاء جدول كوبونات الخصم والجوائز (app_coupons)
+CREATE TABLE public.app_coupons (
+    id SERIAL PRIMARY KEY,
+    code TEXT UNIQUE NOT NULL,
+    discount_percent DOUBLE PRECISION DEFAULT 0.0,
+    is_free_delivery BOOLEAN DEFAULT false,
+    is_bogo BOOLEAN DEFAULT false,
+    for_user_email TEXT DEFAULT '',
+    is_used BOOLEAN DEFAULT false,
+    offer_title TEXT NOT NULL
+);
+
 -- 6. تفعيل سياسات أمن مستوى الصفوف (Row Level Security - RLS)
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.couriers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sellers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pharmacies ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pharmacy_products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pharmacy_orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.restaurants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.restaurant_orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.app_ratings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.app_coupons ENABLE ROW LEVEL SECURITY;
 
 -- 7. حذف السياسات القديمة إن وجدت لمنع حدوث تعارض أو تكرار
 DROP POLICY IF EXISTS "Allow select products" ON public.products;
@@ -1826,6 +1940,31 @@ DROP POLICY IF EXISTS "Allow delete couriers" ON public.couriers;
 DROP POLICY IF EXISTS "Allow select sellers" ON public.sellers;
 DROP POLICY IF EXISTS "Allow insert sellers" ON public.sellers;
 DROP POLICY IF EXISTS "Allow delete sellers" ON public.sellers;
+DROP POLICY IF EXISTS "Allow select pharmacies" ON public.pharmacies;
+DROP POLICY IF EXISTS "Allow insert pharmacies" ON public.pharmacies;
+DROP POLICY IF EXISTS "Allow update pharmacies" ON public.pharmacies;
+DROP POLICY IF EXISTS "Allow delete pharmacies" ON public.pharmacies;
+DROP POLICY IF EXISTS "Allow select pharmacy_products" ON public.pharmacy_products;
+DROP POLICY IF EXISTS "Allow insert pharmacy_products" ON public.pharmacy_products;
+DROP POLICY IF EXISTS "Allow update pharmacy_products" ON public.pharmacy_products;
+DROP POLICY IF EXISTS "Allow delete pharmacy_products" ON public.pharmacy_products;
+DROP POLICY IF EXISTS "Allow select pharmacy_orders" ON public.pharmacy_orders;
+DROP POLICY IF EXISTS "Allow insert pharmacy_orders" ON public.pharmacy_orders;
+DROP POLICY IF EXISTS "Allow update pharmacy_orders" ON public.pharmacy_orders;
+DROP POLICY IF EXISTS "Allow delete pharmacy_orders" ON public.pharmacy_orders;
+DROP POLICY IF EXISTS "Allow select restaurants" ON public.restaurants;
+DROP POLICY IF EXISTS "Allow insert restaurants" ON public.restaurants;
+DROP POLICY IF EXISTS "Allow update restaurants" ON public.restaurants;
+DROP POLICY IF EXISTS "Allow delete restaurants" ON public.restaurants;
+DROP POLICY IF EXISTS "Allow select restaurant_orders" ON public.restaurant_orders;
+DROP POLICY IF EXISTS "Allow insert restaurant_orders" ON public.restaurant_orders;
+DROP POLICY IF EXISTS "Allow update restaurant_orders" ON public.restaurant_orders;
+DROP POLICY IF EXISTS "Allow delete restaurant_orders" ON public.restaurant_orders;
+DROP POLICY IF EXISTS "Allow select app_ratings" ON public.app_ratings;
+DROP POLICY IF EXISTS "Allow insert app_ratings" ON public.app_ratings;
+DROP POLICY IF EXISTS "Allow select app_coupons" ON public.app_coupons;
+DROP POLICY IF EXISTS "Allow insert app_coupons" ON public.app_coupons;
+DROP POLICY IF EXISTS "Allow update app_coupons" ON public.app_coupons;
 
 -- 8. إنشاء سياسات الوصول الكونية الجديدة للسماح بالوصول الكامل دون قيود للتطبيق (Anon / Public)
 CREATE POLICY "Allow select products" ON public.products FOR SELECT USING (true);
@@ -1846,6 +1985,38 @@ CREATE POLICY "Allow delete couriers" ON public.couriers FOR DELETE USING (true)
 CREATE POLICY "Allow select sellers" ON public.sellers FOR SELECT USING (true);
 CREATE POLICY "Allow insert sellers" ON public.sellers FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow delete sellers" ON public.sellers FOR DELETE USING (true);
+
+CREATE POLICY "Allow select pharmacies" ON public.pharmacies FOR SELECT USING (true);
+CREATE POLICY "Allow insert pharmacies" ON public.pharmacies FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow update pharmacies" ON public.pharmacies FOR UPDATE USING (true);
+CREATE POLICY "Allow delete pharmacies" ON public.pharmacies FOR DELETE USING (true);
+
+CREATE POLICY "Allow select pharmacy_products" ON public.pharmacy_products FOR SELECT USING (true);
+CREATE POLICY "Allow insert pharmacy_products" ON public.pharmacy_products FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow update pharmacy_products" ON public.pharmacy_products FOR UPDATE USING (true);
+CREATE POLICY "Allow delete pharmacy_products" ON public.pharmacy_products FOR DELETE USING (true);
+
+CREATE POLICY "Allow select pharmacy_orders" ON public.pharmacy_orders FOR SELECT USING (true);
+CREATE POLICY "Allow insert pharmacy_orders" ON public.pharmacy_orders FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow update pharmacy_orders" ON public.pharmacy_orders FOR UPDATE USING (true);
+CREATE POLICY "Allow delete pharmacy_orders" ON public.pharmacy_orders FOR DELETE USING (true);
+
+CREATE POLICY "Allow select restaurants" ON public.restaurants FOR SELECT USING (true);
+CREATE POLICY "Allow insert restaurants" ON public.restaurants FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow update restaurants" ON public.restaurants FOR UPDATE USING (true);
+CREATE POLICY "Allow delete restaurants" ON public.restaurants FOR DELETE USING (true);
+
+CREATE POLICY "Allow select restaurant_orders" ON public.restaurant_orders FOR SELECT USING (true);
+CREATE POLICY "Allow insert restaurant_orders" ON public.restaurant_orders FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow update restaurant_orders" ON public.restaurant_orders FOR UPDATE USING (true);
+CREATE POLICY "Allow delete restaurant_orders" ON public.restaurant_orders FOR DELETE USING (true);
+
+CREATE POLICY "Allow select app_ratings" ON public.app_ratings FOR SELECT USING (true);
+CREATE POLICY "Allow insert app_ratings" ON public.app_ratings FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Allow select app_coupons" ON public.app_coupons FOR SELECT USING (true);
+CREATE POLICY "Allow insert app_coupons" ON public.app_coupons FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow update app_coupons" ON public.app_coupons FOR UPDATE USING (true);
                                     """.trimIndent()
                                     
                                     Button(
@@ -8664,6 +8835,13 @@ DROP TABLE IF EXISTS public.products CASCADE;
 DROP TABLE IF EXISTS public.couriers CASCADE;
 DROP TABLE IF EXISTS public.profiles CASCADE;
 DROP TABLE IF EXISTS public.sellers CASCADE;
+DROP TABLE IF EXISTS public.pharmacies CASCADE;
+DROP TABLE IF EXISTS public.pharmacy_products CASCADE;
+DROP TABLE IF EXISTS public.pharmacy_orders CASCADE;
+DROP TABLE IF EXISTS public.restaurants CASCADE;
+DROP TABLE IF EXISTS public.restaurant_orders CASCADE;
+DROP TABLE IF EXISTS public.app_ratings CASCADE;
+DROP TABLE IF EXISTS public.app_coupons CASCADE;
 
 -- 1. إنشاء جدول المنتجات (products)
 CREATE TABLE public.products (
@@ -8730,12 +8908,119 @@ CREATE TABLE public.sellers (
     created_at BIGINT
 );
 
+-- 6. إنشاء جدول الصيدليات (pharmacies)
+CREATE TABLE public.pharmacies (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    doctor_name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    location TEXT NOT NULL,
+    pharmacist_email TEXT NOT NULL,
+    is_approved BOOLEAN DEFAULT false,
+    image_base64 TEXT DEFAULT '',
+    has_cosmetics BOOLEAN DEFAULT false,
+    created_at BIGINT
+);
+
+-- 7. إنشاء جدول منتجات الصيدليات (pharmacy_products)
+CREATE TABLE public.pharmacy_products (
+    id SERIAL PRIMARY KEY,
+    pharmacy_id INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    name TEXT NOT NULL,
+    company TEXT,
+    price DOUBLE PRECISION NOT NULL,
+    image_base64 TEXT DEFAULT '',
+    is_approved BOOLEAN DEFAULT false,
+    created_at BIGINT
+);
+
+-- 8. إنشاء جدول طلبات الصيدليات والروشتات (pharmacy_orders)
+CREATE TABLE public.pharmacy_orders (
+    id SERIAL PRIMARY KEY,
+    pharmacy_id INTEGER NOT NULL,
+    customer_name TEXT NOT NULL,
+    customer_phone TEXT NOT NULL,
+    customer_email TEXT DEFAULT '',
+    prescription_image_base64 TEXT DEFAULT '',
+    medicines_json TEXT DEFAULT '',
+    medicine_price DOUBLE PRECISION DEFAULT 0.0,
+    delivery_fee DOUBLE PRECISION DEFAULT 0.0,
+    courier_name TEXT DEFAULT '',
+    courier_phone TEXT DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'بانتظار الصيدلي',
+    payment_method TEXT DEFAULT 'كاش',
+    bank_receipt_image_uri TEXT DEFAULT '',
+    created_at BIGINT
+);
+
+-- 9. إنشاء جدول المطاعم (restaurants)
+CREATE TABLE public.restaurants (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    menu_image_uri TEXT DEFAULT '',
+    logo_image_uri TEXT DEFAULT '',
+    is_approved BOOLEAN DEFAULT false,
+    created_at BIGINT
+);
+
+-- 10. إنشاء جدول طلبات المطاعم (restaurant_orders)
+CREATE TABLE public.restaurant_orders (
+    id SERIAL PRIMARY KEY,
+    restaurant_id INTEGER NOT NULL,
+    restaurant_name TEXT NOT NULL,
+    restaurant_phone TEXT NOT NULL,
+    customer_name TEXT NOT NULL,
+    customer_email TEXT NOT NULL,
+    customer_phone TEXT NOT NULL,
+    items_and_notes TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'معلق',
+    payment_method TEXT NOT NULL DEFAULT 'كاش',
+    delivery_fee DOUBLE PRECISION DEFAULT 0.0,
+    bank_receipt_image_uri TEXT DEFAULT '',
+    courier_name TEXT DEFAULT '',
+    courier_phone TEXT DEFAULT '',
+    created_at BIGINT
+);
+
+-- 11. إنشاء جدول تقييمات التطبيق (app_ratings)
+CREATE TABLE public.app_ratings (
+    id SERIAL PRIMARY KEY,
+    customer_name TEXT NOT NULL,
+    customer_email TEXT NOT NULL,
+    customer_phone TEXT DEFAULT '',
+    customer_classification TEXT DEFAULT 'عميل عادي 👤',
+    rating_stars INTEGER NOT NULL,
+    comment TEXT,
+    rating_date BIGINT
+);
+
+-- 12. إنشاء جدول كوبونات الخصم والجوائز (app_coupons)
+CREATE TABLE public.app_coupons (
+    id SERIAL PRIMARY KEY,
+    code TEXT UNIQUE NOT NULL,
+    discount_percent DOUBLE PRECISION DEFAULT 0.0,
+    is_free_delivery BOOLEAN DEFAULT false,
+    is_bogo BOOLEAN DEFAULT false,
+    for_user_email TEXT DEFAULT '',
+    is_used BOOLEAN DEFAULT false,
+    offer_title TEXT NOT NULL
+);
+
 -- 6. تفعيل سياسات أمن مستوى الصفوف (Row Level Security - RLS)
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.couriers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sellers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pharmacies ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pharmacy_products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pharmacy_orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.restaurants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.restaurant_orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.app_ratings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.app_coupons ENABLE ROW LEVEL SECURITY;
 
 -- 7. حذف السياسات القديمة إن وجدت لمنع حدوث تعارض أو تكرار
 DROP POLICY IF EXISTS "Allow select products" ON public.products;
@@ -8752,6 +9037,31 @@ DROP POLICY IF EXISTS "Allow delete couriers" ON public.couriers;
 DROP POLICY IF EXISTS "Allow select sellers" ON public.sellers;
 DROP POLICY IF EXISTS "Allow insert sellers" ON public.sellers;
 DROP POLICY IF EXISTS "Allow delete sellers" ON public.sellers;
+DROP POLICY IF EXISTS "Allow select pharmacies" ON public.pharmacies;
+DROP POLICY IF EXISTS "Allow insert pharmacies" ON public.pharmacies;
+DROP POLICY IF EXISTS "Allow update pharmacies" ON public.pharmacies;
+DROP POLICY IF EXISTS "Allow delete pharmacies" ON public.pharmacies;
+DROP POLICY IF EXISTS "Allow select pharmacy_products" ON public.pharmacy_products;
+DROP POLICY IF EXISTS "Allow insert pharmacy_products" ON public.pharmacy_products;
+DROP POLICY IF EXISTS "Allow update pharmacy_products" ON public.pharmacy_products;
+DROP POLICY IF EXISTS "Allow delete pharmacy_products" ON public.pharmacy_products;
+DROP POLICY IF EXISTS "Allow select pharmacy_orders" ON public.pharmacy_orders;
+DROP POLICY IF EXISTS "Allow insert pharmacy_orders" ON public.pharmacy_orders;
+DROP POLICY IF EXISTS "Allow update pharmacy_orders" ON public.pharmacy_orders;
+DROP POLICY IF EXISTS "Allow delete pharmacy_orders" ON public.pharmacy_orders;
+DROP POLICY IF EXISTS "Allow select restaurants" ON public.restaurants;
+DROP POLICY IF EXISTS "Allow insert restaurants" ON public.restaurants;
+DROP POLICY IF EXISTS "Allow update restaurants" ON public.restaurants;
+DROP POLICY IF EXISTS "Allow delete restaurants" ON public.restaurants;
+DROP POLICY IF EXISTS "Allow select restaurant_orders" ON public.restaurant_orders;
+DROP POLICY IF EXISTS "Allow insert restaurant_orders" ON public.restaurant_orders;
+DROP POLICY IF EXISTS "Allow update restaurant_orders" ON public.restaurant_orders;
+DROP POLICY IF EXISTS "Allow delete restaurant_orders" ON public.restaurant_orders;
+DROP POLICY IF EXISTS "Allow select app_ratings" ON public.app_ratings;
+DROP POLICY IF EXISTS "Allow insert app_ratings" ON public.app_ratings;
+DROP POLICY IF EXISTS "Allow select app_coupons" ON public.app_coupons;
+DROP POLICY IF EXISTS "Allow insert app_coupons" ON public.app_coupons;
+DROP POLICY IF EXISTS "Allow update app_coupons" ON public.app_coupons;
 
 -- 8. إنشاء سياسات الوصول الكونية الجديدة للسماح بالوصول الكامل دون قيود للتطبيق (Anon / Public)
 CREATE POLICY "Allow select products" ON public.products FOR SELECT USING (true);
@@ -8772,6 +9082,38 @@ CREATE POLICY "Allow delete couriers" ON public.couriers FOR DELETE USING (true)
 CREATE POLICY "Allow select sellers" ON public.sellers FOR SELECT USING (true);
 CREATE POLICY "Allow insert sellers" ON public.sellers FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow delete sellers" ON public.sellers FOR DELETE USING (true);
+
+CREATE POLICY "Allow select pharmacies" ON public.pharmacies FOR SELECT USING (true);
+CREATE POLICY "Allow insert pharmacies" ON public.pharmacies FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow update pharmacies" ON public.pharmacies FOR UPDATE USING (true);
+CREATE POLICY "Allow delete pharmacies" ON public.pharmacies FOR DELETE USING (true);
+
+CREATE POLICY "Allow select pharmacy_products" ON public.pharmacy_products FOR SELECT USING (true);
+CREATE POLICY "Allow insert pharmacy_products" ON public.pharmacy_products FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow update pharmacy_products" ON public.pharmacy_products FOR UPDATE USING (true);
+CREATE POLICY "Allow delete pharmacy_products" ON public.pharmacy_products FOR DELETE USING (true);
+
+CREATE POLICY "Allow select pharmacy_orders" ON public.pharmacy_orders FOR SELECT USING (true);
+CREATE POLICY "Allow insert pharmacy_orders" ON public.pharmacy_orders FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow update pharmacy_orders" ON public.pharmacy_orders FOR UPDATE USING (true);
+CREATE POLICY "Allow delete pharmacy_orders" ON public.pharmacy_orders FOR DELETE USING (true);
+
+CREATE POLICY "Allow select restaurants" ON public.restaurants FOR SELECT USING (true);
+CREATE POLICY "Allow insert restaurants" ON public.restaurants FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow update restaurants" ON public.restaurants FOR UPDATE USING (true);
+CREATE POLICY "Allow delete restaurants" ON public.restaurants FOR DELETE USING (true);
+
+CREATE POLICY "Allow select restaurant_orders" ON public.restaurant_orders FOR SELECT USING (true);
+CREATE POLICY "Allow insert restaurant_orders" ON public.restaurant_orders FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow update restaurant_orders" ON public.restaurant_orders FOR UPDATE USING (true);
+CREATE POLICY "Allow delete restaurant_orders" ON public.restaurant_orders FOR DELETE USING (true);
+
+CREATE POLICY "Allow select app_ratings" ON public.app_ratings FOR SELECT USING (true);
+CREATE POLICY "Allow insert app_ratings" ON public.app_ratings FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Allow select app_coupons" ON public.app_coupons FOR SELECT USING (true);
+CREATE POLICY "Allow insert app_coupons" ON public.app_coupons FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow update app_coupons" ON public.app_coupons FOR UPDATE USING (true);
                                     """.trimIndent()
 
                                     Button(
@@ -9870,6 +10212,25 @@ fun AdminRatingsSection(viewModel: MajarahViewModel) {
                             )
                         }
                         
+                        // Rater detailed information (Complete rater profile)
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "تصنيف المقيم: ${item.customerClassification.ifBlank { "عميل عادي 👤" }}",
+                                color = CosmicSecondary,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "الهاتف: ${item.customerPhone.ifBlank { "غير متوفر" }}",
+                                color = Color.White.copy(0.8f),
+                                fontSize = 10.sp
+                            )
+                        }
+                        
                         if (item.comment.isNotBlank()) {
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
@@ -10182,8 +10543,8 @@ fun AdminSystemManagementSection(viewModel: MajarahViewModel) {
                             it.status == "تم التوصيل"
                         }
                         when {
-                            courierDeliveriesThisWeek >= 20 -> "مندوب ذهبي 👑 ($courierDeliveriesThisWeek مهمة هذا الأسبوع)"
-                            courierDeliveriesThisWeek >= 10 -> "مندوب مميز ⭐ ($courierDeliveriesThisWeek مهمة هذا الأسبوع)"
+                            courierDeliveriesThisWeek >= 40 -> "مندوب ذهبي 👑 ($courierDeliveriesThisWeek مهمة هذا الأسبوع)"
+                            courierDeliveriesThisWeek >= 20 -> "مندوب مميز ⭐ ($courierDeliveriesThisWeek مهمة هذا الأسبوع)"
                             else -> "مندوب عادي 🚴 ($courierDeliveriesThisWeek مهمة هذا الأسبوع)"
                         }
                     }
@@ -10235,8 +10596,8 @@ fun AdminSystemManagementSection(viewModel: MajarahViewModel) {
                             (it.statusArabic.contains("تم") || it.statusArabic.contains("توصيل") || it.statusArabic.contains("تمام") || it.statusArabic.contains("استلام"))
                         }.distinctBy { it.orderId }.size
                         when {
-                            clientOrdersThisWeek >= 20 -> "عميل ذهبي 👑 ($clientOrdersThisWeek طلب هذا الأسبوع)"
-                            clientOrdersThisWeek >= 10 -> "عميل مميز ⭐ ($clientOrdersThisWeek طلب هذا الأسبوع)"
+                            clientOrdersThisWeek >= 40 -> "عميل ذهبي 👑 ($clientOrdersThisWeek طلب هذا الأسبوع)"
+                            clientOrdersThisWeek >= 20 -> "عميل مميز ⭐ ($clientOrdersThisWeek طلب هذا الأسبوع)"
                             else -> "عميل عادي 👤 ($clientOrdersThisWeek طلب هذا الأسبوع)"
                         }
                     }
@@ -10274,6 +10635,8 @@ fun AdminSystemManagementSection(viewModel: MajarahViewModel) {
                             Text("البريد: ${p.email}", color = MediumContrastTextDark, fontSize = 11.sp)
                             Spacer(modifier = Modifier.height(2.dp))
                             Text("الهاتف: ${p.phone}", color = Color.White.copy(0.8f), fontSize = 11.sp)
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text("كلمة المرور: ${p.password}", color = Color(0xFFFFC107), fontSize = 11.sp)
                             Spacer(modifier = Modifier.height(4.dp))
                             
                             // Classification tag

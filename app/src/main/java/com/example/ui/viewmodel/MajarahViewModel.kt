@@ -82,7 +82,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
 
     val isAdmin: StateFlow<Boolean> = combine(isGeneralAdmin, activeProfile, _isLoggedIn, allAdminManagers) { isGen, profile, loggedIn, managers ->
         loggedIn && profile != null && (
-            isGen || managers.any { m -> 
+            profile.role == "admin" || isGen || managers.any { m -> 
                 m.email.trim().lowercase() == profile.email.trim().lowercase() || 
                 m.phone.trim() == profile.phone.trim() 
             }
@@ -106,7 +106,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
             false
         } else {
             val emailClean = profile.email.trim().lowercase()
-            sellers.any { s -> s.email.trim().lowercase() == emailClean }
+            profile.role == "seller" || sellers.any { s -> s.email.trim().lowercase() == emailClean }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
@@ -117,7 +117,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
             false
         } else {
             val phoneClean = profile.phone.trim().replace("+", "").replace(" ", "")
-            couriers.any { c ->
+            profile.role == "courier" || couriers.any { c ->
                 val cPhoneClean = c.phone.trim().replace("+", "").replace(" ", "")
                 cPhoneClean == phoneClean || c.phone.trim() == profile.phone.trim()
             }
@@ -293,7 +293,19 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
 
     fun calculateDiscountedSum(items: List<CartItemWithProduct>, coupon: String?): Double {
         val total = calculateTotalSum(items)
-        val discount = getCouponDiscountPercentage(coupon)
+        var discount = getCouponDiscountPercentage(coupon).toDouble()
+        
+        // Apply customer classification-based discount
+        val classification = userClassification.value
+        if (classification.contains("عميل مميز")) {
+            discount += 5.0
+        } else if (classification.contains("عميل ذهبي")) {
+            discount += 15.0
+        }
+        
+        // Ensure discount doesn't exceed 100%
+        if (discount > 100.0) discount = 100.0
+        
         return total * (1.0 - discount / 100.0)
     }
 
@@ -1282,9 +1294,7 @@ $couponMessage---------------------------
             false
         } else {
             val emailClean = profile.email.trim().lowercase()
-            val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
-            val isPharmPref = sharedPrefs.getString("user_role_${profile.email.trim().lowercase()}", "") == "pharmacist"
-            isPharmPref || pharmacies.any { p -> p.pharmacistEmail.trim().lowercase() == emailClean }
+            profile.role == "pharmacist" || pharmacies.any { p -> p.pharmacistEmail.trim().lowercase() == emailClean }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
@@ -1655,9 +1665,7 @@ $couponMessage---------------------------
             false
         } else {
             val emailClean = profile.email.trim().lowercase()
-            val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
-            val isRestPref = sharedPrefs.getString("user_role_${profile.email.trim().lowercase()}", "") == "restaurant"
-            isRestPref || restaurants.any { r -> r.phone.trim() == profile.phone.trim() || r.name.trim().lowercase() == profile.name.trim().lowercase() }
+            profile.role == "restaurant" || restaurants.any { r -> r.phone.trim() == profile.phone.trim() || r.name.trim().lowercase() == profile.name.trim().lowercase() }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
@@ -1700,17 +1708,19 @@ $couponMessage---------------------------
         
         val emailClean = profile.email.trim().lowercase()
         val phoneClean = profile.phone.trim().replace("+", "").replace(" ", "")
+        val oneWeekAgo = System.currentTimeMillis() - (7 * 24 * 60 * 60 * 1000L)
         
         if (isCou) {
-            val courierDeliveries = orders.filter { 
+            val weeklyCourierDeliveries = orders.filter { 
                 val cPhone = it.courierPhone.trim().replace("+", "").replace(" ", "")
                 (cPhone == phoneClean || it.courierPhone.trim() == profile.phone.trim()) && 
+                it.orderDate >= oneWeekAgo &&
                 (it.statusArabic.contains("تم") || it.statusArabic.contains("توصيل") || it.statusArabic.contains("تمام"))
             }.distinctBy { it.orderId }.size
             
             return@combine when {
-                courierDeliveries >= 9 -> "مندوب ذهبي 👑"
-                courierDeliveries >= 4 -> "مندوب مميز ⭐"
+                weeklyCourierDeliveries >= 40 -> "مندوب ذهبي 👑"
+                weeklyCourierDeliveries >= 20 -> "مندوب مميز ⭐"
                 else -> "مندوب عادي 🚴"
             }
         }
@@ -1749,11 +1759,14 @@ $couponMessage---------------------------
             }
         }
         
-        // Customer classification based on total completed orders
-        val myOrdersCount = orders.distinctBy { it.orderId }.size
+        // Customer classification based on weekly orders count
+        val weeklyOrdersCount = orders.filter { 
+            it.orderDate >= oneWeekAgo 
+        }.distinctBy { it.orderId }.size
+        
         return@combine when {
-            myOrdersCount >= 6 -> "عميل ذهبي 👑"
-            myOrdersCount >= 3 -> "عميل مميز ⭐"
+            weeklyOrdersCount >= 40 -> "عميل ذهبي 👑"
+            weeklyOrdersCount >= 20 -> "عميل مميز ⭐"
             else -> "عميل عادي 👤"
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "زائر 🌌")
@@ -1770,6 +1783,8 @@ $couponMessage---------------------------
             val rating = com.example.data.db.AppRatingEntity(
                 customerName = profile?.name ?: "عميل المجرة الكونية",
                 customerEmail = profile?.email ?: "guest@majarah.com",
+                customerPhone = profile?.phone ?: "",
+                customerClassification = userClassification.value,
                 ratingStars = stars,
                 comment = comment,
                 ratingDate = System.currentTimeMillis()

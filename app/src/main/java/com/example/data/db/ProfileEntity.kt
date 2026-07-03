@@ -11,5 +11,6 @@ data class ProfileEntity(
     val email: String,
     val password: String,
     val profileImageUri: String? = null,
+    val role: String = "customer",
     val createdAt: Long = System.currentTimeMillis()
 )

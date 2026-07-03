@@ -79,6 +79,7 @@ data class SupabaseProfile(
     @Json(name = "name") val name: String? = null,
     @Json(name = "phone") val phone: String? = null,
     @Json(name = "email") val email: String? = null,
+    @Json(name = "role") val role: String? = null,
     @Json(name = "created_at") val createdAt: String? = null
 )
 

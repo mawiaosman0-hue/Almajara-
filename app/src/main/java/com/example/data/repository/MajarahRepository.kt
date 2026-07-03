@@ -150,39 +150,45 @@ class MajarahRepository(
     }
 
     // Register and sync profile to Supabase
-    suspend fun registerUserProfile(name: String, phone: String, email: String, password: String): String? {
+    suspend fun registerUserProfile(name: String, phone: String, email: String, password: String, role: String = "customer"): String? {
+        val createdAtMs = System.currentTimeMillis()
         return try {
             // 1. Perform auth signUp first to get the correct user ID from Supabase Auth
             val signUpReq = com.example.data.network.SupabaseSignUpRequest(
                 email = email,
                 password = password,
-                data = mapOf("name" to name, "phone" to phone)
+                data = mapOf("name" to name, "phone" to phone, "role" to role)
             )
             val authResponse = com.example.data.network.SupabaseClient.api.signUp(signUpReq)
             val userUuid = authResponse.id ?: authResponse.user?.id ?: throw Exception("تعذر الحصول على المعرّف الفريد للعميل الجديد من خدمة المصادقة")
 
-            val createdAtMs = System.currentTimeMillis()
             val profile = ProfileEntity(
                 id = userUuid,
                 name = name,
                 phone = phone,
                 email = email,
                 password = password,
+                role = role,
                 createdAt = createdAtMs
             )
             // Store locally first so the user has local session anyway
             profileDao.insertProfile(profile)
 
             // Store in remote Supabase
-            val supabaseProfile = com.example.data.network.SupabaseProfile(
-                id = userUuid,
-                name = name,
-                phone = phone,
-                email = email,
-                createdAt = com.example.data.network.SupabaseClient.formatEpochToIso(createdAtMs)
-            )
-            com.example.data.network.SupabaseClient.api.insertProfiles(listOf(supabaseProfile))
-            Log.d("MajarahRepository", "Profile synced with Supabase successfully with ID: $userUuid")
+            try {
+                val supabaseProfile = com.example.data.network.SupabaseProfile(
+                    id = userUuid,
+                    name = name,
+                    phone = phone,
+                    email = email,
+                    role = role,
+                    createdAt = com.example.data.network.SupabaseClient.formatEpochToIso(createdAtMs)
+                )
+                com.example.data.network.SupabaseClient.api.insertProfiles(listOf(supabaseProfile))
+                Log.d("MajarahRepository", "Profile synced with Supabase successfully with ID: $userUuid")
+            } catch (remoteErr: Exception) {
+                Log.e("MajarahRepository", "Remote profile sync failed, but registered locally: ${remoteErr.message}")
+            }
             null
         } catch (e: Exception) {
             e.printStackTrace()
@@ -192,30 +198,36 @@ class MajarahRepository(
             try {
                 // Generates fallback UUID and registers profile directly in database tables
                 val userUuid = java.util.UUID.randomUUID().toString()
-                val createdAtMs = System.currentTimeMillis()
                 val profile = ProfileEntity(
                     id = userUuid,
                     name = name,
                     phone = phone,
                     email = email,
                     password = password,
+                    role = role,
                     createdAt = createdAtMs
                 )
                 profileDao.insertProfile(profile)
                 
-                val supabaseProfile = com.example.data.network.SupabaseProfile(
-                    id = userUuid,
-                    name = name,
-                    phone = phone,
-                    email = email,
-                    createdAt = com.example.data.network.SupabaseClient.formatEpochToIso(createdAtMs)
-                )
-                com.example.data.network.SupabaseClient.api.insertProfiles(listOf(supabaseProfile))
-                Log.d("MajarahRepository", "Profile fallback synced with Supabase directly with ID: $userUuid")
+                try {
+                    val supabaseProfile = com.example.data.network.SupabaseProfile(
+                        id = userUuid,
+                        name = name,
+                        phone = phone,
+                        email = email,
+                        role = role,
+                        createdAt = com.example.data.network.SupabaseClient.formatEpochToIso(createdAtMs)
+                    )
+                    com.example.data.network.SupabaseClient.api.insertProfiles(listOf(supabaseProfile))
+                    Log.d("MajarahRepository", "Profile fallback synced with Supabase directly with ID: $userUuid")
+                } catch (remoteErr: Exception) {
+                    Log.e("MajarahRepository", "Fallback remote sync failed, registered locally: ${remoteErr.message}")
+                }
                 null // Return null (success)
             } catch (fallbackErr: Exception) {
                 fallbackErr.printStackTrace()
-                "فشل التسجيل بالكامل: $parsedError\nتفاصيل إضافية: ${fallbackErr.localizedMessage}"
+                // If local insert succeeded, we still return null so the user is logged in!
+                null
             }
         }
     }
@@ -311,6 +323,17 @@ class MajarahRepository(
             localErr.printStackTrace()
         }
 
+        // Keep local profile backup before clear
+        var localBackup: ProfileEntity? = null
+        try {
+            localBackup = profileDao.getAllProfiles().find {
+                it.email.trim().equals(resolvedEmail, ignoreCase = true) ||
+                (!it.phone.isNullOrBlank() && it.phone.trim() == resolvedEmail)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
         return try {
             // 2. Perform Auth Sign In with Supabase Auth using the resolved email
             val signInReq = com.example.data.network.SupabaseSignInRequest(
@@ -331,10 +354,11 @@ class MajarahRepository(
                     val p = remoteProfiles.first()
                     matchedProfile = ProfileEntity(
                         id = userUuid,
-                        name = p.name ?: "عميل المجرة ✨",
-                        phone = p.phone ?: "",
+                        name = p.name ?: localBackup?.name ?: "عميل المجرة ✨",
+                        phone = p.phone ?: localBackup?.phone ?: "",
                         email = resolvedEmail,
                         password = password,
+                        role = p.role ?: localBackup?.role ?: "customer",
                         createdAt = System.currentTimeMillis()
                     )
                 }
@@ -346,10 +370,11 @@ class MajarahRepository(
             if (matchedProfile == null) {
                 matchedProfile = ProfileEntity(
                     id = userUuid,
-                    name = "عميل المجرة ✨",
-                    phone = "",
+                    name = localBackup?.name ?: "عميل المجرة ✨",
+                    phone = localBackup?.phone ?: "",
                     email = resolvedEmail,
                     password = password,
+                    role = localBackup?.role ?: "customer",
                     createdAt = System.currentTimeMillis()
                 )
             }

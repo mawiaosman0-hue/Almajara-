@@ -14,6 +14,8 @@ data class AppRatingEntity(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val customerName: String,
     val customerEmail: String,
+    val customerPhone: String = "",
+    val customerClassification: String = "",
     val ratingStars: Int, // 1 to 7 stars
     val comment: String,
     val ratingDate: Long
