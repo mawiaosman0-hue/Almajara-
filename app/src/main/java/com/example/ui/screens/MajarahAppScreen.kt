@@ -5415,6 +5415,7 @@ fun ProfileScreenBody(
     val isAdmin by viewModel.isAdmin.collectAsStateWithLifecycle()
     val isSeller by viewModel.isSeller.collectAsStateWithLifecycle()
     val isPharmacist by viewModel.isPharmacist.collectAsStateWithLifecycle()
+    val isRestaurant by viewModel.isRestaurant.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     var editName by remember(activeProfile) { mutableStateOf(activeProfile?.name ?: "") }
@@ -5586,6 +5587,7 @@ fun ProfileScreenBody(
                 isCourier -> "مندوب توصيل 🚴"
                 isSeller -> "تاجر المجرة 🛒"
                 isPharmacist -> "صيدلي معتمد 💊"
+                isRestaurant -> "صاحب مطعم 🍔"
                 else -> "عميل المجرة 🌌"
             }
             Text(
@@ -5961,6 +5963,7 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
     val pharmacies by viewModel.allPharmacies.collectAsStateWithLifecycle()
     val pharmacyOrders by viewModel.allPharmacyOrders.collectAsStateWithLifecycle()
     val allRestaurantOrders by viewModel.allRestaurantOrders.collectAsStateWithLifecycle()
+    val restaurants by viewModel.allRestaurants.collectAsStateWithLifecycle()
 
     val pendingCourierOrdersCount = remember(allOrders) {
         val grouped = allOrders.groupBy { it.orderId }
@@ -5981,8 +5984,8 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
         pharmacies.count { !it.isApproved } + pharmacyOrders.count { it.status == "بانتظار المدير" || it.status == "بانتظار الصيدلي" }
     }
 
-    val pendingRestaurantOrdersCount = remember(allRestaurantOrders) {
-        allRestaurantOrders.count { it.status == "معلق" }
+    val pendingRestaurantOrdersCount = remember(allRestaurantOrders, restaurants) {
+        allRestaurantOrders.count { it.status == "معلق" } + restaurants.count { !it.isApproved }
     }
 
     var lastPendingCourierOrdersCount by remember { mutableStateOf(pendingCourierOrdersCount) }
@@ -11645,6 +11648,30 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
         }
     } else {
         emptyList()
+    }
+
+    val currentAssignedKeys = remember(myAssignedOrders, myAssignedRestaurantOrders, myAssignedPharmacyOrders) {
+        val orderKeys = myAssignedOrders.map { "ord_" + it.orderId }.toSet()
+        val restKeys = myAssignedRestaurantOrders.map { "rest_" + it.id }.toSet()
+        val pharKeys = myAssignedPharmacyOrders.map { "phar_" + it.id }.toSet()
+        orderKeys + restKeys + pharKeys
+    }
+
+    LaunchedEffect(currentAssignedKeys) {
+        if (previousAssignedOrderIds.isNotEmpty()) {
+            val newlyAdded = currentAssignedKeys - previousAssignedOrderIds
+            if (newlyAdded.isNotEmpty()) {
+                try {
+                    val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+                    val r = android.media.RingtoneManager.getRingtone(context, alertUri)
+                    r?.play()
+                    Toast.makeText(context, "🌌 تم إسناد مهمة جديدة لك! 🚴✨", Toast.LENGTH_LONG).show()
+                } catch (e: Exception) {
+                    // Fallback
+                }
+            }
+        }
+        previousAssignedOrderIds = currentAssignedKeys
     }
 
     // Products counts

@@ -331,7 +331,6 @@ class MajarahRepository(
                  it.phone.trim() == resolvedEmail) && it.password == password 
             }
             if (matchedLocal != null) {
-                profileDao.clearProfiles()
                 profileDao.insertProfile(matchedLocal)
                 return Pair(matchedLocal, null)
             }
@@ -339,7 +338,7 @@ class MajarahRepository(
             localErr.printStackTrace()
         }
 
-        // Keep local profile backup before clear
+        // Keep local profile backup before login attempt
         var localBackup: ProfileEntity? = null
         try {
             localBackup = profileDao.getAllProfiles().find {
@@ -358,9 +357,6 @@ class MajarahRepository(
             )
             val authResponse = com.example.data.network.SupabaseClient.api.signIn(signInReq)
             val userUuid = authResponse.user?.id ?: throw Exception("تعذر الحصول على معرّف المستخدم لعملية تسجيل الدخول")
-
-            // 3. Clear previous profiles to ensure correct active user is stored
-            profileDao.clearProfiles()
 
             // 4. Fetch remote profile from the databases matching this user's uuid
             var matchedProfile: ProfileEntity? = null
@@ -399,6 +395,20 @@ class MajarahRepository(
             Pair(matchedProfile, null)
         } catch (e: Exception) {
             e.printStackTrace()
+            // Second fallback: check if we can log in with local SQLite profiles when Supabase connection fails
+            try {
+                val localProfiles = profileDao.getAllProfiles()
+                val matchedLocal = localProfiles.find { 
+                    (it.email.trim().equals(resolvedEmail, ignoreCase = true) || 
+                     it.phone.trim() == resolvedEmail) && it.password == password 
+                }
+                if (matchedLocal != null) {
+                    return Pair(matchedLocal, null)
+                }
+            } catch (localErr: Exception) {
+                localErr.printStackTrace()
+            }
+
             val parsedError = com.example.data.network.SupabaseClient.parseError(e)
             Log.e("MajarahRepository", "Failed to login: $parsedError")
             Pair(null, parsedError)

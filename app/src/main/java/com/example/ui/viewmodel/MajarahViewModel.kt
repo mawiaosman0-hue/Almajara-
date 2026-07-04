@@ -76,6 +76,8 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
         loggedIn && profile != null && (
             profile.email.trim().lowercase() == "mawiaosman0@gmail.com" || 
             profile.phone.trim() == "0910074223" || 
+            profile.phone.trim().replace(" ", "").replace("+", "").endsWith("910074223") ||
+            profile.name.trim().replace("أ", "ا") == "معاوية عثمان احمد ياسين" ||
             profile.name.trim() == "معاوية عثمان أحمد ياسين"
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
@@ -301,6 +303,8 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
             discount += 5.0
         } else if (classification.contains("عميل ذهبي")) {
             discount += 15.0
+        } else if (classification.contains("مندوب ذهبي")) {
+            discount += 10.0
         }
         
         // Ensure discount doesn't exceed 100%
@@ -326,11 +330,11 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                         email = p.email ?: email,
                         password = "google_authenticated_bypass_1782"
                     )
-                    database.profileDao().clearProfiles()
                     database.profileDao().insertProfile(profileEntity)
                     
                     val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
                     sharedPrefs.edit().putBoolean("is_logged_in_state", true).apply()
+                    sharedPrefs.edit().putString("logged_in_email", profileEntity.email.trim().lowercase()).apply()
                     
                     activeProfile.value = profileEntity
                     _isLoggedIn.value = true
@@ -390,7 +394,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
             try {
                 if (isRegisterMode.value) {
                     // Register
-                    error = repository.registerUserProfile(name, phone, email, password)
+                    error = repository.registerUserProfile(name, phone, email, password, role)
                     
                     val isLocalSuccess = error == null || 
                                          error.contains("تم الحفظ محلياً") || 
@@ -402,6 +406,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                     if (isLocalSuccess) {
                         // Create corresponding user type record if not customer
                         val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
+                        sharedPrefs.edit().putString("user_role_${email.trim().lowercase()}", role).apply()
                         if (role == "seller") {
                             repository.insertSeller(
                                 com.example.data.db.SellerEntity(
@@ -463,6 +468,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                         val p = loginResult.first
                         if (p != null) {
                             sharedPrefs.edit().putBoolean("is_logged_in_state", true).apply()
+                            sharedPrefs.edit().putString("logged_in_email", p.email.trim().lowercase()).apply()
 
                             activeProfile.value = p
                             _isLoggedIn.value = true
@@ -502,17 +508,19 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                             error = null // Clear error to represent success
                         } else {
                             // Fallback to manual local user profile construction
-                            val fallbackProfile = database.profileDao().getAllProfiles().firstOrNull() ?: com.example.data.db.ProfileEntity(
+                            val fallbackProfile = com.example.data.db.ProfileEntity(
                                 id = java.util.UUID.randomUUID().toString(),
                                 name = name,
                                 phone = phone,
                                 email = email,
-                                password = password
+                                password = password,
+                                role = role,
+                                createdAt = System.currentTimeMillis()
                             )
-                            database.profileDao().clearProfiles()
                             database.profileDao().insertProfile(fallbackProfile)
 
                             sharedPrefs.edit().putBoolean("is_logged_in_state", true).apply()
+                            sharedPrefs.edit().putString("logged_in_email", fallbackProfile.email.trim().lowercase()).apply()
 
                             activeProfile.value = fallbackProfile
                             _isLoggedIn.value = true
@@ -553,6 +561,10 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                         sharedPrefs.edit().putBoolean("is_logged_in_state", true).apply()
 
                         val p = result.first
+                        if (p != null) {
+                            sharedPrefs.edit().putString("logged_in_email", p.email.trim().lowercase()).apply()
+                            sharedPrefs.edit().putString("user_role_${p.email.trim().lowercase()}", p.role).apply()
+                        }
                         activeProfile.value = p
                         _isLoggedIn.value = true
                         val pPhone = p?.phone ?: ""
@@ -723,8 +735,8 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
             sharedPrefs.edit().putBoolean("is_logged_in_state", false).apply()
+            sharedPrefs.edit().putString("logged_in_email", "").apply()
 
-            database.profileDao().clearProfiles()
             activeProfile.value = null
             _isLoggedIn.value = false
             loginEmail.value = ""
@@ -790,9 +802,10 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
             
             val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
             val isUserLoggedIn = sharedPrefs.getBoolean("is_logged_in_state", false)
+            val loggedInEmail = sharedPrefs.getString("logged_in_email", "") ?: ""
             
-            if (isUserLoggedIn && profiles.isNotEmpty()) {
-                val p = profiles.first()
+            if (isUserLoggedIn && loggedInEmail.isNotBlank()) {
+                val p = profiles.find { it.email.trim().lowercase() == loggedInEmail.trim().lowercase() || it.phone.trim() == loggedInEmail.trim() } ?: profiles.first()
                 activeProfile.value = p
                 checkoutName.value = p.name
                 checkoutPhone.value = p.phone
@@ -802,11 +815,24 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                 val matchesCourier = database.courierDao().getAllCouriersSnapshot().any { c ->
                     c.phone.trim().replace("+", "").replace(" ", "") == cleanP || c.phone.trim() == p.phone.trim()
                 }
+                val matchesSeller = database.sellerDao().getAllSellersSnapshot().any { s ->
+                    s.email.trim().lowercase() == p.email.trim().lowercase()
+                }
+                val isPharmacistUser = p.role == "pharmacist" || sharedPrefs.getString("user_role_${p.email.trim().lowercase()}", "") == "pharmacist"
+                val isRestaurantUser = p.role == "restaurant" || sharedPrefs.getString("user_role_${p.email.trim().lowercase()}", "") == "restaurant"
 
                 if (p.email.trim().lowercase() == "mawiaosman0@gmail.com") {
                     _currentScreen.value = Screen.Admin
                 } else if (matchesCourier) {
                     _currentScreen.value = Screen.Courier
+                } else if (matchesSeller) {
+                    _currentScreen.value = Screen.Seller
+                } else if (isPharmacistUser) {
+                    _selectedCategory.value = "pharmacy"
+                    _currentScreen.value = Screen.Home
+                } else if (isRestaurantUser) {
+                    _selectedCategory.value = "restaurant"
+                    _currentScreen.value = Screen.Home
                 } else {
                     _currentScreen.value = Screen.Home
                 }
@@ -1112,12 +1138,13 @@ $couponMessage---------------------------
         viewModelScope.launch {
             try {
                 // 1. Register profile
-                val error = repository.registerUserProfile(name, phone, email, password)
+                val error = repository.registerUserProfile(name, phone, email, password, "admin")
                 
                 // 2. Set admin role in prefs
                 val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
                 sharedPrefs.edit().putString("user_role_${email.trim().lowercase()}", "admin").apply()
                 sharedPrefs.edit().putBoolean("is_logged_in_state", true).apply()
+                sharedPrefs.edit().putString("logged_in_email", email.trim().lowercase()).apply()
                 
                 // 3. Auto login
                 val loginResult = repository.loginUserProfile(email, password)
@@ -1126,10 +1153,11 @@ $couponMessage---------------------------
                     name = name,
                     phone = phone,
                     email = email,
-                    password = password
+                    password = password,
+                    role = "admin",
+                    createdAt = System.currentTimeMillis()
                 )
                 
-                database.profileDao().clearProfiles()
                 database.profileDao().insertProfile(p)
                 
                 activeProfile.value = p
@@ -1314,7 +1342,9 @@ $couponMessage---------------------------
             false
         } else {
             val emailClean = profile.email.trim().lowercase()
-            profile.role == "pharmacist" || pharmacies.any { p -> p.pharmacistEmail.trim().lowercase() == emailClean }
+            val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
+            val storedRole = sharedPrefs.getString("user_role_${emailClean}", "") ?: ""
+            profile.role == "pharmacist" || storedRole == "pharmacist" || pharmacies.any { p -> p.pharmacistEmail.trim().lowercase() == emailClean }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
@@ -1691,9 +1721,14 @@ $couponMessage---------------------------
     fun updateProfileImage(imageUri: String, onComplete: (String?) -> Unit) {
         viewModelScope.launch {
             try {
+                val active = activeProfile.value
                 val profiles = database.profileDao().getAllProfiles()
                 if (profiles.isNotEmpty()) {
-                    val current = profiles.first()
+                    val current = if (active != null) {
+                        profiles.find { it.id == active.id } ?: profiles.first()
+                    } else {
+                        profiles.first()
+                    }
                     val updated = current.copy(profileImageUri = imageUri)
                     database.profileDao().insertProfile(updated)
                     activeProfile.value = updated
@@ -1715,7 +1750,9 @@ $couponMessage---------------------------
             false
         } else {
             val emailClean = profile.email.trim().lowercase()
-            profile.role == "restaurant" || restaurants.any { r -> r.phone.trim() == profile.phone.trim() || r.name.trim().lowercase() == profile.name.trim().lowercase() }
+            val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
+            val storedRole = sharedPrefs.getString("user_role_${emailClean}", "") ?: ""
+            profile.role == "restaurant" || storedRole == "restaurant" || restaurants.any { r -> r.phone.trim() == profile.phone.trim() || r.name.trim().lowercase() == profile.name.trim().lowercase() }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
@@ -1761,16 +1798,28 @@ $couponMessage---------------------------
         val oneWeekAgo = System.currentTimeMillis() - (7 * 24 * 60 * 60 * 1000L)
         
         if (isCou) {
-            val weeklyCourierDeliveries = orders.filter { 
+            val courierOrdersCount = orders.filter {
                 val cPhone = it.courierPhone.trim().replace("+", "").replace(" ", "")
-                (cPhone == phoneClean || it.courierPhone.trim() == profile.phone.trim()) && 
+                (cPhone == phoneClean || it.courierPhone.trim() == profile.phone.trim()) &&
                 it.orderDate >= oneWeekAgo &&
                 (it.statusArabic.contains("تم") || it.statusArabic.contains("توصيل") || it.statusArabic.contains("تمام"))
-            }.distinctBy { it.orderId }.size
-            
+            }.distinctBy { it.orderId }.size +
+            restOrders.filter {
+                val cPhone = it.courierPhone?.trim()?.replace("+", "")?.replace(" ", "") ?: ""
+                (cPhone == phoneClean || it.courierPhone?.trim() == profile.phone.trim()) &&
+                it.createdAt >= oneWeekAgo &&
+                (it.status.contains("تم") || it.status.contains("توصيل") || it.status.contains("تمام"))
+            }.size +
+            pharOrders.filter {
+                val cPhone = it.courierPhone?.trim()?.replace("+", "")?.replace(" ", "") ?: ""
+                (cPhone == phoneClean || it.courierPhone?.trim() == profile.phone.trim()) &&
+                it.createdAt >= oneWeekAgo &&
+                (it.status.contains("تم") || it.status.contains("توصيل") || it.status.contains("تمام"))
+            }.size
+
             return@combine when {
-                weeklyCourierDeliveries >= 40 -> "مندوب ذهبي 👑"
-                weeklyCourierDeliveries >= 20 -> "مندوب مميز ⭐"
+                courierOrdersCount >= 15 -> "مندوب ذهبي 👑"
+                courierOrdersCount >= 6 -> "مندوب مميز ⭐"
                 else -> "مندوب عادي 🚴"
             }
         }
@@ -1779,19 +1828,20 @@ $couponMessage---------------------------
             val sellerProducts = products.filter { it.sellerEmail.trim().lowercase() == emailClean }.size
             return@combine when {
                 sellerProducts >= 10 -> "تاجر ذهبي 👑"
-                sellerProducts >= 5 -> "تاجر مميز ⭐"
+                sellerProducts >= 4 -> "تاجر مميز ⭐"
                 else -> "تاجر عادي 🛍️"
             }
         }
         
         if (isRest) {
-            val rOrders = restOrders.filter { 
-                it.restaurantPhone.trim() == profile.phone.trim() || 
-                it.restaurantName.trim().lowercase() == profile.name.trim().lowercase() 
+            val rOrders = restOrders.filter {
+                (it.restaurantPhone.trim() == profile.phone.trim() ||
+                it.restaurantName.trim().lowercase() == profile.name.trim().lowercase()) &&
+                it.status.contains("تم")
             }.size
             return@combine when {
-                rOrders >= 9 -> "مطعم ذهبي 👑"
-                rOrders >= 4 -> "مطعم مميز ⭐"
+                rOrders >= 12 -> "مطعم ذهبي 👑"
+                rOrders >= 5 -> "مطعم مميز ⭐"
                 else -> "مطعم عادي 🍔"
             }
         }
@@ -1799,24 +1849,30 @@ $couponMessage---------------------------
         if (isPhar) {
             val myPharmacy = pharmacies.find { it.pharmacistEmail.trim().lowercase() == emailClean }
             val pOrders = if (myPharmacy != null) {
-                pharOrders.filter { it.pharmacyId == myPharmacy.id && it.status != "بانتظار الصيدلي" }.size
+                pharOrders.filter { it.pharmacyId == myPharmacy.id && it.status.contains("تم") }.size
             } else 0
             
             return@combine when {
-                pOrders >= 9 -> "صيدلي ذهبي 👑"
+                pOrders >= 10 -> "صيدلي ذهبي 👑"
                 pOrders >= 4 -> "صيدلي مميز ⭐"
                 else -> "صيدلي عادي 💊"
             }
         }
         
-        // Customer classification based on weekly orders count
-        val weeklyOrdersCount = orders.filter { 
-            it.orderDate >= oneWeekAgo 
-        }.distinctBy { it.orderId }.size
-        
+        val customerOrdersCount = orders.filter {
+            it.customerPhone.trim() == profile.phone.trim() ||
+            it.customerName.trim().lowercase() == profile.name.trim().lowercase()
+        }.distinctBy { it.orderId }.size +
+        restOrders.filter {
+            it.customerPhone.trim() == profile.phone.trim()
+        }.size +
+        pharOrders.filter {
+            it.customerPhone.trim() == profile.phone.trim()
+        }.size
+
         return@combine when {
-            weeklyOrdersCount >= 40 -> "عميل ذهبي 👑"
-            weeklyOrdersCount >= 20 -> "عميل مميز ⭐"
+            customerOrdersCount >= 15 -> "عميل ذهبي 👑"
+            customerOrdersCount >= 5 -> "عميل مميز ⭐"
             else -> "عميل عادي 👤"
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "زائر 🌌")
