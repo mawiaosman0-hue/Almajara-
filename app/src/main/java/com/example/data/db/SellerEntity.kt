@@ -9,7 +9,7 @@ data class SellerEntity(
     val name: String,
     val email: String,
     val phone: String,
-    val classification: String = "تاجر ذهبي ⭐", // e.g. "ذهبي ⭐", "فضي 🥈", "برونزي 🥉"
+    val classification: String = "تاجر المجرة ⭐", // e.g. "ذهبي ⭐", "فضي 🥈", "برونزي 🥉"
     val commissionRate: Double = 0.10, // Default 10% commission for the platform
     val createdAt: Long = System.currentTimeMillis()
 )

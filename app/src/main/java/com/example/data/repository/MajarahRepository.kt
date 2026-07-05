@@ -416,12 +416,39 @@ class MajarahRepository(
     }
 
     // Update profile remotely on Supabase and locally in Room
-    suspend fun updateUserProfile(name: String, phone: String, email: String): String? {
+    suspend fun updateUserProfile(name: String, phone: String, email: String, activeEmail: String? = null): String? {
         return try {
             val profiles = profileDao.getAllProfiles()
             if (profiles.isNotEmpty()) {
-                val current = profiles.first()
-                val updated = current.copy(name = name, phone = phone, email = email)
+                val current = if (!activeEmail.isNullOrBlank()) {
+                    profiles.find { it.email.trim().lowercase() == activeEmail.trim().lowercase() }
+                } else {
+                    profiles.find { it.email.trim().lowercase() == email.trim().lowercase() }
+                } ?: profiles.first()
+
+                var resolvedId = current.id.replace("\"", "").replace("'", "").trim()
+                
+                // If it is a hardcoded/seed/placeholder ID, resolve it to real user UID from Supabase
+                if (resolvedId == "mawiaosman-admin-uuid" || resolvedId.contains("admin") || resolvedId.contains("placeholder") || resolvedId.contains("recovered_")) {
+                    try {
+                        val remoteList = com.example.data.network.SupabaseClient.api.getProfilesByEmail(emailFilter = "eq.${email.trim().lowercase()}")
+                        if (remoteList.isNotEmpty()) {
+                            val rId = remoteList.first().id?.replace("\"", "")?.replace("'", "")?.trim()
+                            if (!rId.isNullOrBlank()) {
+                                resolvedId = rId
+                            }
+                        }
+                    } catch (netEx: Exception) {
+                        Log.e("MajarahRepository", "Failed to resolve real ID from remote profiles: ${netEx.message}")
+                    }
+                }
+
+                // If ID changed/updated, remove old profile to prevent duplicates
+                if (resolvedId != current.id) {
+                    profileDao.deleteProfileById(current.id)
+                }
+
+                val updated = current.copy(id = resolvedId, name = name, phone = phone, email = email)
                 profileDao.insertProfile(updated)
 
                 // Sync with remote Supabase via PATCH request
@@ -430,7 +457,10 @@ class MajarahRepository(
                     phone = phone,
                     email = email
                 )
-                com.example.data.network.SupabaseClient.api.updateProfile("eq.${current.id}", supabaseProfile)
+                val cleanId = resolvedId.replace("\"", "").replace("'", "").trim()
+                if (cleanId.isNotEmpty() && cleanId != "mawiaosman-admin-uuid") {
+                    com.example.data.network.SupabaseClient.api.updateProfile("eq.$cleanId", supabaseProfile)
+                }
                 null
             } else {
                 "لا يوجد ملف شخصي مسجل حالياً لتحديثه"
@@ -780,7 +810,7 @@ class MajarahRepository(
             val remoteSellers = com.example.data.network.SupabaseClient.api.getSellers()
             if (remoteSellers.isEmpty()) {
                 val seedSellers = listOf(
-                    com.example.data.db.SellerEntity(name = "عماد الدين للتجارة", email = "emad@example.com", phone = "0912111111", classification = "تاجر ذهبي ⭐", commissionRate = 0.10),
+                    com.example.data.db.SellerEntity(name = "عماد الدين للتجارة", email = "emad@example.com", phone = "0912111111", classification = "تاجر المجرة ⭐", commissionRate = 0.10),
                     com.example.data.db.SellerEntity(name = "سوق أم درمان الرقمي", email = "sudan_seller@example.com", phone = "0922222222", classification = "متميز 🌟", commissionRate = 0.08)
                 )
                 if (sellerDao.getSellersCount() == 0) {
@@ -810,7 +840,7 @@ class MajarahRepository(
                         name = it.name ?: "بائع مجهول",
                         email = it.email ?: "",
                         phone = it.phone ?: "",
-                        classification = it.classification ?: "تاجر ذهبي ⭐",
+                        classification = it.classification ?: "تاجر المجرة ⭐",
                         commissionRate = it.commissionRate ?: 0.10,
                         createdAt = it.createdAt ?: System.currentTimeMillis()
                     )
@@ -822,7 +852,7 @@ class MajarahRepository(
             try {
                 if (sellerDao.getSellersCount() == 0) {
                     sellerDao.insertSellers(listOf(
-                        com.example.data.db.SellerEntity(name = "عماد الدين للتجارة", email = "emad@example.com", phone = "0912111111", classification = "تاجر ذهبي ⭐", commissionRate = 0.10),
+                        com.example.data.db.SellerEntity(name = "عماد الدين للتجارة", email = "emad@example.com", phone = "0912111111", classification = "تاجر المجرة ⭐", commissionRate = 0.10),
                         com.example.data.db.SellerEntity(name = "سوق أم درمان الرقمي", email = "sudan_seller@example.com", phone = "0922222222", classification = "متميز 🌟", commissionRate = 0.08)
                     ))
                 }
@@ -1433,12 +1463,39 @@ class MajarahRepository(
         }
     }
 
-    suspend fun updateUserPassword(password: String): String? {
+    suspend fun updateUserPassword(password: String, activeEmail: String? = null): String? {
         return try {
             val profiles = profileDao.getAllProfiles()
             if (profiles.isNotEmpty()) {
-                val current = profiles.first()
-                val updated = current.copy(password = password)
+                val current = if (!activeEmail.isNullOrBlank()) {
+                    profiles.find { it.email.trim().lowercase() == activeEmail.trim().lowercase() }
+                } else {
+                    profiles.first()
+                } ?: profiles.first()
+
+                var resolvedId = current.id.replace("\"", "").replace("'", "").trim()
+                
+                // If it is a hardcoded/seed/placeholder ID, resolve it to real user UID from Supabase
+                if (resolvedId == "mawiaosman-admin-uuid" || resolvedId.contains("admin") || resolvedId.contains("placeholder") || resolvedId.contains("recovered_")) {
+                    try {
+                        val remoteList = com.example.data.network.SupabaseClient.api.getProfilesByEmail(emailFilter = "eq.${current.email.trim().lowercase()}")
+                        if (remoteList.isNotEmpty()) {
+                            val rId = remoteList.first().id?.replace("\"", "")?.replace("'", "")?.trim()
+                            if (!rId.isNullOrBlank()) {
+                                resolvedId = rId
+                            }
+                        }
+                    } catch (netEx: Exception) {
+                        Log.e("MajarahRepository", "Failed to resolve real ID for password update: ${netEx.message}")
+                    }
+                }
+
+                // If ID changed/updated, remove old profile to prevent duplicates
+                if (resolvedId != current.id) {
+                    profileDao.deleteProfileById(current.id)
+                }
+
+                val updated = current.copy(id = resolvedId, password = password)
                 profileDao.insertProfile(updated)
                 null
             } else {

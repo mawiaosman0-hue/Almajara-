@@ -109,6 +109,105 @@ data class SupabaseAuthResponse(
 )
 
 @JsonClass(generateAdapter = true)
+data class SupabasePharmacy(
+    @Json(name = "id") val id: Int? = null,
+    @Json(name = "name") val name: String? = null,
+    @Json(name = "doctor_name") val doctorName: String? = null,
+    @Json(name = "phone") val phone: String? = null,
+    @Json(name = "location") val location: String? = null,
+    @Json(name = "pharmacist_email") val pharmacistEmail: String? = null,
+    @Json(name = "is_approved") val isApproved: Boolean? = null,
+    @Json(name = "image_base64") val imageBase64: String? = null,
+    @Json(name = "has_cosmetics") val hasCosmetics: Boolean? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class SupabasePharmacyProduct(
+    @Json(name = "id") val id: Int? = null,
+    @Json(name = "pharmacy_id") val pharmacyId: Int? = null,
+    @Json(name = "name") val name: String? = null,
+    @Json(name = "description") val description: String? = null,
+    @Json(name = "price") val price: Double? = null,
+    @Json(name = "category") val category: String? = null,
+    @Json(name = "is_available") val isAvailable: Boolean? = null,
+    @Json(name = "image_base64") val imageBase64: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class SupabasePharmacyOrder(
+    @Json(name = "id") val id: Int? = null,
+    @Json(name = "pharmacy_id") val pharmacyId: Int? = null,
+    @Json(name = "pharmacy_name") val pharmacyName: String? = null,
+    @Json(name = "customer_name") val customerName: String? = null,
+    @Json(name = "customer_phone") val customerPhone: String? = null,
+    @Json(name = "items_and_notes") val itemsAndNotes: String? = null,
+    @Json(name = "payment_method") val paymentMethod: String? = null,
+    @Json(name = "delivery_fee") val deliveryFee: Double? = null,
+    @Json(name = "status") val status: String? = null,
+    @Json(name = "courier_name") val courierName: String? = null,
+    @Json(name = "courier_phone") val courierPhone: String? = null,
+    @Json(name = "created_at") val createdAt: Long? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class SupabaseRestaurant(
+    @Json(name = "id") val id: Int? = null,
+    @Json(name = "name") val name: String? = null,
+    @Json(name = "phone") val phone: String? = null,
+    @Json(name = "is_approved") val isApproved: Boolean? = null,
+    @Json(name = "logo_image_uri") val logoImageUri: String? = null,
+    @Json(name = "menu_image_uri") val menuImageUri: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class SupabaseRestaurantOrder(
+    @Json(name = "id") val id: Int? = null,
+    @Json(name = "restaurant_name") val restaurantName: String? = null,
+    @Json(name = "restaurant_phone") val restaurantPhone: String? = null,
+    @Json(name = "customer_name") val customerName: String? = null,
+    @Json(name = "customer_phone") val customerPhone: String? = null,
+    @Json(name = "items_and_notes") val itemsAndNotes: String? = null,
+    @Json(name = "payment_method") val paymentMethod: String? = null,
+    @Json(name = "delivery_fee") val deliveryFee: Double? = null,
+    @Json(name = "status") val status: String? = null,
+    @Json(name = "courier_name") val courierName: String? = null,
+    @Json(name = "courier_phone") val courierPhone: String? = null,
+    @Json(name = "created_at") val createdAt: Long? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class SupabaseAppRating(
+    @Json(name = "id") val id: Int? = null,
+    @Json(name = "customer_name") val customerName: String? = null,
+    @Json(name = "customer_email") val customerEmail: String? = null,
+    @Json(name = "customer_phone") val customerPhone: String? = null,
+    @Json(name = "customer_classification") val customerClassification: String? = null,
+    @Json(name = "rating_stars") val ratingStars: Int? = null,
+    @Json(name = "comment") val comment: String? = null,
+    @Json(name = "rating_date") val ratingDate: Long? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class SupabaseAppCoupon(
+    @Json(name = "code") val code: String,
+    @Json(name = "discount_percent") val discountPercent: Double? = null,
+    @Json(name = "is_free_delivery") val isFreeDelivery: Boolean? = null,
+    @Json(name = "is_bogo") val isBogo: Boolean? = null,
+    @Json(name = "for_user_email") val forUserEmail: String? = null,
+    @Json(name = "is_used") val isUsed: Boolean? = null,
+    @Json(name = "offer_title") val offerTitle: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class SupabaseAdminManager(
+    @Json(name = "id") val id: Int? = null,
+    @Json(name = "name") val name: String? = null,
+    @Json(name = "email") val email: String? = null,
+    @Json(name = "phone") val phone: String? = null,
+    @Json(name = "created_at") val createdAt: Long? = null
+)
+
+@JsonClass(generateAdapter = true)
 data class SupabaseTokenResponse(
     @Json(name = "access_token") val accessToken: String? = null,
     @Json(name = "user") val user: SupabaseUser? = null
@@ -270,6 +369,81 @@ interface SupabaseApi {
         @Query("email") emailFilter: String,
         @Body seller: SupabaseSeller
     ): List<SupabaseSeller>
+
+    @GET("rest/v1/pharmacies")
+    suspend fun getPharmacies(@Query("select") select: String = "*"): List<SupabasePharmacy>
+
+    @POST("rest/v1/pharmacies")
+    suspend fun insertPharmacies(@Body pharmacies: List<SupabasePharmacy>): okhttp3.ResponseBody
+
+    @retrofit2.http.PATCH("rest/v1/pharmacies")
+    suspend fun updatePharmacy(@Query("id") idFilter: String, @Body pharmacy: SupabasePharmacy): List<SupabasePharmacy>
+
+    @retrofit2.http.DELETE("rest/v1/pharmacies")
+    suspend fun deletePharmacy(@Query("id") idFilter: String)
+
+    @GET("rest/v1/pharmacy_products")
+    suspend fun getPharmacyProducts(@Query("select") select: String = "*"): List<SupabasePharmacyProduct>
+
+    @POST("rest/v1/pharmacy_products")
+    suspend fun insertPharmacyProducts(@Body products: List<SupabasePharmacyProduct>): okhttp3.ResponseBody
+
+    @retrofit2.http.DELETE("rest/v1/pharmacy_products")
+    suspend fun deletePharmacyProduct(@Query("id") idFilter: String)
+
+    @GET("rest/v1/pharmacy_orders")
+    suspend fun getPharmacyOrders(@Query("select") select: String = "*"): List<SupabasePharmacyOrder>
+
+    @POST("rest/v1/pharmacy_orders")
+    suspend fun insertPharmacyOrders(@Body orders: List<SupabasePharmacyOrder>): okhttp3.ResponseBody
+
+    @retrofit2.http.PATCH("rest/v1/pharmacy_orders")
+    suspend fun updatePharmacyOrder(@Query("id") idFilter: String, @Body statusFields: Map<String, String>): List<SupabasePharmacyOrder>
+
+    @retrofit2.http.DELETE("rest/v1/pharmacy_orders")
+    suspend fun deletePharmacyOrder(@Query("id") idFilter: String)
+
+    @GET("rest/v1/restaurants")
+    suspend fun getRestaurants(@Query("select") select: String = "*"): List<SupabaseRestaurant>
+
+    @POST("rest/v1/restaurants")
+    suspend fun insertRestaurants(@Body restaurants: List<SupabaseRestaurant>): okhttp3.ResponseBody
+
+    @retrofit2.http.PATCH("rest/v1/restaurants")
+    suspend fun updateRestaurant(@Query("id") idFilter: String, @Body restaurant: SupabaseRestaurant): List<SupabaseRestaurant>
+
+    @retrofit2.http.DELETE("rest/v1/restaurants")
+    suspend fun deleteRestaurant(@Query("id") idFilter: String)
+
+    @GET("rest/v1/restaurant_orders")
+    suspend fun getRestaurantOrders(@Query("select") select: String = "*"): List<SupabaseRestaurantOrder>
+
+    @POST("rest/v1/restaurant_orders")
+    suspend fun insertRestaurantOrders(@Body orders: List<SupabaseRestaurantOrder>): okhttp3.ResponseBody
+
+    @retrofit2.http.PATCH("rest/v1/restaurant_orders")
+    suspend fun updateRestaurantOrder(@Query("id") idFilter: String, @Body statusFields: Map<String, String>): List<SupabaseRestaurantOrder>
+
+    @retrofit2.http.DELETE("rest/v1/restaurant_orders")
+    suspend fun deleteRestaurantOrder(@Query("id") idFilter: String)
+
+    @GET("rest/v1/app_ratings")
+    suspend fun getAppRatings(@Query("select") select: String = "*"): List<SupabaseAppRating>
+
+    @POST("rest/v1/app_ratings")
+    suspend fun insertAppRatings(@Body ratings: List<SupabaseAppRating>): okhttp3.ResponseBody
+
+    @GET("rest/v1/app_coupons")
+    suspend fun getAppCoupons(@Query("select") select: String = "*"): List<SupabaseAppCoupon>
+
+    @POST("rest/v1/app_coupons")
+    suspend fun insertAppCoupons(@Body coupons: List<SupabaseAppCoupon>): okhttp3.ResponseBody
+
+    @GET("rest/v1/admin_managers")
+    suspend fun getAdminManagers(@Query("select") select: String = "*"): List<SupabaseAdminManager>
+
+    @POST("rest/v1/admin_managers")
+    suspend fun insertAdminManagers(@Body managers: List<SupabaseAdminManager>): okhttp3.ResponseBody
 }
 
 object SupabaseClient {

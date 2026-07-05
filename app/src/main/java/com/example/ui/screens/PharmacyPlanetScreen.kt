@@ -138,7 +138,15 @@ fun PharmacyPlanetSection(
 
             if (myPharmacy == null) {
                 // Pharmacist has no pharmacy yet -> Ask them to add pharmacy
-                PharmacistAddPharmacyForm(viewModel = viewModel, userEmail = userEmail)
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.Top,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    PharmacistAddPharmacyForm(viewModel = viewModel, userEmail = userEmail)
+                }
             } else {
                 // Pharmacist has a pharmacy
                 if (!myPharmacy.isApproved) {
@@ -384,7 +392,7 @@ fun PharmacyPlanetSection(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         Button(
-                                            onClick = { cameraLauncher.launch() },
+                                            onClick = { cameraLauncher.launch(null) },
                                             modifier = Modifier.weight(1f),
                                             colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant),
                                             shape = RoundedCornerShape(8.dp)
@@ -440,12 +448,20 @@ fun PharmacyPlanetSection(
                     }
                 } else {
                     // Approved Pharmacy Panel -> Manage products & incoming prescription orders
-                    PharmacistDashboard(
-                        viewModel = viewModel,
-                        pharmacy = myPharmacy,
-                        allProducts = allProducts.filter { it.pharmacyId == myPharmacy.id },
-                        allOrders = allOrders.filter { it.pharmacyId == myPharmacy.id }
-                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.Top,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        PharmacistDashboard(
+                            viewModel = viewModel,
+                            pharmacy = myPharmacy,
+                            allProducts = allProducts.filter { it.pharmacyId == myPharmacy.id },
+                            allOrders = allOrders.filter { it.pharmacyId == myPharmacy.id }
+                        )
+                    }
                 }
             }
         } else {
@@ -1412,7 +1428,44 @@ fun CustomerPharmacyView(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(Icons.Default.ArrowBackIosNew, null, tint = CosmicSecondary, modifier = Modifier.size(16.dp))
-                                    Text(pharmacy.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        val pharmLogo = remember(pharmacy.imageBase64) {
+                                            if (pharmacy.imageBase64.isBlank()) null
+                                            else {
+                                                try {
+                                                    val clean = if (pharmacy.imageBase64.contains(",")) pharmacy.imageBase64.substringAfter(",") else pharmacy.imageBase64
+                                                    val decodedBytes = android.util.Base64.decode(clean, android.util.Base64.DEFAULT)
+                                                    android.graphics.BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
+                                                } catch (e: Exception) { null }
+                                            }
+                                        }
+                                        if (pharmLogo != null) {
+                                            Image(
+                                                bitmap = pharmLogo.asImageBitmap(),
+                                                contentDescription = "شعار الصيدلية",
+                                                modifier = Modifier
+                                                    .size(36.dp)
+                                                    .clip(CircleShape)
+                                                    .border(1.dp, CosmicSecondary, CircleShape),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                        } else {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(36.dp)
+                                                    .clip(CircleShape)
+                                                    .background(CosmicSurfaceVariant)
+                                                    .border(1.dp, CosmicSecondary.copy(0.4f), CircleShape),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(Icons.Default.LocalPharmacy, null, tint = CosmicSecondary, modifier = Modifier.size(20.dp))
+                                            }
+                                        }
+                                        Text(pharmacy.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    }
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text("الدكتور المسؤول: د. ${pharmacy.doctorName} 🧑‍⚕️", color = MediumContrastTextDark, fontSize = 10.sp)
@@ -1944,7 +1997,7 @@ fun AdminPharmacyPortal(
                     }
                 } else {
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp)) {
-                        items(pharmacies) { pharmacy ->
+                        itemsIndexed(pharmacies) { index, pharmacy ->
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = CardDefaults.cardColors(containerColor = CosmicSurface),
@@ -1970,7 +2023,11 @@ fun AdminPharmacyPortal(
                                                 fontWeight = FontWeight.Bold
                                             )
                                         }
-                                        Text(pharmacy.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text("صيدلية #${index + 1}", color = CosmicSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(pharmacy.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        }
                                     }
 
                                     Spacer(modifier = Modifier.height(4.dp))
@@ -2132,7 +2189,7 @@ fun AdminPharmacyPortal(
                     var selectedOrderForApprove by remember { mutableStateOf<PharmacyOrderEntity?>(null) }
 
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp)) {
-                        items(orders.sortedByDescending { it.createdAt }) { order ->
+                        itemsIndexed(orders.sortedByDescending { it.createdAt }) { index, order ->
                             val pharm = pharmacies.find { it.id == order.pharmacyId }
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
@@ -2169,7 +2226,11 @@ fun AdminPharmacyPortal(
                                                 fontWeight = FontWeight.Bold
                                             )
                                         }
-                                        Text("روشتة من العميل: ${order.customerName}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text("طلب #${orders.size - index}", color = CosmicSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("روشتة من العميل: ${order.customerName}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                        }
                                     }
 
                                     Spacer(modifier = Modifier.height(6.dp))

@@ -494,7 +494,8 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                                 )
                             }
                         }
-                        if (!isCourier) {
+                        val showCartIcon = !isCourier && !isSeller && !isPharmacist && !isRestaurant && (!isAdmin || isGeneralAdmin)
+                        if (showCartIcon) {
                             Box(modifier = Modifier.padding(end = 8.dp)) {
                                 IconButton(onClick = { viewModel.navigateTo(Screen.Cart) }) {
                                     Icon(
@@ -587,7 +588,8 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
             }
         },
         bottomBar = {
-            if (currentScreen !is Screen.Login && currentScreen !is Screen.Splash && !isCourier && !isSeller && !isPharmacist && !isRestaurant && !isAdmin) {
+            val showBottomBar = currentScreen !is Screen.Login && currentScreen !is Screen.Splash && (isGeneralAdmin || (!isCourier && !isSeller && !isPharmacist && !isRestaurant && !isAdmin))
+            if (showBottomBar) {
                 NavigationBar(
                     containerColor = CosmicDeepSpace,
                     tonalElevation = 8.dp,
@@ -5911,6 +5913,172 @@ fun ProfileScreenBody(
             }
             
             Spacer(modifier = Modifier.height(16.dp))
+
+            // Classification and Rewards Card (Visible ONLY to Customers and Couriers)
+            val currentClassification by viewModel.userClassification.collectAsStateWithLifecycle()
+            if (isCourier || (!isSeller && !isPharmacist && !isRestaurant && !isGeneralAdmin && !isAdmin)) {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF161F30)),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, CosmicSecondary.copy(alpha = 0.15f))
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        Text(
+                            text = "الميزات وتصنيفات الحسابات الكونية 🌌",
+                            color = CosmicSecondary,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.align(Alignment.End)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "تصنيفك الحالي: $currentClassification",
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.align(Alignment.End)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        if (isCourier) {
+                            // Courier specific tiers
+                            Text(
+                                text = "دليل تصنيفات المناديب والجوائز 🚴",
+                                color = CosmicSecondary,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.align(Alignment.End)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("أقل من 20 مهمة توصيل ناجحة بالأسبوع", color = Color.LightGray, fontSize = 11.sp, textAlign = TextAlign.Right)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("• مندوب المجرة:", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("أكثر من 20 مهمة بالأسبوع + عرض هدية مجاني 🎁", color = CosmicSecondary, fontSize = 11.sp, textAlign = TextAlign.Right)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("• مندوب مميز ⭐:", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("أكثر من 40 مهمة بالأسبوع + عروض ومكافآت وحوافز إضافية 👑", color = CosmicSecondary, fontSize = 11.sp, textAlign = TextAlign.Right)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("• مندوب ذهبي 👑:", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                            }
+                        } else {
+                            // Customer specific tiers
+                            Text(
+                                text = "دليل تصنيفات العملاء والمكافآت 👤",
+                                color = CosmicSecondary,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.align(Alignment.End)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("أقل من 20 طلباً بالأسبوع", color = Color.LightGray, fontSize = 11.sp, textAlign = TextAlign.Right)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("• عميل المجرة:", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("أكثر من 20 طلباً بالأسبوع + خصم 5% وكوبون توصيل مجاني 🎫", color = CosmicSecondary, fontSize = 11.sp, textAlign = TextAlign.Right)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("• عميل مميز ⭐:", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("أكثر من 40 طلباً بالأسبوع + خصم 15% وكوبون اطلب واحد والثاني هدية 🎁", color = CosmicSecondary, fontSize = 11.sp, textAlign = TextAlign.Right)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("• عميل ذهبي 👑:", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Customer Service Contact card
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF161F30)),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, CosmicSecondary.copy(alpha = 0.2f))
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text(
+                        text = "الدعم وخدمة العملاء الكونية 📞",
+                        color = CosmicSecondary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.align(Alignment.End)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "يسعدنا الرد على كافة استفساراتكم وحل مشكلاتكم على مدار الساعة. تواصلوا معنا مباشرة عبر الاتصال الهاتفي:",
+                        color = Color.LightGray,
+                        fontSize = 12.sp,
+                        textAlign = TextAlign.Right,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = {
+                            try {
+                                val intent = android.content.Intent(android.content.Intent.ACTION_DIAL).apply {
+                                    data = android.net.Uri.parse("tel:0912500344")
+                                }
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "لا يمكن إجراء المكالمة حالياً: ${e.message}", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    ) {
+                        Icon(Icons.Default.Call, null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("اتصل بخدمة العملاء: 0912500344", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
             
             // Logout action button
             OutlinedButton(
@@ -6000,9 +6168,16 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
             pendingRestaurantOrdersCount > lastPendingRestaurantOrdersCount
         ) {
             try {
-                val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+                val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_RINGTONE)
                 val r = android.media.RingtoneManager.getRingtone(context, alertUri)
                 r?.play()
+                
+                try {
+                    val tg = android.media.ToneGenerator(android.media.AudioManager.STREAM_ALARM, 100)
+                    tg.startTone(android.media.ToneGenerator.TONE_PROP_BEEP2, 1000)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             } catch (e: Exception) {
                 // Fallback
             }
@@ -6459,7 +6634,7 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                     Icon(Icons.Default.Stars, null, tint = CosmicSecondary, modifier = Modifier.size(28.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        "المدير العام لمجرة السودان 👑",
+                        if (isGeneralAdmin) "المدير العام لمجرة السودان 👑" else "المدير الإداري لمجرة السودان 👑",
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
                         fontSize = 18.sp
@@ -6474,7 +6649,7 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                     fontWeight = FontWeight.Medium
                 )
                 Text(
-                    "تتمتع بصلاحية مطلقة لإدارة المبيعات والمناديب والمنتجات.",
+                    if (isGeneralAdmin) "تتمتع بصلاحية مطلقة لإدارة المبيعات والمناديب والمنتجات." else "تتمتع بصلاحيات لإدارة وتوثيق طلبات العملاء والمناديب وتوثيقات التجار.",
                     fontSize = 11.sp,
                     color = MediumContrastTextDark,
                     textAlign = TextAlign.Center
@@ -6494,12 +6669,16 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                 add("الملخص📊" to 0)
                 add((if (pendingCourierOrdersCount > 0) "طلبات العملاء 📦 ($pendingCourierOrdersCount)" else "طلبات العملاء 📦") to 3)
                 add("المناديب🚴" to 4)
-                add("المخزون📦" to 7)
+                if (!isAdministrativeManager) {
+                    add("المخزون📦" to 7)
+                }
                 add("التجار🧑‍💼" to 6)
                 add((if (pendingProductsCount > 0) "منتجات قيد المراجعة⏳ ($pendingProductsCount)" else "منتجات قيد المراجعة⏳") to 8)
-                add("المنتجات🛍️" to 2)
-                add("إضافة ➕" to 1)
-                add("مفاتيح الربط🔑" to 5)
+                if (!isAdministrativeManager) {
+                    add("المنتجات🛍️" to 2)
+                    add("إضافة ➕" to 1)
+                    add("مفاتيح الربط🔑" to 5)
+                }
                 add((if (pendingPharmacyCount > 0) "طلبات الصيدليات 💊 ($pendingPharmacyCount)" else "طلبات الصيدليات 💊") to 9)
                 add((if (pendingRestaurantOrdersCount > 0) "طلبات المطاعم 🍔 ($pendingRestaurantOrdersCount)" else "طلبات المطاعم 🍔") to 11)
                 if (isGeneralAdmin) {
@@ -9145,7 +9324,7 @@ CREATE POLICY "Allow update app_coupons" ON public.app_coupons FOR UPDATE USING 
                     var newSellerName by remember { mutableStateOf("") }
                     var newSellerEmail by remember { mutableStateOf("") }
                     var newSellerPhone by remember { mutableStateOf("") }
-                    var newSellerClass by remember { mutableStateOf("تاجر ذهبي ⭐") }
+                    var newSellerClass by remember { mutableStateOf("تاجر المجرة ⭐") }
                     var newSellerCommission by remember { mutableStateOf("10") } // in %
                     var sellerSearchQuery by remember { mutableStateOf("") }
 
@@ -10222,7 +10401,7 @@ fun AdminRatingsSection(viewModel: MajarahViewModel) {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "تصنيف المقيم: ${item.customerClassification.ifBlank { "عميل عادي 👤" }}",
+                                text = "تصنيف المقيم: ${item.customerClassification.ifBlank { "عميل المجرة 👤" }}",
                                 color = CosmicSecondary,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -10548,7 +10727,7 @@ fun AdminSystemManagementSection(viewModel: MajarahViewModel) {
                         when {
                             courierDeliveriesThisWeek >= 40 -> "مندوب ذهبي 👑 ($courierDeliveriesThisWeek مهمة هذا الأسبوع)"
                             courierDeliveriesThisWeek >= 20 -> "مندوب مميز ⭐ ($courierDeliveriesThisWeek مهمة هذا الأسبوع)"
-                            else -> "مندوب عادي 🚴 ($courierDeliveriesThisWeek مهمة هذا الأسبوع)"
+                            else -> "مندوب المجرة 🚴 ($courierDeliveriesThisWeek مهمة هذا الأسبوع)"
                         }
                     }
                     isSel -> {
@@ -10559,7 +10738,7 @@ fun AdminSystemManagementSection(viewModel: MajarahViewModel) {
                             (it.statusArabic.contains("تم") || it.statusArabic.contains("توصيل") || it.statusArabic.contains("تمام"))
                         }.sumOf { it.quantity }
                         when {
-                            sellerSalesThisWeek >= 20 -> "تاجر ذهبي 👑 ($sellerSalesThisWeek مبيعات هذا الأسبوع)"
+                            sellerSalesThisWeek >= 20 -> "تاجر المجرة 👑 ($sellerSalesThisWeek مبيعات هذا الأسبوع)"
                             sellerSalesThisWeek >= 10 -> "تاجر مميز ⭐ ($sellerSalesThisWeek مبيعات هذا الأسبوع)"
                             else -> "تاجر عادي 🛍️ ($sellerSalesThisWeek مبيعات هذا الأسبوع)"
                         }
@@ -10601,7 +10780,7 @@ fun AdminSystemManagementSection(viewModel: MajarahViewModel) {
                         when {
                             clientOrdersThisWeek >= 40 -> "عميل ذهبي 👑 ($clientOrdersThisWeek طلب هذا الأسبوع)"
                             clientOrdersThisWeek >= 20 -> "عميل مميز ⭐ ($clientOrdersThisWeek طلب هذا الأسبوع)"
-                            else -> "عميل عادي 👤 ($clientOrdersThisWeek طلب هذا الأسبوع)"
+                            else -> "عميل المجرة 👤 ($clientOrdersThisWeek طلب هذا الأسبوع)"
                         }
                     }
                 }
@@ -11657,23 +11836,6 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
         orderKeys + restKeys + pharKeys
     }
 
-    LaunchedEffect(currentAssignedKeys) {
-        if (previousAssignedOrderIds.isNotEmpty()) {
-            val newlyAdded = currentAssignedKeys - previousAssignedOrderIds
-            if (newlyAdded.isNotEmpty()) {
-                try {
-                    val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
-                    val r = android.media.RingtoneManager.getRingtone(context, alertUri)
-                    r?.play()
-                    Toast.makeText(context, "🌌 تم إسناد مهمة جديدة لك! 🚴✨", Toast.LENGTH_LONG).show()
-                } catch (e: Exception) {
-                    // Fallback
-                }
-            }
-        }
-        previousAssignedOrderIds = currentAssignedKeys
-    }
-
     // Products counts
     val groupedOrders = myAssignedOrders.groupBy { it.orderId }
     val activeProductsCount = groupedOrders.count { (_, itemsList) ->
@@ -11711,6 +11873,32 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
     }
     val cancelledPharmacyCount = myAssignedPharmacyOrders.count {
         it.status.contains("ملغ")
+    }
+
+    LaunchedEffect(currentAssignedKeys) {
+        if (previousAssignedOrderIds.isNotEmpty()) {
+            val newlyAdded = currentAssignedKeys - previousAssignedOrderIds
+            if (newlyAdded.isNotEmpty()) {
+                try {
+                    val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+                    val r = android.media.RingtoneManager.getRingtone(context, alertUri)
+                    r?.play()
+                    
+                    try {
+                        val tg = android.media.ToneGenerator(android.media.AudioManager.STREAM_ALARM, 100)
+                        tg.startTone(android.media.ToneGenerator.TONE_PROP_BEEP2, 1000)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+
+                    val totalActive = activeProductsCount + activeRestaurantsCount + activePharmacyCount
+                    Toast.makeText(context, "🌌 تم إسناد مهمة جديدة لك! إجمالي المهام النشطة حالياً: $totalActive 🚴✨", Toast.LENGTH_LONG).show()
+                } catch (e: Exception) {
+                    // Fallback
+                }
+            }
+        }
+        previousAssignedOrderIds = currentAssignedKeys
     }
 
     // Selected Tab totals
