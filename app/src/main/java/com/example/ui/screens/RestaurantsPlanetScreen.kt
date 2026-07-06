@@ -46,10 +46,8 @@ import com.example.ui.viewmodel.MajarahViewModel
 import java.io.ByteArrayOutputStream
 import java.net.URLEncoder
 
-@Composable
-fun PharmacyPlanetSection(viewModel: MajarahViewModel) {
-    // Placeholder to make sure any imports of PharmacyPlanetSection compile properly if called here.
-}
+
+
 
 @Composable
 fun RestaurantsPlanetSection(

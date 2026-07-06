@@ -11,6 +11,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -140,7 +141,8 @@ fun PharmacyPlanetSection(
                 // Pharmacist has no pharmacy yet -> Ask them to add pharmacy
                 Column(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .weight(1f)
+                        .fillMaxWidth()
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.Top,
                     horizontalAlignment = Alignment.CenterHorizontally
@@ -198,7 +200,7 @@ fun PharmacyPlanetSection(
 
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(16.dp),
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
                         contentPadding = PaddingValues(bottom = 24.dp)
                     ) {
                         item {
@@ -450,7 +452,8 @@ fun PharmacyPlanetSection(
                     // Approved Pharmacy Panel -> Manage products & incoming prescription orders
                     Column(
                         modifier = Modifier
-                            .fillMaxSize()
+                            .weight(1f)
+                            .fillMaxWidth()
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.Top,
                         horizontalAlignment = Alignment.CenterHorizontally
@@ -466,11 +469,13 @@ fun PharmacyPlanetSection(
             }
         } else {
             // Customer View Panel -> Show approved pharmacies & prescription form
-            CustomerPharmacyView(
-                viewModel = viewModel,
-                approvedPharmacies = allPharmacies.filter { it.isApproved },
-                allProducts = allProducts.filter { it.isApproved }
-            )
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                CustomerPharmacyView(
+                    viewModel = viewModel,
+                    approvedPharmacies = allPharmacies.filter { it.isApproved },
+                    allProducts = allProducts.filter { it.isApproved }
+                )
+            }
         }
     }
 }

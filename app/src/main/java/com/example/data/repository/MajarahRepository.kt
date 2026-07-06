@@ -416,15 +416,18 @@ class MajarahRepository(
     }
 
     // Update profile remotely on Supabase and locally in Room
-    suspend fun updateUserProfile(name: String, phone: String, email: String, activeEmail: String? = null): String? {
+    suspend fun updateUserProfile(name: String, phone: String, email: String, activeId: String? = null, activeEmail: String? = null): String? {
         return try {
             val profiles = profileDao.getAllProfiles()
             if (profiles.isNotEmpty()) {
-                val current = if (!activeEmail.isNullOrBlank()) {
+                val foundProfile = if (!activeId.isNullOrBlank()) {
+                    profiles.find { it.id == activeId }
+                } else if (!activeEmail.isNullOrBlank()) {
                     profiles.find { it.email.trim().lowercase() == activeEmail.trim().lowercase() }
                 } else {
                     profiles.find { it.email.trim().lowercase() == email.trim().lowercase() }
-                } ?: profiles.first()
+                }
+                val current = foundProfile ?: profiles.first()
 
                 var resolvedId = current.id.replace("\"", "").replace("'", "").trim()
                 
@@ -1463,15 +1466,18 @@ class MajarahRepository(
         }
     }
 
-    suspend fun updateUserPassword(password: String, activeEmail: String? = null): String? {
+    suspend fun updateUserPassword(password: String, activeId: String? = null, activeEmail: String? = null): String? {
         return try {
             val profiles = profileDao.getAllProfiles()
             if (profiles.isNotEmpty()) {
-                val current = if (!activeEmail.isNullOrBlank()) {
+                val foundProfile = if (!activeId.isNullOrBlank()) {
+                    profiles.find { it.id == activeId }
+                } else if (!activeEmail.isNullOrBlank()) {
                     profiles.find { it.email.trim().lowercase() == activeEmail.trim().lowercase() }
                 } else {
                     profiles.first()
-                } ?: profiles.first()
+                }
+                val current = foundProfile ?: profiles.first()
 
                 var resolvedId = current.id.replace("\"", "").replace("'", "").trim()
                 

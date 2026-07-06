@@ -731,11 +731,16 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
     fun updateProfile(name: String, phone: String, email: String, onResult: (String?) -> Unit) {
         viewModelScope.launch {
             val oldEmail = activeProfile.value?.email ?: ""
-            val error = repository.updateUserProfile(name, phone, email, oldEmail)
+            val activeId = activeProfile.value?.id ?: ""
+            val error = repository.updateUserProfile(name, phone, email, activeId, oldEmail)
             if (error == null) {
                 val profiles = database.profileDao().getAllProfiles()
                 val found = if (profiles.isNotEmpty()) {
-                    profiles.find { it.email.trim().lowercase() == email.trim().lowercase() }
+                    if (activeId.isNotEmpty()) {
+                        profiles.find { it.id == activeId }
+                    } else {
+                        profiles.find { it.email.trim().lowercase() == email.trim().lowercase() }
+                    }
                 } else null
                 
                 if (found != null) {
@@ -769,12 +774,17 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
 
     fun updatePassword(password: String, onResult: (String?) -> Unit) {
         viewModelScope.launch {
-            val error = repository.updateUserPassword(password, activeProfile.value?.email)
+            val activeId = activeProfile.value?.id ?: ""
+            val error = repository.updateUserPassword(password, activeId, activeProfile.value?.email)
             if (error == null) {
                 val emailClean = activeProfile.value?.email?.trim()?.lowercase() ?: ""
                 val profiles = database.profileDao().getAllProfiles()
                 val found = if (profiles.isNotEmpty()) {
-                    profiles.find { it.email.trim().lowercase() == emailClean }
+                    if (activeId.isNotEmpty()) {
+                        profiles.find { it.id == activeId }
+                    } else {
+                        profiles.find { it.email.trim().lowercase() == emailClean }
+                    }
                 } else null
                 
                 if (found != null) {
