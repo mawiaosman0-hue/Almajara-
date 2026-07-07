@@ -85,7 +85,7 @@ fun PharmacyPlanetSection(
                 )
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = "💊 كوكب صيدلية المجرة الكونية",
+                        text = "💊 كوكب صيدلية المجرة للتسوق",
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp,
@@ -554,7 +554,7 @@ fun PharmacistAddPharmacyForm(
             horizontalAlignment = Alignment.End
         ) {
             Text(
-                text = "🆕 إنشاء وتوثيق صيدليتك بالمجرة الكونية",
+                text = "🆕 إنشاء وتوثيق صيدليتك بالمجرة للتسوق",
                 color = CosmicSecondary,
                 fontWeight = FontWeight.Bold,
                 fontSize = 14.sp,
@@ -777,10 +777,11 @@ fun PharmacistDashboard(
 
     LaunchedEffect(pendingCount) {
         if (pendingCount > previousPendingCount) {
-            // Trigger audial alarm notification natively using ToneGenerator!
+            // Trigger audial alarm notification natively using RingtoneManager!
             try {
-                val tg = ToneGenerator(AudioManager.STREAM_ALARM, 100)
-                tg.startTone(ToneGenerator.TONE_PROP_BEEP, 1200)
+                val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+                val r = android.media.RingtoneManager.getRingtone(context, alertUri)
+                r?.play()
                 Toast.makeText(context, "🔔 تنبيه عاجل: تم إرسال روشتة جديدة لصيدليتك بالمجرة!", Toast.LENGTH_LONG).show()
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -967,6 +968,9 @@ fun PharmacistOrdersTab(
 
                         Spacer(modifier = Modifier.height(4.dp))
                         Text("رقم الهاتف: ${order.customerPhone} 📞", color = MediumContrastTextDark, fontSize = 10.sp)
+                        if (order.deliveryLocation.isNotBlank()) {
+                            Text("📍 موقع التوصيل: ${order.deliveryLocation}", color = Color.White.copy(0.9f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        }
                         
                         if (order.medicinesJson.isNotBlank()) {
                             Spacer(modifier = Modifier.height(6.dp))
@@ -1409,7 +1413,7 @@ fun CustomerPharmacyView(
             } else {
                 Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        text = "🏥 الصيدليات الطبية المعتمدة في المجرة الكونية:",
+                        text = "🏥 الصيدليات الطبية المعتمدة في المجرة للتسوق:",
                         color = CosmicSecondary,
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp,
@@ -1432,11 +1436,34 @@ fun CustomerPharmacyView(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(Icons.Default.ArrowBackIosNew, null, tint = CosmicSecondary, modifier = Modifier.size(16.dp))
+                                    // Left Side: Doctor Name and Contact at the top
+                                    Column(horizontalAlignment = Alignment.Start) {
+                                        Text(
+                                            text = "الطبيب المسؤول المسؤول 🧑‍⚕️",
+                                            color = CosmicSecondary,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "د. ${pharmacy.doctorName}",
+                                            color = Color.White,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "📞 ${pharmacy.phone}",
+                                            color = CosmicSecondary,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+
+                                    // Right Side: Logo & Name
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
+                                        Text(pharmacy.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                                         val pharmLogo = remember(pharmacy.imageBase64) {
                                             if (pharmacy.imageBase64.isBlank()) null
                                             else {
@@ -1452,28 +1479,26 @@ fun CustomerPharmacyView(
                                                 bitmap = pharmLogo.asImageBitmap(),
                                                 contentDescription = "شعار الصيدلية",
                                                 modifier = Modifier
-                                                    .size(36.dp)
+                                                    .size(40.dp)
                                                     .clip(CircleShape)
-                                                    .border(1.dp, CosmicSecondary, CircleShape),
+                                                    .border(1.5.dp, CosmicSecondary, CircleShape),
                                                 contentScale = ContentScale.Crop
                                             )
                                         } else {
                                             Box(
                                                 modifier = Modifier
-                                                    .size(36.dp)
+                                                    .size(40.dp)
                                                     .clip(CircleShape)
                                                     .background(CosmicSurfaceVariant)
-                                                    .border(1.dp, CosmicSecondary.copy(0.4f), CircleShape),
+                                                    .border(1.5.dp, CosmicSecondary.copy(0.4f), CircleShape),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Icon(Icons.Default.LocalPharmacy, null, tint = CosmicSecondary, modifier = Modifier.size(20.dp))
                                             }
                                         }
-                                        Text(pharmacy.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                                     }
                                 }
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text("الدكتور المسؤول: د. ${pharmacy.doctorName} 🧑‍⚕️", color = MediumContrastTextDark, fontSize = 10.sp)
+                                Spacer(modifier = Modifier.height(6.dp))
                                 Text("الموقع والفرع: ${pharmacy.location} 📍", color = Color.White.copy(0.7f), fontSize = 10.sp)
                                 
                                 Spacer(modifier = Modifier.height(10.dp))
@@ -1818,6 +1843,7 @@ fun CustomerPharmacyView(
         val pharm = showPrescriptionFormForPharmacy!!
         var custName by remember { mutableStateOf(activeProfile?.name ?: "") }
         var custPhone by remember { mutableStateOf(activeProfile?.phone ?: "") }
+        var deliveryLoc by remember { mutableStateOf("") }
         var prescriptionImageBase64 by remember { mutableStateOf("") }
 
         val imagePicker = rememberLauncherForActivityResult(
@@ -1884,6 +1910,17 @@ fun CustomerPharmacyView(
                         colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
                     )
 
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedTextField(
+                        value = deliveryLoc,
+                        onValueChange = { deliveryLoc = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("موقع التوصيل المحدد بالتفصيل 📍", color = CosmicSecondary, fontSize = 11.sp) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                    )
+
                     Spacer(modifier = Modifier.height(14.dp))
 
                     OutlinedButton(
@@ -1904,15 +1941,16 @@ fun CustomerPharmacyView(
             confirmButton = {
                 Button(
                     onClick = {
-                        if (custName.isBlank() || custPhone.isBlank() || prescriptionImageBase64.isBlank()) {
-                            Toast.makeText(context, "الرجاء إدخال اسمك ورقم هاتفك وتصوير الروشتة الطبية ⚠️", Toast.LENGTH_SHORT).show()
+                        if (custName.isBlank() || custPhone.isBlank() || prescriptionImageBase64.isBlank() || deliveryLoc.isBlank()) {
+                            Toast.makeText(context, "الرجاء إدخال اسمك ورقم هاتفك وموقع التوصيل وتصوير الروشتة الطبية ⚠️", Toast.LENGTH_SHORT).show()
                         } else {
                             viewModel.addPharmacyOrder(
                                 pharmacyId = pharm.id,
                                 customerName = custName.trim(),
                                 customerPhone = custPhone.trim(),
                                 customerEmail = activeProfile?.email ?: "",
-                                prescriptionBase64 = prescriptionImageBase64
+                                prescriptionBase64 = prescriptionImageBase64,
+                                deliveryLocation = deliveryLoc.trim()
                             ) { err ->
                                 if (err == null) {
                                     Toast.makeText(context, "تم إرسال روشتتك بنجاح! سيتم إرجاع الفاتورة والتسعيرة إليك للتأكيد الفوري! 🌌💊", Toast.LENGTH_LONG).show()
@@ -2240,7 +2278,60 @@ fun AdminPharmacyPortal(
 
                                     Spacer(modifier = Modifier.height(6.dp))
                                     Text("هاتف العميل: ${order.customerPhone} 📞", color = MediumContrastTextDark, fontSize = 10.sp)
+                                    if (order.deliveryLocation.isNotBlank()) {
+                                        Text("موقع التوصيل المحدد: ${order.deliveryLocation} 📍", color = Color.White.copy(0.9f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                    }
                                     Text("الصيدلية المصدر: ${pharm?.name ?: "مجهولة"}", color = CosmicSecondary, fontSize = 10.sp)
+                                    
+                                    if (pharm != null) {
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.End,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            // Call button
+                                            Button(
+                                                onClick = {
+                                                    try {
+                                                        val dialIntent = android.content.Intent(android.content.Intent.ACTION_DIAL).apply {
+                                                            data = android.net.Uri.parse("tel:${pharm.phone.trim()}")
+                                                        }
+                                                        context.startActivity(dialIntent)
+                                                    } catch (e: Exception) {
+                                                        e.printStackTrace()
+                                                    }
+                                                },
+                                                colors = ButtonDefaults.buttonColors(containerColor = Color.Green.copy(0.2f), contentColor = Color.Green),
+                                                shape = RoundedCornerShape(8.dp),
+                                                modifier = Modifier.padding(end = 6.dp)
+                                            ) {
+                                                Icon(Icons.Default.Call, null, modifier = Modifier.size(12.dp))
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text("اتصال بالصيدلي 📞", fontSize = 10.sp)
+                                            }
+
+                                            // WhatsApp button
+                                            Button(
+                                                onClick = {
+                                                    try {
+                                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                                                            data = android.net.Uri.parse("https://api.whatsapp.com/send?phone=${pharm.phone.trim()}")
+                                                        }
+                                                        context.startActivity(intent)
+                                                    } catch (e: Exception) {
+                                                        e.printStackTrace()
+                                                    }
+                                                },
+                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366).copy(0.2f), contentColor = Color(0xFF25D366)),
+                                                shape = RoundedCornerShape(8.dp)
+                                            ) {
+                                                Icon(Icons.Default.Message, null, modifier = Modifier.size(12.dp))
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text("واتساب الصيدلي 💬", fontSize = 10.sp)
+                                            }
+                                        }
+                                    }
                                     
                                     if (order.medicinesJson.isNotBlank()) {
                                         Text("قائمة الأدوية والأسعار: ${order.medicinesJson}", color = Color.White.copy(0.8f), fontSize = 11.sp, textAlign = TextAlign.Right)
@@ -2308,6 +2399,9 @@ fun AdminPharmacyPortal(
                                 Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
                                     Text("أدوية العميل: ${ord.medicinesJson}", color = MediumContrastTextDark, fontSize = 11.sp, textAlign = TextAlign.Right)
                                     Text("قيمة الدواء: ${viewModel.formatPrice(ord.medicinePrice)}", color = CosmicSecondary, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                    if (ord.deliveryLocation.isNotBlank()) {
+                                        Text("📍 موقع التوصيل المطلوب: ${ord.deliveryLocation}", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Right)
+                                    }
                                     
                                     Spacer(modifier = Modifier.height(12.dp))
 

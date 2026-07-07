@@ -49,6 +49,11 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
         database.restaurantOrderDao()
     )
 
+    private val connectivityManager = application.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+
+    private val _isInternetAvailable = MutableStateFlow(true)
+    val isInternetAvailable: StateFlow<Boolean> = _isInternetAvailable.asStateFlow()
+
     // Current Navigation State
     private val _currentScreen = MutableStateFlow<Screen>(Screen.Splash)
     val currentScreen: StateFlow<Screen> = _currentScreen.asStateFlow()
@@ -798,6 +803,30 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
     }
 
     init {
+        // Initialize real-time network connectivity monitoring
+        try {
+            val activeNetwork = connectivityManager.activeNetwork
+            val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork)
+            _isInternetAvailable.value = capabilities?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+
+            val networkRequest = android.net.NetworkRequest.Builder()
+                .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .build()
+
+            connectivityManager.registerNetworkCallback(networkRequest, object : android.net.ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: android.net.Network) {
+                    _isInternetAvailable.value = true
+                }
+
+                override fun onLost(network: android.net.Network) {
+                    _isInternetAvailable.value = false
+                }
+            })
+        } catch (e: Exception) {
+            android.util.Log.e("MajarahViewModel", "Failed to register network callback: ${e.message}")
+            _isInternetAvailable.value = true
+        }
+
         // Initialize the app with Room products seed and local session loading
         viewModelScope.launch {
             repository.checkAndPrepopulateProducts()
@@ -882,6 +911,40 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                 }
             } else {
                 _currentScreen.value = Screen.Login
+            }
+
+            // Auto classification-to-role synchronization with Supabase
+            viewModelScope.launch {
+                userClassification.collect { classification ->
+                    if (classification.isNotEmpty() && classification != "زائر 🌌") {
+                        val profile = activeProfile.value
+                        if (profile != null) {
+                            val currentRoleInDb = profile.role
+                            if (currentRoleInDb != classification) {
+                                val updatedProf = profile.copy(role = classification)
+                                // Save locally
+                                database.profileDao().insertProfile(updatedProf)
+                                // Sync remote
+                                val cleanId = profile.id.replace("\"", "").replace("'", "").trim()
+                                if (cleanId.isNotEmpty() && cleanId != "mawiaosman-admin-uuid") {
+                                    try {
+                                        com.example.data.network.SupabaseClient.api.updateProfile(
+                                            "eq.$cleanId",
+                                            com.example.data.network.SupabaseProfile(
+                                                name = profile.name,
+                                                phone = profile.phone,
+                                                email = profile.email,
+                                                role = classification
+                                            )
+                                        )
+                                    } catch (e: Exception) {
+                                        android.util.Log.e("MajarahViewModel", "Failed to sync dynamic classification role: ${e.message}")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -1074,6 +1137,73 @@ $couponMessage---------------------------
     fun syncOrders(onComplete: (String?) -> Unit = {}) {
         viewModelScope.launch {
             val err = repository.syncRemoteOrdersToLocal()
+            
+            // Sync remote ratings to local Room
+            try {
+                val remoteRatings = com.example.data.network.SupabaseClient.api.getAppRatings()
+                if (remoteRatings.isNotEmpty()) {
+                    database.appRatingDao().clearRatings()
+                    remoteRatings.forEach { r ->
+                        database.appRatingDao().insertRating(
+                            com.example.data.db.AppRatingEntity(
+                                id = r.id ?: 0,
+                                customerName = r.customerName ?: "عميل المجرة للتسوق",
+                                customerEmail = r.customerEmail ?: "guest@majarah.com",
+                                customerPhone = r.customerPhone ?: "",
+                                customerClassification = r.customerClassification ?: "",
+                                ratingStars = r.ratingStars ?: 5,
+                                comment = r.comment ?: "",
+                                ratingDate = r.ratingDate ?: System.currentTimeMillis()
+                            )
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MajarahViewModel", "Failed to sync remote ratings: ${e.message}")
+            }
+
+            // Sync remote coupons to local Room
+            try {
+                val remoteCoupons = com.example.data.network.SupabaseClient.api.getAppCoupons()
+                if (remoteCoupons.isNotEmpty()) {
+                    database.appCouponDao().clearCoupons()
+                    remoteCoupons.forEach { c ->
+                        database.appCouponDao().insertCoupon(
+                            com.example.data.db.AppCouponEntity(
+                                code = c.code,
+                                discountPercent = c.discountPercent ?: 0.0,
+                                isFreeDelivery = c.isFreeDelivery ?: false,
+                                isBogo = c.isBogo ?: false,
+                                forUserEmail = c.forUserEmail ?: "",
+                                isUsed = c.isUsed ?: false,
+                                offerTitle = c.offerTitle ?: ""
+                            )
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MajarahViewModel", "Failed to sync remote coupons: ${e.message}")
+            }
+
+            // Sync remote admin managers to local Room
+            try {
+                val remoteManagers = com.example.data.network.SupabaseClient.api.getAdminManagers()
+                if (remoteManagers.isNotEmpty()) {
+                    database.adminManagerDao().clearAdminManagers()
+                    remoteManagers.forEach { m ->
+                        database.adminManagerDao().insertAdminManager(
+                            com.example.data.db.AdminManagerEntity(
+                                email = m.email ?: "",
+                                name = m.name ?: "مدير إداري",
+                                phone = m.phone ?: ""
+                            )
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MajarahViewModel", "Failed to sync remote admin managers: ${e.message}")
+            }
+
             onComplete(err)
         }
     }
@@ -1159,6 +1289,19 @@ $couponMessage---------------------------
                         phone = phone
                     )
                 )
+                try {
+                    com.example.data.network.SupabaseClient.api.insertAdminManagers(
+                        listOf(
+                            com.example.data.network.SupabaseAdminManager(
+                                email = email,
+                                name = name,
+                                phone = phone
+                            )
+                        )
+                    )
+                } catch (e: Exception) {
+                    android.util.Log.e("MajarahViewModel", "Failed to sync added admin manager: ${e.message}")
+                }
                 onComplete(null)
             } catch (e: Exception) {
                 onComplete(e.localizedMessage ?: "حدث خطأ غير معروف")
@@ -1169,7 +1312,15 @@ $couponMessage---------------------------
     fun removeAdminManager(id: Int, onComplete: (String?) -> Unit) {
         viewModelScope.launch {
             try {
+                val manager = database.adminManagerDao().getAllAdminManagersSnapshot().find { it.id == id }
                 repository.adminManagerDao.deleteAdminManager(id)
+                if (manager != null) {
+                    try {
+                        com.example.data.network.SupabaseClient.api.deleteAdminManager("eq.${manager.email}")
+                    } catch (e: Exception) {
+                        android.util.Log.e("MajarahViewModel", "Failed to sync removed admin manager: ${e.message}")
+                    }
+                }
                 onComplete(null)
             } catch (e: Exception) {
                 onComplete(e.localizedMessage ?: "حدث خطأ غير معروف")
@@ -1525,7 +1676,7 @@ $couponMessage---------------------------
         return repository.getProductsByPharmacy(pharmacyId)
     }
 
-    fun addPharmacyOrder(pharmacyId: Int, customerName: String, customerPhone: String, customerEmail: String, prescriptionBase64: String, onComplete: (String?) -> Unit) {
+    fun addPharmacyOrder(pharmacyId: Int, customerName: String, customerPhone: String, customerEmail: String, prescriptionBase64: String, deliveryLocation: String = "", onComplete: (String?) -> Unit) {
         isGlobalLoading.value = true
         viewModelScope.launch {
             var error: String? = null
@@ -1536,7 +1687,8 @@ $couponMessage---------------------------
                     customerPhone = customerPhone,
                     customerEmail = customerEmail,
                     prescriptionImageBase64 = prescriptionBase64,
-                    status = "بانتظار الصيدلي"
+                    status = "بانتظار الصيدلي",
+                    deliveryLocation = deliveryLocation
                 )
                 repository.insertPharmacyOrder(ord)
             } catch (e: Exception) {
@@ -1895,7 +2047,7 @@ $couponMessage---------------------------
             return@combine when {
                 pOrders >= 10 -> "صيدلي ذهبي 👑"
                 pOrders >= 4 -> "صيدلي مميز ⭐"
-                else -> "صيدلي عادي 💊"
+                else -> "صيدلي المجرة 💊"
             }
         }
         
@@ -1927,7 +2079,7 @@ $couponMessage---------------------------
         viewModelScope.launch {
             val profile = activeProfile.value
             val rating = com.example.data.db.AppRatingEntity(
-                customerName = profile?.name ?: "عميل المجرة الكونية",
+                customerName = profile?.name ?: "عميل المجرة للتسوق",
                 customerEmail = profile?.email ?: "guest@majarah.com",
                 customerPhone = profile?.phone ?: "",
                 customerClassification = userClassification.value,
@@ -1936,6 +2088,23 @@ $couponMessage---------------------------
                 ratingDate = System.currentTimeMillis()
             )
             database.appRatingDao().insertRating(rating)
+            try {
+                com.example.data.network.SupabaseClient.api.insertAppRatings(
+                    listOf(
+                        com.example.data.network.SupabaseAppRating(
+                            customerName = rating.customerName,
+                            customerEmail = rating.customerEmail,
+                            customerPhone = rating.customerPhone,
+                            customerClassification = rating.customerClassification,
+                            ratingStars = rating.ratingStars,
+                            comment = rating.comment,
+                            ratingDate = rating.ratingDate
+                        )
+                    )
+                )
+            } catch (e: Exception) {
+                android.util.Log.e("MajarahViewModel", "Failed to sync rating to Supabase: ${e.message}")
+            }
             
             // Generate customized promo coupon based on rating stars
             val randSuffix = (1000..9999).random()
@@ -1950,6 +2119,23 @@ $couponMessage---------------------------
                 offerTitle = if (stars >= 5) "توصيل مجاني لتقييمك المتميز 🚚🌌" else "عرض اطلب واحد والثاني هدية لتقييمك الغالي 🎁🍔"
             )
             database.appCouponDao().insertCoupon(coupon)
+            try {
+                com.example.data.network.SupabaseClient.api.insertAppCoupons(
+                    listOf(
+                        com.example.data.network.SupabaseAppCoupon(
+                            code = coupon.code,
+                            discountPercent = coupon.discountPercent,
+                            isFreeDelivery = coupon.isFreeDelivery,
+                            isBogo = coupon.isBogo,
+                            forUserEmail = coupon.forUserEmail,
+                            isUsed = coupon.isUsed,
+                            offerTitle = coupon.offerTitle
+                        )
+                    )
+                )
+            } catch (e: Exception) {
+                android.util.Log.e("MajarahViewModel", "Failed to sync coupon to Supabase: ${e.message}")
+            }
             
             android.widget.Toast.makeText(
                 getApplication(), 

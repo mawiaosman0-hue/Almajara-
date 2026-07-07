@@ -31,5 +31,6 @@ data class RestaurantOrderEntity(
     val bankReceiptImageUri: String? = null,
     val courierName: String = "",
     val courierPhone: String = "",
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val deliveryLocation: String = ""
 )

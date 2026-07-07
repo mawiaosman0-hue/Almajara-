@@ -30,4 +30,6 @@ interface AdminManagerDao {
 
     @Query("DELETE FROM admin_managers WHERE id = :id")
     suspend fun deleteAdminManager(id: Int)
+    @Query("DELETE FROM admin_managers")
+    suspend fun clearAdminManagers()
 }

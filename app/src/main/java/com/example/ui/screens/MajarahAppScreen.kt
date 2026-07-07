@@ -254,6 +254,7 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
     val isPharmacist by viewModel.isPharmacist.collectAsStateWithLifecycle()
     val isRestaurant by viewModel.isRestaurant.collectAsStateWithLifecycle()
     val isEnglish by viewModel.isEnglish.collectAsStateWithLifecycle()
+    val isInternetAvailable by viewModel.isInternetAvailable.collectAsStateWithLifecycle()
 
     val phoneState by viewModel.checkoutPhone.collectAsStateWithLifecycle()
     val addressState by viewModel.checkoutAddress.collectAsStateWithLifecycle()
@@ -422,7 +423,7 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "المجرة الكونية للتسوق 🌌",
+                                text = "المجرة للتسوق 🌌",
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White,
                                 fontSize = 16.sp
@@ -2159,6 +2160,85 @@ CREATE POLICY "Allow update app_coupons" ON public.app_coupons FOR UPDATE USING 
                 }
             }
 
+        }
+
+        if (!isInternetAvailable) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFF0A0F1D))
+                    .clickable(enabled = true, onClick = {}), // Block all click touch events
+                contentAlignment = Alignment.Center
+            ) {
+                // Draw background stars
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val rand = java.util.Random(42)
+                    for (i in 0..100) {
+                        val x = rand.nextFloat() * size.width
+                        val y = rand.nextFloat() * size.height
+                        val radius = rand.nextFloat() * 2f + 1f
+                        val alpha = rand.nextFloat() * 0.5f + 0.5f
+                        drawCircle(
+                            color = Color.White.copy(alpha = alpha),
+                            radius = radius,
+                            center = androidx.compose.ui.geometry.Offset(x, y)
+                        )
+                    }
+                }
+                
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth(0.9f)
+                        .padding(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                    shape = RoundedCornerShape(24.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.5.dp, CosmicSecondary.copy(alpha = 0.5f))
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .padding(24.dp)
+                            .fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.WifiOff,
+                            contentDescription = "No Internet Connection",
+                            tint = CosmicSecondary,
+                            modifier = Modifier.size(72.dp)
+                        )
+                        
+                        Text(
+                            text = "انقطع الاتصال بالشبكة الكونية! 📡🌌",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            textAlign = TextAlign.Center
+                        )
+                        
+                        Text(
+                            text = "بوابة المجرة للتسوق السودانية تتطلب اتصالاً نشطاً ومستقراً بالإنترنت لمزامنة ومراجعة كافة الطلبات والمنتجات والتقييمات مع السيرفر السحابي الآمن لمنع تضارب المعاملات.\n\nيرجى التحقق من اتصال الواي فاي أو بيانات الهاتف للتمكن من الدخول واستكمال جولتك بالمجرة 🚀✨",
+                            color = MediumContrastTextDark,
+                            fontSize = 13.sp,
+                            lineHeight = 20.sp,
+                            textAlign = TextAlign.Center
+                        )
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        Button(
+                            onClick = {
+                                viewModel.refreshConnection()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth().height(48.dp)
+                        ) {
+                            Text("تحديث محاولة الاتصال 🌌🔄", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -3991,7 +4071,9 @@ fun HistoryScreenBody(
                             Button(
                                 onClick = {
                                     val textBuilder = StringBuilder()
-                                    textBuilder.append("🌌 طلب جديد من تطبيق المجرة الكونية للتسوق\n")
+                                    val classification = if (viewModel.isCourier.value) "فاتورة مندوب منتجات المجرة" else "فاتورة عميل منتجات المجرة"
+                                    textBuilder.append("📋 تصنيف الفاتورة: $classification\n")
+                                    textBuilder.append("🌌 تطبيق المجرة للتسوق\n")
                                     textBuilder.append("-----------------------------\n")
                                     textBuilder.append("🆔 رقم الطلب: $orderId\n")
                                     textBuilder.append("📅 التاريخ: $dateStr\n")
@@ -4016,7 +4098,7 @@ fun HistoryScreenBody(
                                         textBuilder.append("🚴 المندوب المعين للتوصيل: $courierName ($courierPhone)\n")
                                     }
                                     textBuilder.append("-----------------------------\n")
-                                    textBuilder.append("المجرة الكونية - تسوق من أي مكان بكل سهولة 🚀")
+                                    textBuilder.append("المجرة للتسوق - تسوق من أي مكان بكل سهولة 🚀")
                                     
                                     val invoiceText = textBuilder.toString()
                                     clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(invoiceText))
@@ -4302,6 +4384,7 @@ fun LoginScreenBody(
     val isGlobalLoading by viewModel.isGlobalLoading.collectAsStateWithLifecycle()
     val isCurrentlyLoading = isCheckingEmail || isLoginLoading || isGlobalLoading
     val adminManagers by viewModel.allAdminManagers.collectAsStateWithLifecycle()
+    val allProfiles by viewModel.allProfilesFlow.collectAsStateWithLifecycle()
 
     val logoScale = remember { Animatable(0.2f) }
     val logoAlpha = remember { Animatable(0f) }
@@ -4309,6 +4392,7 @@ fun LoginScreenBody(
     val langEnglish = viewModel.isEnglish.collectAsStateWithLifecycle().value
 
     LaunchedEffect(Unit) {
+        viewModel.refreshAllProfiles()
         logoScale.animateTo(
             targetValue = 1f,
             animationSpec = spring(
@@ -4332,12 +4416,13 @@ fun LoginScreenBody(
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val r = java.util.Random(1337)
-            for (i in 0..30) {
+            for (i in 0..150) {
                 val x = r.nextFloat() * size.width
                 val y = r.nextFloat() * size.height
-                val radius = r.nextFloat() * 4f + 1f
+                val radius = r.nextFloat() * 3.5f + 0.8f
+                val starColor = if (r.nextBoolean()) CosmicSecondary else Color.White
                 drawCircle(
-                    color = CosmicSecondary.copy(alpha = r.nextFloat() * 0.5f + 0.1f),
+                    color = starColor.copy(alpha = r.nextFloat() * 0.7f + 0.3f),
                     radius = radius,
                     center = androidx.compose.ui.geometry.Offset(x, y)
                 )
@@ -4355,8 +4440,8 @@ fun LoginScreenBody(
                     .fillMaxWidth()
                     .widthIn(max = 450.dp),
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = CosmicSurface.copy(alpha = 0.9f)),
-                border = androidx.compose.foundation.BorderStroke(1.dp, CosmicSurfaceVariant)
+                colors = CardDefaults.cardColors(containerColor = CosmicSurface.copy(alpha = 0.35f)),
+                border = androidx.compose.foundation.BorderStroke(1.5.dp, CosmicSecondary.copy(alpha = 0.3f))
             ) {
                 LazyColumn(
                     modifier = Modifier
@@ -4456,9 +4541,9 @@ fun LoginScreenBody(
                             
                             Spacer(modifier = Modifier.height(12.dp))
                             
-                            // App Logo Text Slogan - exact text "المجرة الكونية للتسوق"
+                            // App Logo Text Slogan - exact text "المجرة للتسوق"
                             Text(
-                                text = viewModel.t("المجرة الكونية للتسوق 🌌", "Almajra 🌌"),
+                                text = viewModel.t("المجرة للتسوق 🌌", "Almajra 🌌"),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 22.sp,
                                 color = Color.White,
@@ -4706,7 +4791,11 @@ fun LoginScreenBody(
                         null
                     }
 
-                    if (matchingAdminManager != null) {
+                    val hasAlreadySetPassword = matchingAdminManager != null && allProfiles.any { profile ->
+                        profile.email.trim().lowercase() == matchingAdminManager.email.trim().lowercase() && !profile.password.isNullOrBlank()
+                    }
+
+                    if (matchingAdminManager != null && !hasAlreadySetPassword) {
                         item {
                             Card(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -5588,7 +5677,7 @@ fun ProfileScreenBody(
                 isAdmin -> "مدير إداري 🏛️"
                 isCourier -> "مندوب توصيل 🚴"
                 isSeller -> "تاجر المجرة 🛒"
-                isPharmacist -> "صيدلي معتمد 💊"
+                isPharmacist -> "صيدلي المجرة 💊"
                 isRestaurant -> "صاحب مطعم 🍔"
                 else -> "عميل المجرة 🌌"
             }
@@ -6167,19 +6256,22 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
             pendingPharmacyCount > lastPendingPharmacyCount ||
             pendingRestaurantOrdersCount > lastPendingRestaurantOrdersCount
         ) {
-            try {
-                val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_RINGTONE)
-                val r = android.media.RingtoneManager.getRingtone(context, alertUri)
-                r?.play()
-                
+            // Disabled sound notifications specifically for General Manager and Administrative Manager as requested
+            if (!isGeneralAdmin && !isAdministrativeManager) {
                 try {
-                    val tg = android.media.ToneGenerator(android.media.AudioManager.STREAM_ALARM, 100)
-                    tg.startTone(android.media.ToneGenerator.TONE_PROP_BEEP2, 1000)
+                    val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_RINGTONE)
+                    val r = android.media.RingtoneManager.getRingtone(context, alertUri)
+                    r?.play()
+                    
+                    try {
+                        val tg = android.media.ToneGenerator(android.media.AudioManager.STREAM_ALARM, 100)
+                        tg.startTone(android.media.ToneGenerator.TONE_PROP_BEEP2, 1000)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    // Fallback
                 }
-            } catch (e: Exception) {
-                // Fallback
             }
         }
         lastPendingCourierOrdersCount = pendingCourierOrdersCount
@@ -8133,7 +8225,7 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                                                     OutlinedButton(
                                                                         onClick = {
                                                                             val phoneClean = parentOrder?.customerPhone?.trim()?.replace("+", "")?.replace(" ", "") ?: ""
-                                                                            val msg = "مرحباً يا ${parentOrder?.customerName ?: "زبوننا الكريم"}، معك مندوب المجرة الكونية للتسوق. نود تتبع واستلام طلبك رقم #${orderId.take(8)}."
+                                                                            val msg = "مرحباً يا ${parentOrder?.customerName ?: "زبوننا الكريم"}، معك مندوب المجرة للتسوق للتسوق. نود تتبع واستلام طلبك رقم #${orderId.take(8)}."
                                                                             try {
                                                                                 val url = "https://wa.me/249$phoneClean?text=" + java.net.URLEncoder.encode(msg, "UTF-8")
                                                                                 val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
@@ -9667,7 +9759,7 @@ CREATE POLICY "Allow update app_coupons" ON public.app_coupons FOR UPDATE USING 
                                             Button(
                                                 onClick = {
                                                     val invoiceText = StringBuilder()
-                                                    invoiceText.append("🌌 *مبيعات التاجر في المجرة الكونية* 🌌\n\n")
+                                                    invoiceText.append("🌌 *مبيعات التاجر في المجرة للتسوق* 🌌\n\n")
                                                     invoiceText.append("👤 *التاجر:* ${seller.name}\n")
                                                     invoiceText.append("⭐ *التصنيف:* ${seller.classification}\n\n")
                                                     invoiceText.append("📋 *تفاصيل الطلبيات الخاضعة للفوترة الصافية:*\n")
@@ -9999,7 +10091,7 @@ fun AdminManagersSection(viewModel: MajarahViewModel) {
                     OutlinedTextField(
                         value = managerPhone,
                         onValueChange = { managerPhone = it },
-                        label = { Text("رقم الهاتف (مثل: 0910074223)", color = CosmicSecondary) },
+                        label = { Text("رقم الهاتف", color = CosmicSecondary) },
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = CosmicSecondary,
@@ -10467,6 +10559,7 @@ fun AdminSystemManagementSection(viewModel: MajarahViewModel) {
     val sellers by viewModel.allSellers.collectAsStateWithLifecycle()
     val pharmacies by viewModel.allPharmacies.collectAsStateWithLifecycle()
     val restaurants by viewModel.allRestaurants.collectAsStateWithLifecycle()
+    val allAdminManagers by viewModel.allAdminManagers.collectAsStateWithLifecycle()
 
     var userName by remember { mutableStateOf("") }
     var userEmail by remember { mutableStateOf("") }
@@ -10712,6 +10805,8 @@ fun AdminSystemManagementSection(viewModel: MajarahViewModel) {
                 // Dynamic classification based on weekly stats (last 7 days)
                 val oneWeekAgo = System.currentTimeMillis() - 7 * 24 * 60 * 60 * 1000L
                 val classification = when {
+                    emailClean == "mawiaosman0@gmail.com" -> "مدير عام للمجرة 👑"
+                    allAdminManagers.any { it.email.trim().lowercase() == emailClean } -> "مدير إداري 🧑‍💼"
                     isCou -> {
                         val courierDeliveriesThisWeek = allOrders.filter { 
                             val cPhone = it.courierPhone.trim().replace("+", "").replace(" ", "")
@@ -10767,7 +10862,7 @@ fun AdminSystemManagementSection(viewModel: MajarahViewModel) {
                         when {
                             pharmacyOrdersThisWeek >= 20 -> "صيدلي ذهبي 👑 ($pharmacyOrdersThisWeek روشتة هذا الأسبوع)"
                             pharmacyOrdersThisWeek >= 10 -> "صيدلي مميز ⭐ ($pharmacyOrdersThisWeek روشتة هذا الأسبوع)"
-                            else -> "صيدلي عادي 💊 ($pharmacyOrdersThisWeek روشتة هذا الأسبوع)"
+                            else -> "صيدلي المجرة 💊 ($pharmacyOrdersThisWeek روشتة هذا الأسبوع)"
                         }
                     }
                     else -> {
@@ -11685,7 +11780,7 @@ fun SellerDashboardScreenBody(viewModel: MajarahViewModel) {
                                         colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Text("إدراج هذا المنتج في المجرة الكونية 🚀", fontWeight = FontWeight.Bold)
+                                        Text("إدراج هذا المنتج في المجرة للتسوق 🚀", fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
@@ -13192,7 +13287,7 @@ fun SplashScreenBody() {
 
             // Brand Typography
             Text(
-                text = "المجرة الكونية للتسوق 🌌",
+                text = "المجرة للتسوق 🌌",
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
                 fontSize = 26.sp,

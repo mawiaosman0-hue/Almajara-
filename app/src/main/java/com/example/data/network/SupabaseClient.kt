@@ -444,6 +444,9 @@ interface SupabaseApi {
 
     @POST("rest/v1/admin_managers")
     suspend fun insertAdminManagers(@Body managers: List<SupabaseAdminManager>): okhttp3.ResponseBody
+
+    @retrofit2.http.DELETE("rest/v1/admin_managers")
+    suspend fun deleteAdminManager(@Query("email") emailFilter: String)
 }
 
 object SupabaseClient {

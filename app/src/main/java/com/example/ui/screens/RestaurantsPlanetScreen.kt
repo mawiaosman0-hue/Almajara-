@@ -88,8 +88,9 @@ fun RestaurantsPlanetSection(
     LaunchedEffect(myRestaurantOrders) {
         if (lastSeenOrderCount != -1 && myRestaurantOrders.size > lastSeenOrderCount) {
             try {
-                val toneGenerator = android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 100)
-                toneGenerator.startTone(android.media.ToneGenerator.TONE_PROP_BEEP2, 250)
+                val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+                val r = android.media.RingtoneManager.getRingtone(context, alertUri)
+                r?.play()
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -1038,20 +1039,95 @@ fun RestaurantCard(
     isGeneralAdmin: Boolean,
     onDeleteClick: () -> Unit
 ) {
+    var showFullMenuDialog by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onOrderClick() },
+            .padding(vertical = 4.dp),
         colors = CardDefaults.cardColors(containerColor = CosmicSurface),
         shape = RoundedCornerShape(16.dp),
         border = BorderStroke(1.dp, CosmicSurfaceVariant)
     ) {
         Column {
-            // Menu Image section
+            // 1. Logo and Phone/Order number at the very top
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Left Side: Phone/Order number
+                Column(horizontalAlignment = Alignment.Start) {
+                    Text(
+                        text = "📞 رقم الطلبات:",
+                        color = CosmicSecondary,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = restaurant.phone,
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                // Right Side: Logo & Name
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = restaurant.name,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        textAlign = TextAlign.Right
+                    )
+
+                    val logoBitmap = remember(restaurant.logoImageUri) {
+                        if (restaurant.logoImageUri == null) null
+                        else {
+                            try {
+                                val decodedBytes = Base64.decode(restaurant.logoImageUri, Base64.DEFAULT)
+                                BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
+                            } catch (e: Exception) { null }
+                        }
+                    }
+                    if (logoBitmap != null) {
+                        Image(
+                            bitmap = logoBitmap.asImageBitmap(),
+                            contentDescription = "شعار المطعم",
+                            modifier = Modifier
+                                .size(45.dp)
+                                .clip(CircleShape)
+                                .border(1.5.dp, CosmicSecondary, CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(45.dp)
+                                .clip(CircleShape)
+                                .background(CosmicDeepSpace)
+                                .border(1.5.dp, CosmicSecondary.copy(0.4f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Restaurant, null, tint = CosmicSecondary, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                }
+            }
+
+            Divider(color = CosmicSurfaceVariant, modifier = Modifier.padding(horizontal = 14.dp))
+
+            // 2. Menu Image Section
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(150.dp)
+                    .height(180.dp)
                     .background(Color(0xFF0F1524))
             ) {
                 if (restaurant.menuImageUri != null) {
@@ -1076,102 +1152,112 @@ fun RestaurantCard(
                 } else {
                     ImagePlaceholder()
                 }
-
-                // Title overlay with inline/floating logo
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.BottomCenter)
-                        .background(Color.Black.copy(alpha = 0.6f))
-                        .padding(8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            val logoBitmap = remember(restaurant.logoImageUri) {
-                                if (restaurant.logoImageUri == null) null
-                                else {
-                                    try {
-                                        val decodedBytes = Base64.decode(restaurant.logoImageUri, Base64.DEFAULT)
-                                        BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
-                                    } catch (e: Exception) { null }
-                                }
-                            }
-                            if (logoBitmap != null) {
-                                Image(
-                                    bitmap = logoBitmap.asImageBitmap(),
-                                    contentDescription = "شعار المطعم",
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .border(1.dp, CosmicSecondary, CircleShape),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .background(CosmicSurface)
-                                        .border(1.dp, CosmicSecondary.copy(0.4f), CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(Icons.Default.Restaurant, null, tint = CosmicSecondary, modifier = Modifier.size(16.dp))
-                                }
-                            }
-
-                            Text(
-                                text = restaurant.name,
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
-                        }
-
-                        Text(
-                            text = "📞 ${restaurant.phone}",
-                            color = CosmicSecondary,
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 11.sp
-                        )
-                    }
-                }
             }
 
-            // Bottom Actions
+            // 3. Bottom Actions with "عرض المنيو كامل" and "اطلب الآن"
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (isGeneralAdmin) {
                     IconButton(onClick = onDeleteClick) {
                         Icon(Icons.Default.Delete, "حذف", tint = Color.Red.copy(0.8f))
                     }
-                } else {
-                    Spacer(modifier = Modifier.width(1.dp))
+                }
+
+                // Button to browse full menu image
+                Button(
+                    onClick = { showFullMenuDialog = true },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant, contentColor = Color.White),
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, CosmicSecondary.copy(0.3f))
+                ) {
+                    Icon(Icons.Default.Image, null, modifier = Modifier.size(16.dp), tint = CosmicSecondary)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("عرض المنيو كامل 📋🔍", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
 
                 Button(
                     onClick = onOrderClick,
+                    modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                    shape = RoundedCornerShape(8.dp)
                 ) {
                     Icon(Icons.Default.RestaurantMenu, null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text("اطلب الآن 🍔", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
+    }
+
+    // Full Menu Image Viewer Dialog
+    if (showFullMenuDialog) {
+        AlertDialog(
+            onDismissRequest = { showFullMenuDialog = false },
+            containerColor = CosmicDeepSpace,
+            title = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { showFullMenuDialog = false }) {
+                        Icon(Icons.Default.Close, "إغلاق", tint = Color.White)
+                    }
+                    Text(
+                        text = "منيو مطعم ${restaurant.name} الكوني 🌌🍟",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Right
+                    )
+                }
+            },
+            text = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(450.dp)
+                        .background(Color.Black, RoundedCornerShape(12.dp))
+                        .padding(8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (restaurant.menuImageUri != null) {
+                        val bitmap = remember(restaurant.menuImageUri) {
+                            try {
+                                val decodedBytes = Base64.decode(restaurant.menuImageUri, Base64.DEFAULT)
+                                BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
+                            } catch (e: Exception) { null }
+                        }
+                        if (bitmap != null) {
+                            Image(
+                                bitmap = bitmap.asImageBitmap(),
+                                contentDescription = "منيو كامل",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Fit // Fit is crucial to see the entire menu without crop
+                            )
+                        } else {
+                            Text("حدث خطأ في تحميل صورة المنيو ❌", color = Color.White)
+                        }
+                    } else {
+                        Text("لا تتوفر صورة منيو لهذا المطعم 📭", color = Color.White)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showFullMenuDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary)
+                ) {
+                    Text("حسناً", color = Color.Black, fontWeight = FontWeight.Bold)
+                }
+            }
+        )
     }
 }
 
