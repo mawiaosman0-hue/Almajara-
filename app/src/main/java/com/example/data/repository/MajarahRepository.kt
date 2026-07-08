@@ -422,12 +422,21 @@ class MajarahRepository(
             if (profiles.isNotEmpty()) {
                 val foundProfile = if (!activeId.isNullOrBlank()) {
                     profiles.find { it.id == activeId }
-                } else if (!activeEmail.isNullOrBlank()) {
+                } else null
+                
+                val foundProfileByEmail = foundProfile ?: if (!activeEmail.isNullOrBlank()) {
                     profiles.find { it.email.trim().lowercase() == activeEmail.trim().lowercase() }
-                } else {
-                    profiles.find { it.email.trim().lowercase() == email.trim().lowercase() }
-                }
-                val current = foundProfile ?: profiles.first()
+                } else null
+
+                val foundProfileByTargetEmail = foundProfileByEmail ?: profiles.find { it.email.trim().lowercase() == email.trim().lowercase() }
+
+                val current = foundProfileByTargetEmail ?: com.example.data.db.ProfileEntity(
+                    id = activeId ?: java.util.UUID.randomUUID().toString(),
+                    name = name,
+                    phone = phone,
+                    email = email,
+                    password = "recovered_pwd_1234"
+                )
 
                 var resolvedId = current.id.replace("\"", "").replace("'", "").trim()
                 

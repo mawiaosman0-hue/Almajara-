@@ -1715,12 +1715,23 @@ $couponMessage---------------------------
         }
     }
 
-    fun adminApprovePharmacyOrder(orderId: Int, courierName: String, courierPhone: String, deliveryFee: Double, onComplete: (String?) -> Unit) {
+    fun adminApprovePharmacyOrder(
+        orderId: Int, 
+        courierName: String, 
+        courierPhone: String, 
+        deliveryFee: Double, 
+        medicinesJson: String = "", 
+        medicinePrice: Double = 0.0, 
+        onComplete: (String?) -> Unit
+    ) {
         isGlobalLoading.value = true
         viewModelScope.launch {
             var error: String? = null
             try {
-                repository.assignPharmacyOrderCourierAndDeliveryFee(orderId, "تم تحديد السعر النهائي", courierName, courierPhone, deliveryFee)
+                if (medicinesJson.isNotBlank() || medicinePrice > 0.0) {
+                    repository.updatePharmacyOrderPriceAndStatus(orderId, "بانتظار المدير", medicinePrice, medicinesJson)
+                }
+                repository.assignPharmacyOrderCourierAndDeliveryFee(orderId, "تم تسليم المندوب", courierName, courierPhone, deliveryFee)
             } catch (e: Exception) {
                 error = e.localizedMessage
             } finally {
@@ -2021,7 +2032,7 @@ $couponMessage---------------------------
             return@combine when {
                 sellerProducts >= 10 -> "تاجر المجرة 👑"
                 sellerProducts >= 4 -> "تاجر مميز ⭐"
-                else -> "تاجر عادي 🛍️"
+                else -> "تاجر المجرة 🛍️"
             }
         }
         
@@ -2034,7 +2045,7 @@ $couponMessage---------------------------
             return@combine when {
                 rOrders >= 12 -> "مطعم ذهبي 👑"
                 rOrders >= 5 -> "مطعم مميز ⭐"
-                else -> "مطعم عادي 🍔"
+                else -> "مطعم المجرة 🍔"
             }
         }
         

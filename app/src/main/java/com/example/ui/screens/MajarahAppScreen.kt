@@ -4416,7 +4416,7 @@ fun LoginScreenBody(
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val r = java.util.Random(1337)
-            for (i in 0..150) {
+            for (i in 0..250) {
                 val x = r.nextFloat() * size.width
                 val y = r.nextFloat() * size.height
                 val radius = r.nextFloat() * 3.5f + 0.8f
@@ -4440,7 +4440,7 @@ fun LoginScreenBody(
                     .fillMaxWidth()
                     .widthIn(max = 450.dp),
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = CosmicSurface.copy(alpha = 0.35f)),
+                colors = CardDefaults.cardColors(containerColor = CosmicSurface.copy(alpha = 0.15f)),
                 border = androidx.compose.foundation.BorderStroke(1.5.dp, CosmicSecondary.copy(alpha = 0.3f))
             ) {
                 LazyColumn(
@@ -6256,22 +6256,20 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
             pendingPharmacyCount > lastPendingPharmacyCount ||
             pendingRestaurantOrdersCount > lastPendingRestaurantOrdersCount
         ) {
-            // Disabled sound notifications specifically for General Manager and Administrative Manager as requested
-            if (!isGeneralAdmin && !isAdministrativeManager) {
+            // Enable sound notifications for General Manager and Administrative Manager with the system message tone
+            try {
+                val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+                val r = android.media.RingtoneManager.getRingtone(context, alertUri)
+                r?.play()
+                
                 try {
-                    val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_RINGTONE)
-                    val r = android.media.RingtoneManager.getRingtone(context, alertUri)
-                    r?.play()
-                    
-                    try {
-                        val tg = android.media.ToneGenerator(android.media.AudioManager.STREAM_ALARM, 100)
-                        tg.startTone(android.media.ToneGenerator.TONE_PROP_BEEP2, 1000)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
+                    val tg = android.media.ToneGenerator(android.media.AudioManager.STREAM_ALARM, 100)
+                    tg.startTone(android.media.ToneGenerator.TONE_PROP_BEEP2, 1000)
                 } catch (e: Exception) {
-                    // Fallback
+                    e.printStackTrace()
                 }
+            } catch (e: Exception) {
+                // Fallback
             }
         }
         lastPendingCourierOrdersCount = pendingCourierOrdersCount
@@ -10835,7 +10833,7 @@ fun AdminSystemManagementSection(viewModel: MajarahViewModel) {
                         when {
                             sellerSalesThisWeek >= 20 -> "تاجر المجرة 👑 ($sellerSalesThisWeek مبيعات هذا الأسبوع)"
                             sellerSalesThisWeek >= 10 -> "تاجر مميز ⭐ ($sellerSalesThisWeek مبيعات هذا الأسبوع)"
-                            else -> "تاجر عادي 🛍️ ($sellerSalesThisWeek مبيعات هذا الأسبوع)"
+                            else -> "تاجر المجرة 🛍️ ($sellerSalesThisWeek مبيعات هذا الأسبوع)"
                         }
                     }
                     isRest -> {
@@ -10847,7 +10845,7 @@ fun AdminSystemManagementSection(viewModel: MajarahViewModel) {
                         when {
                             restaurantOrdersThisWeek >= 20 -> "مطعم ذهبي 👑 ($restaurantOrdersThisWeek طلب هذا الأسبوع)"
                             restaurantOrdersThisWeek >= 10 -> "مطعم مميز ⭐ ($restaurantOrdersThisWeek طلب هذا الأسبوع)"
-                            else -> "مطعم عادي 🍔 ($restaurantOrdersThisWeek طلب هذا الأسبوع)"
+                            else -> "مطعم المجرة 🍔 ($restaurantOrdersThisWeek طلب هذا الأسبوع)"
                         }
                     }
                     isPhar -> {
@@ -12478,9 +12476,9 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     val categoryData = listOf(
-                        Triple(0, "المنتجات 🛒 ($activeProductsCount)", CosmicSecondary),
-                        Triple(1, "المطاعم 🍔 ($activeRestaurantsCount)", CosmicTertiary),
-                        Triple(2, "الصيدلية 💊 ($activePharmacyCount)", Color(0xFF64B5F6))
+                        Triple(0, if (courierOrdersTab == 1) "المنتجات المنفذة 🛒 ($completedProductsCount)" else if (courierOrdersTab == 2) "منتجات ملغية ❌ ($cancelledProductsCount)" else "المنتجات النشطة 🛒 ($activeProductsCount)", CosmicSecondary),
+                        Triple(1, if (courierOrdersTab == 1) "طلبات المطعم المنفذة 🍔 ($completedRestaurantsCount)" else if (courierOrdersTab == 2) "طلبات مطعم ملغية ❌ ($cancelledRestaurantsCount)" else "المطاعم النشطة 🍔 ($activeRestaurantsCount)", CosmicTertiary),
+                        Triple(2, if (courierOrdersTab == 1) "الروشتات المنفذة 💊 ($completedPharmacyCount)" else if (courierOrdersTab == 2) "روشتات ملغية ❌ ($cancelledPharmacyCount)" else "الصيدلية النشطة 💊 ($activePharmacyCount)", Color(0xFF64B5F6))
                     )
                     categoryData.forEach { (catIndex, title, colorVal) ->
                         val isSelected = courierMainCategoryTab == catIndex
@@ -12558,7 +12556,7 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                 }
 
                 val filteredPharmacyOrders = myAssignedPharmacyOrders.filter { order ->
-                    val isActuallyCompleted = order.status.contains("تم التوصيل") || order.status.contains("تم تسليم")
+                    val isActuallyCompleted = order.status.startsWith("تم التسليم") || order.status == "تم التوصيل"
                     val isCancelled = order.status.contains("ملغ") || order.status.contains("ملغي")
                     when (courierOrdersTab) {
                         0 -> !isActuallyCompleted && !isCancelled
