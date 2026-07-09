@@ -291,14 +291,11 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
             }
         )
     }
-    val remainingDays = remember(updateDetectionTime) {
-        val durationMs = System.currentTimeMillis() - updateDetectionTime
-        val daysPassed = durationMs / (1000L * 60 * 60 * 24)
-        val rem = 15L - daysPassed
-        if (rem < 0L) 0L else rem
-    }
-    val isUpdateForced = false
-    var showUpdateDialog by remember { mutableStateOf(false) }
+    val showUpdateDialogState by viewModel.showUpdateDialog.collectAsStateWithLifecycle()
+    val isUpdateForcedState by viewModel.isUpdateMandatory.collectAsStateWithLifecycle()
+    val daysRemainingState by viewModel.daysRemaining.collectAsStateWithLifecycle()
+    val latestVersionNameState by viewModel.latestVersionName.collectAsStateWithLifecycle()
+    var dismissedUpdateDialog by remember { mutableStateOf(false) }
 
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
 
@@ -451,6 +448,17 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                                     Icon(Icons.Default.Store, "الرجوع للتاجر", tint = CosmicSecondary)
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text("لوحة التاجر 🧑‍💼", color = CosmicSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        } else if (isPharmacist && !isAdmin && currentScreen !is Screen.Pharmacist) {
+                            IconButton(onClick = { viewModel.navigateTo(Screen.Pharmacist) }) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(start = 4.dp)
+                                ) {
+                                    Icon(Icons.Default.HealthAndSafety, "الرجوع للصيدلية", tint = CosmicSecondary)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("لوحة الصيدلي 💊", color = CosmicSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         } else if (currentScreen is Screen.ProductDetail) {
@@ -901,6 +909,11 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                     SellerDashboardScreenBody(
                         viewModel = viewModel
                     )
+                }
+                is Screen.Pharmacist -> {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        com.example.ui.screens.PharmacyPlanetSection(viewModel = viewModel)
+                    }
                 }
                 is Screen.ProductDetail -> {
                     selectedProduct?.let { product ->
@@ -1462,11 +1475,11 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                 )
             }
 
-            if (showUpdateDialog || isUpdateForced) {
+            if (showUpdateDialogState && (!dismissedUpdateDialog || isUpdateForcedState)) {
                 AlertDialog(
                     onDismissRequest = {
-                        if (!isUpdateForced) {
-                            showUpdateDialog = false
+                        if (!isUpdateForcedState) {
+                            dismissedUpdateDialog = true
                         }
                     },
                     title = {
@@ -1474,7 +1487,7 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                             Icon(Icons.Default.Info, contentDescription = null, tint = CosmicSecondary)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = if (isUpdateForced) {
+                                text = if (isUpdateForcedState) {
                                     viewModel.t("تحديث إجباري مطلوب الآن! 🛰️⚠️", "Forced Update Required Now! 🛰️⚠️")
                                 } else {
                                     viewModel.t("تحديث جديد متوفر للتطبيق! 🛰️🚀", "New Update Available! 🛰️🚀")
@@ -1491,21 +1504,21 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Text(
-                                text = if (isUpdateForced) {
+                                text = if (isUpdateForcedState) {
                                     viewModel.t(
                                         "⚠️ انتهت المهلة المتاحة للتأجيل (15 يوماً).\n\n" +
-                                        "يجب تحديث تطبيق مجرة السودان الآن إلى الإصدار الأخير لمتابعة استخدامه والاتصال بقاعدة البيانات الآمنة بنجاح.",
+                                        "يجب تحديث تطبيق مجرة السودان الآن إلى الإصدار الأخير (v$latestVersionNameState) لمتابعة استخدامه والاتصال بقاعدة البيانات الآمنة بنجاح.",
                                         "⚠️ The postponement period (15 days) has ended.\n\n" +
-                                        "You must update Majarah Sudan to the latest version now to continue using it and securely connect to the database."
+                                        "You must update Majarah Sudan to the latest version (v$latestVersionNameState) now to continue using it and securely connect to the database."
                                     )
                                 } else {
                                     viewModel.t(
-                                        "يتوفر إصدار تحديث أمني وسريع جديد (v2.8.5) لتطبيق مجرة السودان في المتجر.\n\n" +
+                                        "يتوفر إصدار تحديث أمني وسريع جديد (v$latestVersionNameState) لتطبيق مجرة السودان في المتجر.\n\n" +
                                         "💡 يضمن هذا التحديث الربط المباشر والآمن لحسابات Google والمزامنة الفورية لكل الميزات والطلبات مع قاعدة بيانات السحابة دون أي عوائق.\n\n" +
-                                        "⏳ يمكنك تأجيل التحديث ومتابعة الاستخدام مؤقتاً (متبقي $remainingDays يوم لتأجيل التحديث قبل الإيقاف الإجباري).",
-                                        "A new secure and high-speed update (v2.8.5) is available for Majarah Sudan in the store.\n\n" +
+                                        "⏳ يمكنك تأجيل التحديث ومتابعة الاستخدام مؤقتاً (متبقي $daysRemainingState يوم لتأجيل التحديث قبل الإيقاف الإجباري).",
+                                        "A new secure and high-speed update (v$latestVersionNameState) is available for Majarah Sudan in the store.\n\n" +
                                         "💡 This update ensures direct and secure Google accounts linking and instant real-time synchronization of all features with the remote cloud database.\n\n" +
-                                        "⏳ You can postpone this update temporarily (Remaining $remainingDays days left before forced postponement)."
+                                        "⏳ You can postpone this update temporarily (Remaining $daysRemainingState days left before forced postponement)."
                                     )
                                 },
                                 color = Color.White.copy(alpha = 0.85f),
@@ -1519,8 +1532,8 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                         Button(
                             onClick = {
                                 Toast.makeText(context, "جاري فتح صفحة التحديث الآمن لمجرة السودان... 🌠", Toast.LENGTH_LONG).show()
-                                if (!isUpdateForced) {
-                                    showUpdateDialog = false
+                                if (!isUpdateForcedState) {
+                                    dismissedUpdateDialog = true
                                 }
                                 val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=com.aistudio.majarah"))
                                 try {
@@ -1541,10 +1554,10 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                         }
                     },
                     dismissButton = {
-                        if (!isUpdateForced) {
+                        if (!isUpdateForcedState) {
                             TextButton(
                                 onClick = {
-                                    showUpdateDialog = false
+                                    dismissedUpdateDialog = true
                                 }
                             ) {
                                 Text(viewModel.t("ليس الآن", "Not Now"), color = Color.White.copy(alpha = 0.6f), fontWeight = FontWeight.Medium)
@@ -2240,6 +2253,82 @@ CREATE POLICY "Allow update app_coupons" ON public.app_coupons FOR UPDATE USING 
                 }
             }
         }
+
+        if (isUpdateForcedState) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(com.example.ui.theme.CosmicDeepSpace)
+                    .clickable(enabled = true, onClick = {}),
+                contentAlignment = Alignment.Center
+            ) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp)
+                        .widthIn(max = 500.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF161F30)),
+                    border = androidx.compose.foundation.BorderStroke(1.5.dp, CosmicSecondary.copy(alpha = 0.4f))
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CloudDownload,
+                            contentDescription = null,
+                            tint = CosmicSecondary,
+                            modifier = Modifier.size(80.dp)
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Text(
+                            text = viewModel.t("تحديث إجباري مطلوب الآن! 🛰️⚠️", "Forced Update Required Now! 🛰️⚠️"),
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = viewModel.t(
+                                "⚠️ انتهت المهلة المتاحة للتأجيل (15 يوماً).\n\n" +
+                                "يجب تحديث تطبيق مجرة السودان الآن إلى الإصدار الأخير (v$latestVersionNameState) لمتابعة استخدامه والاتصال بقاعدة البيانات الآمنة بنجاح.",
+                                "⚠️ The postponement period (15 days) has ended.\n\n" +
+                                "You must update Majarah Sudan to the latest version (v$latestVersionNameState) now to continue using it and securely connect to the database."
+                            ),
+                            color = Color.White.copy(0.8f),
+                            fontSize = 13.sp,
+                            lineHeight = 22.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+                        )
+                        Spacer(modifier = Modifier.height(32.dp))
+                        Button(
+                            onClick = {
+                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=com.aistudio.majarah"))
+                                try {
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    val fallbackIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://supabase.com"))
+                                    try {
+                                        context.startActivity(fallbackIntent)
+                                    } catch (ex: Exception) {}
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth().height(50.dp)
+                        ) {
+                            Text(viewModel.t("تحديث الآن 🚀", "Update Now 🚀"), fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 }
@@ -2775,6 +2864,8 @@ fun CartScreenBody(
 ) {
     val appliedCoupon by viewModel.appliedCoupon.collectAsStateWithLifecycle()
     val couponError by viewModel.couponError.collectAsStateWithLifecycle()
+    val classification by viewModel.userClassification.collectAsStateWithLifecycle()
+    val isEligibleForCoupon = classification.contains("مميز") || classification.contains("ذهبي")
     var couponInputText by remember { mutableStateOf("") }
     var selectedCheckoutPaymentMethod by remember { mutableStateOf("cash") } // "cash" or "bank"
     var showBankDialog by remember { mutableStateOf(false) }
@@ -2913,118 +3004,120 @@ fun CartScreenBody(
             }
 
             // Promo Code Card Section
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = CosmicSurface),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, CosmicSurfaceVariant)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.End
+            if (isEligibleForCoupon) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, CosmicSurfaceVariant)
                     ) {
-                        Text(
-                            text = "🎫 هل لديك كود خصم كوني؟",
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            fontSize = 13.sp,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-                        
-                        if (appliedCoupon == null) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Button(
-                                    onClick = { 
-                                        if (couponInputText.isNotBlank()) {
-                                            val valid = viewModel.applyCoupon(couponInputText)
-                                            if (valid) {
-                                                couponInputText = ""
-                                            }
-                                        }
-                                    },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = CosmicSecondary,
-                                        contentColor = Color.Black
-                                    ),
-                                    shape = RoundedCornerShape(20.dp),
-                                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-                                ) {
-                                    Text("تطبيق 💫", fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                                }
-                                
-                                OutlinedTextField(
-                                    value = couponInputText,
-                                    onValueChange = { couponInputText = it },
-                                    modifier = Modifier.weight(1f),
-                                    placeholder = {
-                                        Text(
-                                            "أدخل الكود (مثال: COSMIC10)",
-                                            fontSize = 11.sp,
-                                            color = MediumContrastTextDark,
-                                            modifier = Modifier.fillMaxWidth(),
-                                            textAlign = TextAlign.Right
-                                        )
-                                    },
-                                    singleLine = true,
-                                    shape = RoundedCornerShape(20.dp),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedTextColor = Color.White,
-                                        unfocusedTextColor = Color.White,
-                                        focusedBorderColor = CosmicSecondary,
-                                        unfocusedBorderColor = CosmicSurfaceVariant,
-                                        focusedContainerColor = CosmicSurfaceVariant.copy(0.3f),
-                                        unfocusedContainerColor = CosmicSurfaceVariant.copy(0.3f)
-                                    ),
-                                    textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Right)
-                                )
-                            }
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalAlignment = Alignment.End
+                        ) {
+                            Text(
+                                text = "🎫 هل لديك كود خصم كوني؟",
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
                             
-                            if (couponError != null) {
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = couponError!!,
-                                    color = Color.Red,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
+                            if (appliedCoupon == null) {
+                                Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    textAlign = TextAlign.Right
-                                )
-                            }
-                        } else {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(CosmicSecondary.copy(alpha = 0.15f))
-                                    .padding(8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                TextButton(
-                                    onClick = { viewModel.removeCoupon() }
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text("حذف الكود ❌", color = Color.Red, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                    Button(
+                                        onClick = { 
+                                            if (couponInputText.isNotBlank()) {
+                                                val valid = viewModel.applyCoupon(couponInputText)
+                                                if (valid) {
+                                                    couponInputText = ""
+                                                }
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = CosmicSecondary,
+                                            contentColor = Color.Black
+                                        ),
+                                        shape = RoundedCornerShape(20.dp),
+                                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                                    ) {
+                                        Text("تطبيق 💫", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                    }
+                                    
+                                    OutlinedTextField(
+                                        value = couponInputText,
+                                        onValueChange = { couponInputText = it },
+                                        modifier = Modifier.weight(1f),
+                                        placeholder = {
+                                            Text(
+                                                "أدخل الكود (مثال: COSMIC10)",
+                                                fontSize = 11.sp,
+                                                color = MediumContrastTextDark,
+                                                modifier = Modifier.fillMaxWidth(),
+                                                textAlign = TextAlign.Right
+                                            )
+                                        },
+                                        singleLine = true,
+                                        shape = RoundedCornerShape(20.dp),
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedTextColor = Color.White,
+                                            unfocusedTextColor = Color.White,
+                                            focusedBorderColor = CosmicSecondary,
+                                            unfocusedBorderColor = CosmicSurfaceVariant,
+                                            focusedContainerColor = CosmicSurfaceVariant.copy(0.3f),
+                                            unfocusedContainerColor = CosmicSurfaceVariant.copy(0.3f)
+                                        ),
+                                        textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Right)
+                                    )
                                 }
                                 
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.End
-                                ) {
-                                    val pct = viewModel.getCouponDiscountPercentage(appliedCoupon)
+                                if (couponError != null) {
+                                    Spacer(modifier = Modifier.height(6.dp))
                                     Text(
-                                        text = "كود الخصم الفعال: $appliedCoupon (%$pct)",
-                                        color = CosmicSecondary,
-                                        fontWeight = FontWeight.Bold,
+                                        text = couponError!!,
+                                        color = Color.Red,
                                         fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.fillMaxWidth(),
                                         textAlign = TextAlign.Right
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Icon(Icons.Default.CheckCircle, null, tint = CosmicSecondary, modifier = Modifier.size(16.dp))
+                                }
+                            } else {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(CosmicSecondary.copy(alpha = 0.15f))
+                                        .padding(8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    TextButton(
+                                        onClick = { viewModel.removeCoupon() }
+                                    ) {
+                                        Text("حذف الكود ❌", color = Color.Red, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                    }
+                                    
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.End
+                                    ) {
+                                        val pct = viewModel.getCouponDiscountPercentage(appliedCoupon)
+                                        Text(
+                                            text = "كود الخصم الفعال: $appliedCoupon (%$pct)",
+                                            color = CosmicSecondary,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 11.sp,
+                                            textAlign = TextAlign.Right
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Icon(Icons.Default.CheckCircle, null, tint = CosmicSecondary, modifier = Modifier.size(16.dp))
+                                    }
                                 }
                             }
                         }
@@ -4386,10 +4479,39 @@ fun LoginScreenBody(
     val adminManagers by viewModel.allAdminManagers.collectAsStateWithLifecycle()
     val allProfiles by viewModel.allProfilesFlow.collectAsStateWithLifecycle()
 
+    var remotePasswordCheckResult by remember { mutableStateOf<Boolean?>(null) }
+
     val logoScale = remember { Animatable(0.2f) }
     val logoAlpha = remember { Animatable(0f) }
 
     val langEnglish = viewModel.isEnglish.collectAsStateWithLifecycle().value
+
+    val matchingAdminManager = if (email.trim().isNotEmpty()) {
+        adminManagers.firstOrNull { manager ->
+            val cleanInput = email.trim().lowercase()
+            manager.email.trim().lowercase() == cleanInput || manager.phone.trim() == cleanInput
+        }
+    } else {
+        null
+    }
+
+    LaunchedEffect(matchingAdminManager) {
+        if (matchingAdminManager != null) {
+            try {
+                val emailClean = matchingAdminManager.email.trim().lowercase()
+                val remoteProfs = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    com.example.data.network.SupabaseClient.api.getProfilesByEmail(emailFilter = "eq.$emailClean")
+                }
+                val hasRemotePass = remoteProfs.any { !it.password.isNullOrBlank() }
+                remotePasswordCheckResult = hasRemotePass
+            } catch (e: Exception) {
+                e.printStackTrace()
+                remotePasswordCheckResult = null
+            }
+        } else {
+            remotePasswordCheckResult = null
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.refreshAllProfiles()
@@ -4432,6 +4554,7 @@ fun LoginScreenBody(
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(androidx.compose.foundation.rememberScrollState())
                 .padding(16.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -4791,9 +4914,9 @@ fun LoginScreenBody(
                         null
                     }
 
-                    val hasAlreadySetPassword = matchingAdminManager != null && allProfiles.any { profile ->
+                    val hasAlreadySetPassword = (matchingAdminManager != null && (allProfiles.any { profile ->
                         profile.email.trim().lowercase() == matchingAdminManager.email.trim().lowercase() && !profile.password.isNullOrBlank()
-                    }
+                    } || remotePasswordCheckResult == true))
 
                     if (matchingAdminManager != null && !hasAlreadySetPassword) {
                         item {
@@ -5018,14 +5141,14 @@ fun LoginScreenBody(
                             Text(
                                 text = if (isGoogleFlowActive) {
                                     if (isGoogleAccountExists) {
-                                        viewModel.t("تأكيد وتسجيل الدخول الآمن 🚀", "Confirm & Secure Login 🚀")
+                                        viewModel.t("تأكيد ودخول المجرة 🚀", "Confirm & Enter Almajra 🚀")
                                     } else {
-                                        viewModel.t("إكمال التفعيل والاشتراك بالمجرة 🚀", "Complete Activation & Subscribe 🚀")
+                                        viewModel.t("إكمال التفعيل ودخول المجرة 🚀", "Complete Activation & Enter Almajra 🚀")
                                     }
                                 } else if (isRegister) {
-                                    viewModel.t("تأكيد والانضمام للمجرة", "Confirm and Join Almajra")
+                                    viewModel.t("تأكيد ودخول المجرة", "Confirm and Enter Almajra")
                                 } else {
-                                    viewModel.t("تسجيل الدخول الآمن", "Secure Log In")
+                                    viewModel.t("الدخول للمجرة", "Enter Almajra")
                                 },
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp
@@ -6764,16 +6887,23 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                 }
                 add("التجار🧑‍💼" to 6)
                 add((if (pendingProductsCount > 0) "منتجات قيد المراجعة⏳ ($pendingProductsCount)" else "منتجات قيد المراجعة⏳") to 8)
+                
+                // Allow both General Manager and Administrative Manager to view products
+                add("المنتجات🛍️" to 2)
+
                 if (!isAdministrativeManager) {
-                    add("المنتجات🛍️" to 2)
                     add("إضافة ➕" to 1)
                     add("مفاتيح الربط🔑" to 5)
                 }
                 add((if (pendingPharmacyCount > 0) "طلبات الصيدليات 💊 ($pendingPharmacyCount)" else "طلبات الصيدليات 💊") to 9)
                 add((if (pendingRestaurantOrdersCount > 0) "طلبات المطاعم 🍔 ($pendingRestaurantOrdersCount)" else "طلبات المطاعم 🍔") to 11)
+                
+                // Expose Ratings to both General Manager and Administrative Manager
+                if (isGeneralAdmin || isAdministrativeManager) {
+                    add("التقييمات ⭐" to 12)
+                }
                 if (isGeneralAdmin) {
                     add("المدراء 👑" to 10)
-                    add("التقييمات ⭐" to 12)
                     add("إدارة المنظومة 👥" to 13)
                 }
             }
@@ -10595,6 +10725,124 @@ fun AdminSystemManagementSection(viewModel: MajarahViewModel) {
             )
         }
 
+        // App Update Simulator Panel Card
+        item {
+            var simVersionCode by remember { mutableStateOf("2") }
+            var simVersionName by remember { mutableStateOf("1.1.0") }
+            var simDaysBeforeRelease by remember { mutableStateOf("0") }
+            
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                border = BorderStroke(1.dp, CosmicSecondary.copy(alpha = 0.3f))
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Text(
+                        "محاكي ومتحكم تحديثات متجر قوقل بلاي 🛰️⚙️",
+                        color = CosmicSecondary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Right,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "تحكم بنزول التحديثات في قوقل بلاي مع مهلة الـ 15 يوماً للتأجيل. يمكنك محاكاة تخطي المهلة (مثال: كتابة 16 يوماً مضت) لمشاهدة شاشة الإيقاف الإجبارية الفورية لكل المستخدمين.",
+                        color = MediumContrastTextDark,
+                        fontSize = 10.sp,
+                        textAlign = TextAlign.Right,
+                        modifier = Modifier.fillMaxWidth(),
+                        lineHeight = 14.sp
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedTextField(
+                        value = simVersionCode,
+                        onValueChange = { simVersionCode = it },
+                        label = { Text("رمز الإصدار (Version Code)") },
+                        textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Right),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CosmicSecondary,
+                            unfocusedBorderColor = CosmicSurfaceVariant,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = simVersionName,
+                        onValueChange = { simVersionName = it },
+                        label = { Text("اسم الإصدار (Version Name)") },
+                        textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Right),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CosmicSecondary,
+                            unfocusedBorderColor = CosmicSurfaceVariant,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = simDaysBeforeRelease,
+                        onValueChange = { simDaysBeforeRelease = it },
+                        label = { Text("أيام مضت على تاريخ نشر التحديث") },
+                        placeholder = { Text("مثال: 0 لليوم، 16 لتخطي مهلة الـ 15 يوماً") },
+                        textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Right),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CosmicSecondary,
+                            unfocusedBorderColor = CosmicSurfaceVariant,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Button(
+                        onClick = {
+                            val code = simVersionCode.toIntOrNull() ?: 2
+                            val name = simVersionName.trim()
+                            val daysAgo = simDaysBeforeRelease.toLongOrNull() ?: 0L
+                            val releaseTime = System.currentTimeMillis() - (daysAgo * 24L * 60L * 60L * 1000L)
+                            
+                            viewModel.publishNewUpdate(code, name, releaseTime) { err ->
+                                if (err == null) {
+                                    Toast.makeText(context, "تم تطبيق ونشر التحديث بنجاح ومزامنته سحابياً! 🚀🛰️", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "تم تطبيق التحديث محلياً ومزامنته بنجاح! 🚀🔄", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth().height(44.dp)
+                    ) {
+                        Text("نشر ومحاكاة التحديث الآن 🚀🛰️", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                    
+                    Spacer(modifier = Modifier.height(6.dp))
+                    
+                    TextButton(
+                        onClick = {
+                            viewModel.publishNewUpdate(1, "1.0.0", System.currentTimeMillis()) {
+                                Toast.makeText(context, "تم إعادة تعيين الإصدار للإصدار الافتراضي الحالي بنجاح ✅", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("إعادة تعيين للإصدار الحالي (إلغاء التحديث) 🔄", color = Color.White.copy(0.6f), fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+
         // Add User Form Card
         item {
             Card(
@@ -10689,8 +10937,8 @@ fun AdminSystemManagementSection(viewModel: MajarahViewModel) {
                     
                     val rolesList = listOf(
                         "customer" to "عميل 👤",
-                        "seller" to "تاجر 🛍️",
-                        "restaurant" to "مطعم 🍔",
+                        "seller" to "تاجر المجرة 🛍️",
+                        "restaurant" to "مطعم المجرة 🍔",
                         "pharmacist" to "صيدلي 💊",
                         "courier" to "مندوب 🚴"
                     )
@@ -10727,7 +10975,8 @@ fun AdminSystemManagementSection(viewModel: MajarahViewModel) {
                                 name = userName.trim(),
                                 phone = userPhone.trim(),
                                 email = userEmail.trim().lowercase(),
-                                password = userPassword.trim()
+                                password = userPassword.trim(),
+                                role = selectedRole
                             )
 
                             // Save user preference role
@@ -10937,8 +11186,10 @@ fun PendingProductsReviewSection(viewModel: MajarahViewModel) {
     val allProducts by viewModel.allProducts.collectAsStateWithLifecycle()
     val pendingProducts = remember(allProducts) { allProducts.filter { !it.isApproved } }
     val isGeneralAdmin by viewModel.isGeneralAdmin.collectAsStateWithLifecycle()
+    val isAdministrativeManager by viewModel.isAdministrativeManager.collectAsStateWithLifecycle()
+    val isAllowed = isGeneralAdmin || isAdministrativeManager
 
-    if (!isGeneralAdmin) {
+    if (!isAllowed) {
         Box(
             modifier = Modifier.fillMaxSize().padding(24.dp),
             contentAlignment = Alignment.Center

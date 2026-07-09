@@ -29,6 +29,7 @@ sealed class Screen {
     object Admin : Screen()
     object Courier : Screen()
     object Seller : Screen()
+    object Pharmacist : Screen()
     data class ProductDetail(val productId: Int) : Screen()
 }
 
@@ -143,6 +144,14 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
     val showOtpVerification = MutableStateFlow(false)
     val otpVerificationEmail = MutableStateFlow("")
     val otpCode = MutableStateFlow("")
+
+    // App Update properties (15-day grace period check)
+    val latestVersionCode = MutableStateFlow(1)
+    val latestVersionName = MutableStateFlow("1.0.0")
+    val releaseDateMs = MutableStateFlow(System.currentTimeMillis())
+    val showUpdateDialog = MutableStateFlow(false)
+    val isUpdateMandatory = MutableStateFlow(false)
+    val daysRemaining = MutableStateFlow(15L)
 
     // Current Search Query State
     private val _searchQuery = MutableStateFlow("")
@@ -367,8 +376,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                     } else if (matchesSeller) {
                         _currentScreen.value = Screen.Seller
                     } else if (isPharmacistUser) {
-                        _selectedCategory.value = "pharmacy"
-                        _currentScreen.value = Screen.Home
+                        _currentScreen.value = Screen.Pharmacist
                     } else if (isRestaurantUser) {
                         _selectedCategory.value = "restaurant"
                         _currentScreen.value = Screen.Home
@@ -479,8 +487,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                             } else if (role == "seller" || matchesSeller) {
                                 _currentScreen.value = Screen.Seller
                             } else if (isPharmacistUser) {
-                                _selectedCategory.value = "pharmacy"
-                                _currentScreen.value = Screen.Home
+                                _currentScreen.value = Screen.Pharmacist
                             } else if (isRestaurantUser) {
                                 _selectedCategory.value = "restaurant"
                                 _currentScreen.value = Screen.Home
@@ -524,8 +531,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                             } else if (role == "seller") {
                                 _currentScreen.value = Screen.Seller
                             } else if (isPharmacistUser) {
-                                _selectedCategory.value = "pharmacy"
-                                _currentScreen.value = Screen.Home
+                                _currentScreen.value = Screen.Pharmacist
                             } else if (isRestaurantUser) {
                                 _selectedCategory.value = "restaurant"
                                 _currentScreen.value = Screen.Home
@@ -575,8 +581,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                         } else if (matchesSeller) {
                             _currentScreen.value = Screen.Seller
                         } else if (isPharmacistUser) {
-                            _selectedCategory.value = "pharmacy"
-                            _currentScreen.value = Screen.Home
+                            _currentScreen.value = Screen.Pharmacist
                         } else if (isRestaurantUser) {
                             _selectedCategory.value = "restaurant"
                             _currentScreen.value = Screen.Home
@@ -829,6 +834,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
 
         // Initialize the app with Room products seed and local session loading
         viewModelScope.launch {
+            checkForUpdates()
             repository.checkAndPrepopulateProducts()
             repository.syncRemoteOrdersToLocal()
             
@@ -901,8 +907,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                 } else if (matchesSeller) {
                     _currentScreen.value = Screen.Seller
                 } else if (isPharmacistUser) {
-                    _selectedCategory.value = "pharmacy"
-                    _currentScreen.value = Screen.Home
+                    _currentScreen.value = Screen.Pharmacist
                 } else if (isRestaurantUser) {
                     _selectedCategory.value = "restaurant"
                     _currentScreen.value = Screen.Home
@@ -2117,42 +2122,53 @@ $couponMessage---------------------------
                 android.util.Log.e("MajarahViewModel", "Failed to sync rating to Supabase: ${e.message}")
             }
             
-            // Generate customized promo coupon based on rating stars
-            val randSuffix = (1000..9999).random()
-            val couponCode = if (stars >= 5) "MAJARAH_FREE_$randSuffix" else "HAPPY_BOGO_$randSuffix"
-            val coupon = com.example.data.db.AppCouponEntity(
-                code = couponCode,
-                discountPercent = if (stars >= 5) 0.0 else 50.0,
-                isFreeDelivery = (stars >= 5),
-                isBogo = (stars < 5),
-                forUserEmail = profile?.email ?: "guest@majarah.com",
-                isUsed = false,
-                offerTitle = if (stars >= 5) "توصيل مجاني لتقييمك المتميز 🚚🌌" else "عرض اطلب واحد والثاني هدية لتقييمك الغالي 🎁🍔"
-            )
-            database.appCouponDao().insertCoupon(coupon)
-            try {
-                com.example.data.network.SupabaseClient.api.insertAppCoupons(
-                    listOf(
-                        com.example.data.network.SupabaseAppCoupon(
-                            code = coupon.code,
-                            discountPercent = coupon.discountPercent,
-                            isFreeDelivery = coupon.isFreeDelivery,
-                            isBogo = coupon.isBogo,
-                            forUserEmail = coupon.forUserEmail,
-                            isUsed = coupon.isUsed,
-                            offerTitle = coupon.offerTitle
+            // Generate customized promo coupon based on rating stars ONLY if the user is distinguished or gold
+            val classification = userClassification.value
+            val isEligibleForCoupon = classification.contains("مميز") || classification.contains("ذهبي")
+            
+            if (isEligibleForCoupon) {
+                val randSuffix = (1000..9999).random()
+                val couponCode = if (stars >= 5) "MAJARAH_FREE_$randSuffix" else "HAPPY_BOGO_$randSuffix"
+                val coupon = com.example.data.db.AppCouponEntity(
+                    code = couponCode,
+                    discountPercent = if (stars >= 5) 0.0 else 50.0,
+                    isFreeDelivery = (stars >= 5),
+                    isBogo = (stars < 5),
+                    forUserEmail = profile?.email ?: "guest@majarah.com",
+                    isUsed = false,
+                    offerTitle = if (stars >= 5) "توصيل مجاني لتقييمك المتميز 🚚🌌" else "عرض اطلب واحد والثاني هدية لتقييمك الغالي 🎁🍔"
+                )
+                database.appCouponDao().insertCoupon(coupon)
+                try {
+                    com.example.data.network.SupabaseClient.api.insertAppCoupons(
+                        listOf(
+                            com.example.data.network.SupabaseAppCoupon(
+                                code = coupon.code,
+                                discountPercent = coupon.discountPercent,
+                                isFreeDelivery = coupon.isFreeDelivery,
+                                isBogo = coupon.isBogo,
+                                forUserEmail = coupon.forUserEmail,
+                                isUsed = coupon.isUsed,
+                                offerTitle = coupon.offerTitle
+                            )
                         )
                     )
-                )
-            } catch (e: Exception) {
-                android.util.Log.e("MajarahViewModel", "Failed to sync coupon to Supabase: ${e.message}")
+                } catch (e: Exception) {
+                    android.util.Log.e("MajarahViewModel", "Failed to sync coupon to Supabase: ${e.message}")
+                }
+                
+                android.widget.Toast.makeText(
+                    getApplication(), 
+                    "تهانينا يا عميلنا الذهبي/المميز! لقد فزت بكوبون عرض كوني: $couponCode 🌌✨", 
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            } else {
+                android.widget.Toast.makeText(
+                    getApplication(), 
+                    "شكراً لتقييمك الغالي ومساهمتك في تطوير المجرة! ✨🚀", 
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
             }
-            
-            android.widget.Toast.makeText(
-                getApplication(), 
-                "شكراً لتقييمك! لقد فزت بكوبون عرض متميز: $couponCode 🌌✨", 
-                android.widget.Toast.LENGTH_LONG
-            ).show()
         }
     }
 
@@ -2189,6 +2205,87 @@ $couponMessage---------------------------
                 onResult(null)
             } catch (e: Exception) {
                 refreshAllProfiles()
+                onResult(e.localizedMessage)
+            }
+        }
+    }
+
+    fun checkForUpdates() {
+        viewModelScope.launch {
+            try {
+                val updates = com.example.data.network.SupabaseClient.api.getAppUpdates()
+                if (updates.isNotEmpty()) {
+                    val update = updates.first()
+                    processUpdateInfo(update.latestVersionCode, update.latestVersionName, update.releaseDateMs)
+                } else {
+                    checkLocalUpdateSimulation()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                checkLocalUpdateSimulation()
+            }
+        }
+    }
+
+    private fun checkLocalUpdateSimulation() {
+        val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
+        val testCode = sharedPrefs.getInt("test_latest_version_code", 1)
+        val testName = sharedPrefs.getString("test_latest_version_name", "1.0.0") ?: "1.0.0"
+        val testReleaseMs = sharedPrefs.getLong("test_release_date_ms", System.currentTimeMillis())
+        processUpdateInfo(testCode, testName, testReleaseMs)
+    }
+
+    fun processUpdateInfo(latestCode: Int, latestName: String, releaseMs: Long) {
+        val currentCode = 1 // Our current version code
+        if (latestCode > currentCode) {
+            val now = System.currentTimeMillis()
+            val fifteenDaysMs = 15L * 24 * 60 * 60 * 1000L
+            val expiryMs = releaseMs + fifteenDaysMs
+            
+            latestVersionCode.value = latestCode
+            latestVersionName.value = latestName
+            releaseDateMs.value = releaseMs
+            
+            if (now > expiryMs) {
+                isUpdateMandatory.value = true
+                showUpdateDialog.value = true
+                daysRemaining.value = 0
+            } else {
+                isUpdateMandatory.value = false
+                showUpdateDialog.value = true
+                val diffMs = expiryMs - now
+                val diffDays = diffMs / (24L * 60 * 60 * 1000L)
+                daysRemaining.value = diffDays.coerceAtLeast(0)
+            }
+        } else {
+            showUpdateDialog.value = false
+        }
+    }
+
+    fun publishNewUpdate(code: Int, name: String, releaseMs: Long, onResult: (String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val sharedPrefs = getApplication<Application>().getSharedPreferences("majarah_prefs", android.content.Context.MODE_PRIVATE)
+                sharedPrefs.edit()
+                    .putInt("test_latest_version_code", code)
+                    .putString("test_latest_version_name", name)
+                    .putLong("test_release_date_ms", releaseMs)
+                    .apply()
+                
+                try {
+                    val updateObj = com.example.data.network.SupabaseAppUpdate(
+                        latestVersionCode = code,
+                        latestVersionName = name,
+                        releaseDateMs = releaseMs
+                    )
+                    com.example.data.network.SupabaseClient.api.insertAppUpdate(listOf(updateObj))
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+
+                processUpdateInfo(code, name, releaseMs)
+                onResult(null)
+            } catch (e: Exception) {
                 onResult(e.localizedMessage)
             }
         }

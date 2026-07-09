@@ -108,14 +108,28 @@ fun RestaurantsPlanetSection(
         else orders.filter { it.customerPhone == profile.phone }
     }
 
+    val myCustomerActiveOrders = remember(myCustomerOrders) {
+        myCustomerOrders.filter { it.status != "تم تسليم العميل وإغلاق الفاتورة ✅" && !it.status.contains("مغلقة") }
+    }
+
+    val myCustomerPastOrders = remember(myCustomerOrders) {
+        myCustomerOrders.filter { it.status == "تم تسليم العميل وإغلاق الفاتورة ✅" || it.status.contains("مغلقة") }
+    }
+
     // Determine tabs based on role
-    val tabTitles = remember(isAdmin, isRestaurant, myRestaurantOrders.size, myCustomerOrders.size, restaurants.size) {
+    val tabTitles = remember(isAdmin, isRestaurant, myRestaurantOrders.size, myCustomerActiveOrders.size, restaurants.size) {
+        val customerTabLabel = if (myCustomerActiveOrders.isNotEmpty()) {
+            "طلباتي الحالية (${myCustomerActiveOrders.size}) 📑"
+        } else {
+            "طلباتي السابقة 📑"
+        }
+
         if (isRestaurant) {
             listOf("المطاعم المتاحة 🍔", "طلبات مطعمي (${myRestaurantOrders.size}) 📋", "إدارة مطعمي 🏪")
         } else if (isAdmin) {
-            listOf("المطاعم المتاحة 🍔", "طلباتي السابقة (${myCustomerOrders.size}) 📑", "إدارة المطاعم (${restaurants.size}) ⚙️")
+            listOf("المطاعم المتاحة 🍔", customerTabLabel, "إدارة المطاعم (${restaurants.size}) ⚙️")
         } else {
-            listOf("المطاعم المتاحة 🍔", "طلباتي السابقة (${myCustomerOrders.size}) 📑")
+            listOf("المطاعم المتاحة 🍔", customerTabLabel)
         }
     }
 
@@ -128,6 +142,35 @@ fun RestaurantsPlanetSection(
     var selectedOrderForInvoice by remember { mutableStateOf<RestaurantOrderEntity?>(null) }
     var selectedOrderForApprove by remember { mutableStateOf<RestaurantOrderEntity?>(null) }
     val couriers by viewModel.allCouriers.collectAsStateWithLifecycle()
+
+    var activeDeliveredOverlayOrderId by remember { mutableStateOf<Int?>(null) }
+    var activeRatingDialogOrderId by remember { mutableStateOf<Int?>(null) }
+    val shownDeliveredNotifications = remember { mutableStateListOf<Int>() }
+    var pricingOrderTarget by remember { mutableStateOf<RestaurantOrderEntity?>(null) }
+
+    LaunchedEffect(orders) {
+        val customerPhone = activeProfile?.phone ?: ""
+        if (customerPhone.isNotBlank()) {
+            val deliveredCustomerOrder = orders.find { ord ->
+                ord.customerPhone.trim() == customerPhone.trim() &&
+                (ord.status.contains("تم التوصيل") || ord.status.contains("تم التسليم")) &&
+                ord.status != "تم تسليم العميل وإغلاق الفاتورة ✅" &&
+                ord.id !in shownDeliveredNotifications
+            }
+            if (deliveredCustomerOrder != null) {
+                shownDeliveredNotifications.add(deliveredCustomerOrder.id)
+                activeDeliveredOverlayOrderId = deliveredCustomerOrder.id
+            }
+        }
+    }
+
+    LaunchedEffect(activeDeliveredOverlayOrderId) {
+        if (activeDeliveredOverlayOrderId != null) {
+            kotlinx.coroutines.delay(5000)
+            activeRatingDialogOrderId = activeDeliveredOverlayOrderId
+            activeDeliveredOverlayOrderId = null
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -380,37 +423,81 @@ fun RestaurantsPlanetSection(
                         }
                     }
                 } else {
-                    // Regular customer orders
-                    val myEmail = activeProfile?.email ?: ""
-                    val myOrders = orders.filter { it.customerEmail == myEmail }
-                    if (myOrders.isEmpty()) {
-                        Box(
-                            modifier = Modifier.fillMaxSize().padding(32.dp),
-                            contentAlignment = Alignment.Center
+                    // Regular customer orders separated into active and past
+                    var customerSubTab by remember { mutableStateOf(0) } // 0: Active, 1: Past
+                    
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text("ليس لديك طلبات سابقة من المطاعم 📝", color = Color.Gray, fontSize = 13.sp)
+                            Button(
+                                onClick = { customerSubTab = 0 },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (customerSubTab == 0) CosmicSecondary else CosmicSurfaceVariant,
+                                    contentColor = if (customerSubTab == 0) Color.Black else Color.White
+                                ),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("الطلبات الجارية (${myCustomerActiveOrders.size}) 🛰️", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Button(
+                                onClick = { customerSubTab = 1 },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (customerSubTab == 1) CosmicSecondary else CosmicSurfaceVariant,
+                                    contentColor = if (customerSubTab == 1) Color.Black else Color.White
+                                ),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("الطلبات المغلقة (${myCustomerPastOrders.size}) 📑", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            items(myOrders) { ord ->
-                                RestaurantOrderCard(
-                                    order = ord,
-                                    onShowInvoice = { selectedOrderForInvoice = ord },
-                                    isAdmin = false,
-                                    onStatusChange = null,
-                                    onUpdatePayment = { method, base64 ->
-                                        viewModel.updateRestaurantOrderPayment(ord.id, method, base64) { err ->
-                                            if (err == null) {
-                                                Toast.makeText(context, "تم تأكيد السداد وإرسال الإشعار بنجاح! 🎉", Toast.LENGTH_SHORT).show()
-                                            } else {
-                                                Toast.makeText(context, "فشل تأكيد الدفع: $err", Toast.LENGTH_LONG).show()
+
+                        val targetOrders = if (customerSubTab == 0) myCustomerActiveOrders else myCustomerPastOrders
+
+                        if (targetOrders.isEmpty()) {
+                            Box(
+                                modifier = Modifier.fillMaxSize().padding(32.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (customerSubTab == 0) "ليس لديك طلبات جارية حالياً 🍔" else "لا توجد طلبات منفذة سابقة 📝",
+                                    color = Color.Gray,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(targetOrders) { ord ->
+                                    RestaurantOrderCard(
+                                        order = ord,
+                                        onShowInvoice = { selectedOrderForInvoice = ord },
+                                        isAdmin = false,
+                                        onStatusChange = null,
+                                        onUpdatePayment = { method, base64 ->
+                                            viewModel.updateRestaurantOrderPayment(ord.id, method, base64) { err ->
+                                                if (err == null) {
+                                                    viewModel.updateRestaurantOrderStatus(ord.id, "تم تسليم العميل وإغلاق الفاتورة ✅") { errStatus ->
+                                                        if (errStatus == null) {
+                                                            Toast.makeText(context, "تم سداد الفاتورة وإغلاقها بنجاح! 🎉🛰️", Toast.LENGTH_LONG).show()
+                                                        } else {
+                                                            Toast.makeText(context, "تم تأكيد السداد بنجاح! 🎉", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    }
+                                                } else {
+                                                    Toast.makeText(context, "فشل تأكيد الدفع: $err", Toast.LENGTH_LONG).show()
+                                                }
                                             }
                                         }
-                                    }
-                                )
+                                    )
+                                }
                             }
                         }
                     }
@@ -806,11 +893,11 @@ fun RestaurantsPlanetSection(
             restaurant = selectedRestaurantForOrder!!,
             activeProfile = activeProfile,
             onDismiss = { selectedRestaurantForOrder = null },
-            onSubmitOrder = { orderText, notesText, deliveryLoc, paymentMethod, receiptBase64 ->
+            onSubmitOrder = { orderText, notesText, deliveryLoc ->
                 val name = activeProfile?.name ?: "عميل المجرة"
                 val phone = activeProfile?.phone ?: ""
                 val email = activeProfile?.email ?: ""
-                val deliveryFee = 1500.0 // Fixed delivery fee for restaurants or calculated
+                val deliveryFee = 0.0 // Initially 0, Manager/Admin will specify it!
 
                 viewModel.addRestaurantOrder(
                     restaurantId = selectedRestaurantForOrder!!.id,
@@ -820,9 +907,9 @@ fun RestaurantsPlanetSection(
                     customerPhone = phone,
                     customerEmail = email,
                     itemsAndNotes = "$orderText\nملاحظات: $notesText\nموقع التوصيل: $deliveryLoc",
-                    paymentMethod = paymentMethod,
+                    paymentMethod = "", // Initially empty, chosen after delivery
                     deliveryFee = deliveryFee,
-                    bankReceiptImageUri = receiptBase64
+                    bankReceiptImageUri = null // Initially null, attached after delivery
                 ) { err, savedOrder ->
                     if (err == null && savedOrder != null) {
                         Toast.makeText(context, "تم تسجيل طلبك بنجاح! 🎉", Toast.LENGTH_LONG).show()
@@ -1002,6 +1089,219 @@ fun RestaurantsPlanetSection(
             dismissButton = {
                 TextButton(onClick = { selectedOrderForApprove = null }) {
                     Text("إلغاء", color = Color.White)
+                }
+            }
+        )
+    }
+
+    // 1. "بالهناء والشفاء" 5-second full-screen overlay dialog
+    if (activeDeliveredOverlayOrderId != null) {
+        AlertDialog(
+            onDismissRequest = {},
+            containerColor = CosmicDeepSpace,
+            shape = RoundedCornerShape(20.dp),
+            tonalElevation = 10.dp,
+            title = null,
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(CircleShape)
+                            .background(CosmicSecondary.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("❤️", fontSize = 42.sp)
+                    }
+                    
+                    Spacer(modifier = Modifier.height(20.dp))
+                    
+                    Text(
+                        text = "بالهناء والشفاء 🪐❤️",
+                        color = CosmicSecondary,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    Text(
+                        text = "تم تسليم وجبتك اللذيذة بنجاح.\nنتمنى لك وجبة شهية وممتعة في كوكبنا! 🍕🍔",
+                        color = Color.White.copy(alpha = 0.8f),
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 20.sp
+                    )
+                }
+            },
+            confirmButton = {}
+        )
+    }
+
+    // 2. "تقييم التطبيق" dialog (App Rating)
+    if (activeRatingDialogOrderId != null) {
+        var ratingStars by remember { mutableStateOf(5) }
+        var reviewText by remember { mutableStateOf("") }
+        
+        AlertDialog(
+            onDismissRequest = { activeRatingDialogOrderId = null },
+            containerColor = CosmicSurface,
+            shape = RoundedCornerShape(16.dp),
+            title = {
+                Text(
+                    text = "تقييم تطبيق المجرة الكوني 🌟🪐",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "يسعدنا كثيراً تقييم تجربتك معنا لتحسين خدمات التوصيل والطلب المستمر بالمجرة!",
+                        color = Color.White.copy(0.7f),
+                        fontSize = 12.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+                    
+                    // Star rating row
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    ) {
+                        for (i in 1..5) {
+                            val isSelected = i <= ratingStars
+                            Icon(
+                                imageVector = if (isSelected) Icons.Default.Star else Icons.Default.StarBorder,
+                                contentDescription = "$i نجوم",
+                                tint = if (isSelected) CosmicSecondary else Color.White.copy(0.4f),
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clickable { ratingStars = i }
+                            )
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(10.dp))
+                    
+                    OutlinedTextField(
+                        value = reviewText,
+                        onValueChange = { reviewText = it },
+                        placeholder = { Text("اكتب رأيك أو اقتراحاتك هنا (اختياري)...", fontSize = 11.sp, color = Color.White.copy(0.4f)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 3,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = CosmicSecondary,
+                            unfocusedBorderColor = CosmicSurfaceVariant
+                        )
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        Toast.makeText(context, "شكراً جزيلاً لتقييمك الكوني المميز! ❤️🌌", Toast.LENGTH_LONG).show()
+                        activeRatingDialogOrderId = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("إرسال التقييم 🚀", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { activeRatingDialogOrderId = null }) {
+                    Text("تخطي", color = Color.White.copy(0.6f))
+                }
+            }
+        )
+    }
+
+    // 3. Restaurant Owner Pricing Dialog
+    if (pricingOrderTarget != null) {
+        val ord = pricingOrderTarget!!
+        var priceInput by remember { mutableStateOf("") }
+        
+        AlertDialog(
+            onDismissRequest = { pricingOrderTarget = null },
+            containerColor = CosmicSurface,
+            shape = RoundedCornerShape(16.dp),
+            title = {
+                Text(
+                    text = "تسعير طلب الوجبة وإكمال التحضير 🍳💵",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Right
+                )
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "الرجاء تحديد السعر الإجمالي لقائمة الطعام والطلبات لتسليم الفاتورة للمدير:",
+                        color = Color.White.copy(0.8f),
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Right,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+                    
+                    OutlinedTextField(
+                        value = priceInput,
+                        onValueChange = { priceInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("السعر الإجمالي للوجبات (ج.س) 💰", color = CosmicSecondary, fontSize = 11.sp) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = CosmicSecondary,
+                            unfocusedBorderColor = CosmicSurfaceVariant
+                        )
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val price = priceInput.toDoubleOrNull() ?: 0.0
+                        if (price <= 0.0) {
+                            Toast.makeText(context, "الرجاء تحديد سعر صحيح للمأكولات ⚠️", Toast.LENGTH_SHORT).show()
+                        } else {
+                            viewModel.updateRestaurantOrderPriceAndStatus(ord.id, "جاهز للتوصيل (بانتظار المدير) 🛵", price) { err ->
+                                if (err == null) {
+                                    Toast.makeText(context, "تم تحديد السعر الكلي للوجبات وإرسال الطلب للمدير! 🛵🚀", Toast.LENGTH_SHORT).show()
+                                    pricingOrderTarget = null
+                                } else {
+                                    Toast.makeText(context, "فشل الحفظ: $err", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("إرسال للمدير الكوني 🚀", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pricingOrderTarget = null }) {
+                    Text("إلغاء", color = Color.White.copy(0.6f))
                 }
             }
         )
@@ -1531,73 +1831,12 @@ fun OrderFromRestaurantDialog(
     restaurant: RestaurantEntity,
     activeProfile: com.example.data.db.ProfileEntity?,
     onDismiss: () -> Unit,
-    onSubmitOrder: (order: String, notes: String, deliveryLoc: String, payment: String, receiptBase64: String?) -> Unit
+    onSubmitOrder: (order: String, notes: String, deliveryLoc: String) -> Unit
 ) {
     val context = LocalContext.current
     var orderText by remember { mutableStateOf("") }
     var notesText by remember { mutableStateOf("") }
     var deliveryLocation by remember { mutableStateOf("") }
-    var paymentMethod by remember { mutableStateOf("كاش") } // كاش , تحويل بنكي
-    var receiptBase64 by remember { mutableStateOf<String?>(null) }
-
-    val cameraLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.TakePicturePreview()
-    ) { bitmap ->
-        if (bitmap != null) {
-            val base64 = try {
-                val outputStream = ByteArrayOutputStream()
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 70, outputStream)
-                val bytes = outputStream.toByteArray()
-                Base64.encodeToString(bytes, Base64.DEFAULT)
-            } catch (e: Exception) {
-                null
-            }
-            if (base64 != null) {
-                receiptBase64 = base64
-                Toast.makeText(context, "تم التقاط إشعار التحويل! 📸", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    val receiptPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            try {
-                cameraLauncher.launch(null)
-            } catch (e: Exception) {
-                Toast.makeText(context, "تعذر تشغيل الكاميرا: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
-            }
-        } else {
-            Toast.makeText(context, "يجب منح إذن الكاميرا لالتقاط صورة الإشعار! ⚠️", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    val galleryLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        if (uri != null) {
-            val base64 = try {
-                val bitmap = if (android.os.Build.VERSION.SDK_INT >= 29) {
-                    val source = android.graphics.ImageDecoder.createSource(context.contentResolver, uri)
-                    android.graphics.ImageDecoder.decodeBitmap(source)
-                } else {
-                    @Suppress("DEPRECATION")
-                    android.provider.MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
-                }
-                val outputStream = ByteArrayOutputStream()
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 70, outputStream)
-                val bytes = outputStream.toByteArray()
-                Base64.encodeToString(bytes, Base64.DEFAULT)
-            } catch (e: Exception) {
-                null
-            }
-            if (base64 != null) {
-                receiptBase64 = base64
-                Toast.makeText(context, "تم اختيار إشعار التحويل! 🖼️", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1662,91 +1901,6 @@ fun OrderFromRestaurantDialog(
                         )
                     )
                 }
-
-                item {
-                    Text("طريقة الدفع الكونية 💳", color = CosmicSecondary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        listOf("كاش", "تحويل بنكي").forEach { m ->
-                            val isSel = paymentMethod == m
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(if (isSel) CosmicSecondary.copy(0.15f) else CosmicSurface)
-                                    .border(1.5.dp, if (isSel) CosmicSecondary else CosmicSurfaceVariant, RoundedCornerShape(8.dp))
-                                    .clickable { paymentMethod = m }
-                                    .padding(vertical = 10.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(m, color = if (isSel) CosmicSecondary else Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                            }
-                        }
-                    }
-                }
-
-                if (paymentMethod == "تحويل بنكي") {
-                    item {
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = CosmicDeepSpace),
-                            border = BorderStroke(1.dp, CosmicSurfaceVariant),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "حساب بنك الخرطوم للتحويل:\n3414879 باسم معاوية عثمان",
-                                    color = Color.White,
-                                    fontSize = 11.sp,
-                                    textAlign = TextAlign.Center,
-                                    lineHeight = 16.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text("الرجاء إضافة صورة إشعار التحويل البنكي:", color = CosmicSecondary, fontSize = 10.sp)
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Button(
-                                        onClick = {
-                                            if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                                                try {
-                                                    cameraLauncher.launch(null)
-                                                } catch (e: Exception) {
-                                                    Toast.makeText(context, "تعذر فتح الكاميرا: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
-                                                }
-                                            } else {
-                                                receiptPermissionLauncher.launch(android.Manifest.permission.CAMERA)
-                                            }
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant, contentColor = Color.White),
-                                        shape = RoundedCornerShape(8.dp)
-                                    ) {
-                                        Icon(Icons.Default.CameraAlt, null, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("الكاميرا 📸", fontSize = 10.sp)
-                                    }
-                                    Button(
-                                        onClick = { galleryLauncher.launch("image/*") },
-                                        colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant, contentColor = Color.White),
-                                        shape = RoundedCornerShape(8.dp)
-                                    ) {
-                                        Icon(Icons.Default.Photo, null, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("المعرض 🖼️", fontSize = 10.sp)
-                                    }
-                                }
-                                
-                                if (receiptBase64 != null) {
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text("تم إرفاق إشعار الدفع بنجاح! ✅", color = Color.Green, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
-                }
             }
         },
         confirmButton = {
@@ -1756,10 +1910,8 @@ fun OrderFromRestaurantDialog(
                         Toast.makeText(context, "الرجاء كتابة طلبك أولاً", Toast.LENGTH_SHORT).show()
                     } else if (deliveryLocation.isBlank()) {
                         Toast.makeText(context, "الرجاء كتابة عنوان التوصيل بالتفصيل", Toast.LENGTH_SHORT).show()
-                    } else if (paymentMethod == "تحويل بنكي" && receiptBase64 == null) {
-                        Toast.makeText(context, "الرجاء إرفاق صورة الإشعار البنكي لتأكيد الدفع", Toast.LENGTH_SHORT).show()
                     } else {
-                        onSubmitOrder(orderText, notesText, deliveryLocation, paymentMethod, receiptBase64)
+                        onSubmitOrder(orderText, notesText, deliveryLocation)
                     }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),

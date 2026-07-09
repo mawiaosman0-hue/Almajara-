@@ -1391,6 +1391,22 @@ fun CustomerPharmacyView(
     var showPrescriptionFormForPharmacy by remember { mutableStateOf<PharmacyEntity?>(null) }
     var activeSubTab by remember { mutableStateOf(0) } // 0: Pharmacies, 1: My Prescriptions
 
+    val myPharmacyOrders = remember(allOrders, activeProfile) {
+        val email = activeProfile?.email?.trim()?.lowercase() ?: ""
+        val phone = activeProfile?.phone?.trim() ?: ""
+        allOrders.filter {
+            (email.isNotBlank() && it.customerEmail.trim().lowercase() == email) ||
+            (phone.isNotBlank() && it.customerPhone.trim() == phone)
+        }
+    }
+
+    val rxActive = remember(myPharmacyOrders) {
+        myPharmacyOrders.filter { it.status != "تم التوصيل" && !it.status.startsWith("تم التسليم") }
+    }
+    val rxCompleted = remember(myPharmacyOrders) {
+        myPharmacyOrders.filter { it.status == "تم التوصيل" || it.status.startsWith("تم التسليم") }
+    }
+
     var activeWellWishesOrder by remember { mutableStateOf<PharmacyOrderEntity?>(null) }
     var showLocalRatingDialog by remember { mutableStateOf(false) }
 
@@ -1414,15 +1430,6 @@ fun CustomerPharmacyView(
     if (showLocalRatingDialog) {
         PharmacyAppRatingDialog {
             showLocalRatingDialog = false
-        }
-    }
-
-    val myPharmacyOrders = remember(allOrders, activeProfile) {
-        val email = activeProfile?.email?.trim()?.lowercase() ?: ""
-        val phone = activeProfile?.phone?.trim() ?: ""
-        allOrders.filter {
-            (email.isNotBlank() && it.customerEmail.trim().lowercase() == email) ||
-            (phone.isNotBlank() && it.customerPhone.trim() == phone)
         }
     }
 
@@ -1450,7 +1457,7 @@ fun CustomerPharmacyView(
                 onClick = { activeSubTab = 1 },
                 text = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (myPharmacyOrders.isNotEmpty()) {
+                        if (rxActive.isNotEmpty()) {
                             Box(
                                 modifier = Modifier
                                     .padding(end = 6.dp)
@@ -1459,7 +1466,7 @@ fun CustomerPharmacyView(
                                     .background(Color.Red),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(myPharmacyOrders.size.toString(), color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                Text(rxActive.size.toString(), color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                         Text("طلباتي السابقة (الروشتات) 📑", fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -1632,178 +1639,216 @@ fun CustomerPharmacyView(
             }
         } else {
             // My Prescriptions / Submitted Orders
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                if (myPharmacyOrders.isEmpty()) {
-                    item {
-                        Box(
-                            modifier = Modifier.fillMaxWidth().padding(32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("لا توجد روشتات أو طلبات طبية سابقة لك 📭", color = Color.Gray, fontSize = 13.sp)
-                        }
+            var rxSubFilter by remember { mutableStateOf(0) } // 0: Active, 1: Previous (Completed)
+            val displayedRx = if (rxSubFilter == 0) rxActive else rxCompleted
+
+            Column(modifier = Modifier.fillMaxWidth()) {
+                // Sub-tabs row for Patient Prescriptions
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = { rxSubFilter = 1 },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (rxSubFilter == 1) CosmicSecondary else CosmicSurface,
+                            contentColor = if (rxSubFilter == 1) Color.Black else Color.White
+                        ),
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("روشتات سابقة 📜 (${rxCompleted.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
-                } else {
-                    items(myPharmacyOrders) { order ->
-                        val pharm = approvedPharmacies.find { it.id == order.pharmacyId }
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = CosmicSurface),
-                            border = BorderStroke(1.dp, CosmicSurfaceVariant),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(14.dp), horizontalAlignment = Alignment.End) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = order.status,
-                                        color = when (order.status) {
-                                            "بانتظار الصيدلي" -> Color.Red
-                                            "بانتظار المدير" -> Color(0xFFFF9800)
-                                            "تم التوصيل" -> Color.Green
-                                            else -> CosmicSecondary
-                                        },
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier
-                                            .background(
-                                                when (order.status) {
-                                                    "بانتظار الصيدلي" -> Color.Red.copy(0.12f)
-                                                    "بانتظار المدير" -> Color(0xFFFF9800).copy(0.12f)
-                                                    "تم التوصيل" -> Color.Green.copy(0.12f)
-                                                    else -> CosmicSecondary.copy(0.12f)
-                                                },
-                                                RoundedCornerShape(6.dp)
-                                            )
-                                            .padding(horizontal = 8.dp, vertical = 3.dp)
-                                    )
-                                    Text(
-                                        text = "طلب روشتة #${order.id}",
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp
-                                    )
-                                }
+                    Button(
+                        onClick = { rxSubFilter = 0 },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (rxSubFilter == 0) CosmicSecondary else CosmicSurface,
+                            contentColor = if (rxSubFilter == 0) Color.Black else Color.White
+                        ),
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("روشتات قيد التنفيذ ⏳ (${rxActive.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
 
-                                Spacer(modifier = Modifier.height(6.dp))
-                                PharmacyOrderTracker(order.status)
-                                Spacer(modifier = Modifier.height(6.dp))
-
-                                Text("الصيدلية: ${pharm?.name ?: "صيدلية معتمدة بالمجرة"}", color = CosmicSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                
-                                if (order.medicinesJson.isNotBlank()) {
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text("الأدوية المسعرة: ${order.medicinesJson}", color = Color.White.copy(0.8f), fontSize = 11.sp, textAlign = TextAlign.Right)
-                                    Text("قيمة العلاج: ${viewModel.formatPrice(order.medicinePrice)} SDG", color = CosmicSecondary, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                                }
-
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text("توصيل الدواء مجان 🌸", color = Color.Green, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    Text("رسوم التوصيل 🚚:", color = Color.White.copy(0.6f), fontSize = 10.sp)
-                                }
-
-                                if (order.courierName.isNotBlank()) {
-                                    Text("المندوب المعين: ${order.courierName} (${order.courierPhone}) 🚴", color = Color.White, fontSize = 10.sp)
-                                }
-
-                                 // Display "بالشفاء العاجل لك إن شاء الله 🤲✨" when order.status == "تم التوصيل"
-                                if (order.status == "تم تسليم المندوب" || order.status == "تم التوصيل" || order.status.startsWith("تم التسليم")) {
-                                    if (order.status == "تم التوصيل" || order.status.startsWith("تم التسليم")) {
-                                        Spacer(modifier = Modifier.height(12.dp))
-                                        Card(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            colors = CardDefaults.cardColors(containerColor = Color.Green.copy(0.12f)),
-                                            border = BorderStroke(1.dp, Color.Green.copy(0.3f)),
-                                            shape = RoundedCornerShape(8.dp)
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth().padding(10.dp),
-                                                horizontalArrangement = Arrangement.Center,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text(
-                                                    text = "بالشفاء العاجل لك ان شاء الله",
-                                                    color = Color.Green,
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontSize = 12.sp,
-                                                    textAlign = TextAlign.Center
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    if (displayedRx.isEmpty()) {
+                        item {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(32.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (rxSubFilter == 0) "لا توجد روشتات قيد التنفيذ حالياً ⏳" else "لا توجد روشتات سابقة منفذة 📜",
+                                    color = Color.Gray,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+                    } else {
+                        items(displayedRx) { order ->
+                            val pharm = approvedPharmacies.find { it.id == order.pharmacyId }
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                                border = BorderStroke(1.dp, CosmicSurfaceVariant),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp), horizontalAlignment = Alignment.End) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = order.status,
+                                            color = when (order.status) {
+                                                "بانتظار الصيدلي" -> Color.Red
+                                                "بانتظار المدير" -> Color(0xFFFF9800)
+                                                "تم التوصيل" -> Color.Green
+                                                else -> CosmicSecondary
+                                            },
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier
+                                                .background(
+                                                    when (order.status) {
+                                                        "بانتظار الصيدلي" -> Color.Red.copy(0.12f)
+                                                        "بانتظار المدير" -> Color(0xFFFF9800).copy(0.12f)
+                                                        "تم التوصيل" -> Color.Green.copy(0.12f)
+                                                        else -> CosmicSecondary.copy(0.12f)
+                                                    },
+                                                    RoundedCornerShape(6.dp)
                                                 )
-                                            }
-                                        }
+                                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                                        )
+                                        Text(
+                                            text = "طلب روشتة #${order.id}",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp
+                                        )
                                     }
 
-                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    PharmacyOrderTracker(order.status)
+                                    Spacer(modifier = Modifier.height(6.dp))
 
-                                    val savedPaymentMethod = order.paymentMethod ?: ""
-                                    val savedReceiptBase64 = order.bankReceiptImageUri
-                                    val localContext = androidx.compose.ui.platform.LocalContext.current
-
-                                    var receiptToShow by remember { mutableStateOf<String?>(null) }
-                                    if (receiptToShow != null) {
-                                        ViewReceiptDialog(receiptToShow!!) { receiptToShow = null }
+                                    Text("الصيدلية: ${pharm?.name ?: "صيدلية معتمدة بالمجرة"}", color = CosmicSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    
+                                    if (order.medicinesJson.isNotBlank()) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text("الأدوية المسعرة: ${order.medicinesJson}", color = Color.White.copy(0.8f), fontSize = 11.sp, textAlign = TextAlign.Right)
+                                        Text("قيمة العلاج: ${viewModel.formatPrice(order.medicinePrice)} SDG", color = CosmicSecondary, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                                     }
 
-                                    val isPaymentSubmitted = (savedPaymentMethod.isNotBlank() && savedPaymentMethod != "كاش") || sharedPref.getBoolean("payment_submitted_${order.id}", false)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("توصيل الدواء مجان 🌸", color = Color.Green, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        Text("رسوم التوصيل 🚚:", color = Color.White.copy(0.6f), fontSize = 10.sp)
+                                    }
 
-                                    if (!isPaymentSubmitted) {
-                                        OrderPostDeliveryPaymentBlock(
-                                            currentPaymentMethod = "",
-                                            currentReceiptBase64 = null,
-                                            onSavePayment = { method, base64 ->
-                                                viewModel.updatePharmacyOrderPayment(order.id, method, base64) { err ->
-                                                    if (err == null) {
-                                                        sharedPref.edit().putBoolean("payment_submitted_${order.id}", true).apply()
-                                                        android.widget.Toast.makeText(localContext, "تم تأكيد الدفع وإكمال الفاتورة بنجاح! 🎉", android.widget.Toast.LENGTH_SHORT).show()
-                                                    } else {
-                                                        android.widget.Toast.makeText(localContext, "فشل حفظ الدفع: $err", android.widget.Toast.LENGTH_LONG).show()
-                                                    }
+                                    if (order.courierName.isNotBlank()) {
+                                        Text("المندوب المعين: ${order.courierName} (${order.courierPhone}) 🚴", color = Color.White, fontSize = 10.sp)
+                                    }
+
+                                     // Display "بالشفاء العاجل لك إن شاء الله 🤲✨" when order.status == "تم التوصيل"
+                                    if (order.status == "تم تسليم المندوب" || order.status == "تم التوصيل" || order.status.startsWith("تم التسليم")) {
+                                        if (order.status == "تم التوصيل" || order.status.startsWith("تم التسليم")) {
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            Card(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                colors = CardDefaults.cardColors(containerColor = Color.Green.copy(0.12f)),
+                                                border = BorderStroke(1.dp, Color.Green.copy(0.3f)),
+                                                shape = RoundedCornerShape(8.dp)
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth().padding(10.dp),
+                                                    horizontalArrangement = Arrangement.Center,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        text = "بالشفاء العاجل لك ان شاء الله",
+                                                        color = Color.Green,
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 12.sp,
+                                                        textAlign = TextAlign.Center
+                                                    )
                                                 }
                                             }
-                                        )
-                                    } else {
-                                        Card(
-                                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                                            colors = CardDefaults.cardColors(containerColor = CosmicSurface),
-                                            border = BorderStroke(1.dp, Color.Green.copy(0.3f)),
-                                            shape = RoundedCornerShape(10.dp)
-                                        ) {
-                                            Column(
-                                                modifier = Modifier.padding(10.dp).fillMaxWidth(),
-                                                horizontalAlignment = Alignment.End
+                                        }
+
+                                        Spacer(modifier = Modifier.height(10.dp))
+
+                                        val savedPaymentMethod = order.paymentMethod ?: ""
+                                        val savedReceiptBase64 = order.bankReceiptImageUri
+                                        val localContext = androidx.compose.ui.platform.LocalContext.current
+
+                                        var receiptToShow by remember { mutableStateOf<String?>(null) }
+                                        if (receiptToShow != null) {
+                                            ViewReceiptDialog(receiptToShow!!) { receiptToShow = null }
+                                        }
+
+                                        val isPaymentSubmitted = (savedPaymentMethod.isNotBlank() && savedPaymentMethod != "كاش") || sharedPref.getBoolean("payment_submitted_${order.id}", false)
+
+                                        if (!isPaymentSubmitted) {
+                                            OrderPostDeliveryPaymentBlock(
+                                                currentPaymentMethod = "",
+                                                currentReceiptBase64 = null,
+                                                onSavePayment = { method, base64 ->
+                                                    viewModel.updatePharmacyOrderPayment(order.id, method, base64) { err ->
+                                                        if (err == null) {
+                                                            sharedPref.edit().putBoolean("payment_submitted_${order.id}", true).apply()
+                                                            android.widget.Toast.makeText(localContext, "تم تأكيد الدفع وإكمال الفاتورة بنجاح! 🎉", android.widget.Toast.LENGTH_SHORT).show()
+                                                        } else {
+                                                            android.widget.Toast.makeText(localContext, "فشل حفظ الدفع: $err", android.widget.Toast.LENGTH_LONG).show()
+                                                        }
+                                                    }
+                                                }
+                                            )
+                                        } else {
+                                            Card(
+                                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                                colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                                                border = BorderStroke(1.dp, Color.Green.copy(0.3f)),
+                                                shape = RoundedCornerShape(10.dp)
                                             ) {
-                                                Text(
-                                                    text = "✅ تم تأكيد طريقة الدفع للصيدلية",
-                                                    color = Color.Green,
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontSize = 11.sp,
-                                                    modifier = Modifier.padding(bottom = 4.dp)
-                                                )
-                                                Text(
-                                                    text = "طريقة السداد: $savedPaymentMethod",
-                                                    color = Color.White,
-                                                    fontSize = 11.sp
-                                                )
-                                                if (!savedReceiptBase64.isNullOrBlank()) {
-                                                    Spacer(modifier = Modifier.height(6.dp))
-                                                    Button(
-                                                        onClick = { receiptToShow = savedReceiptBase64 },
-                                                        colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
-                                                        shape = RoundedCornerShape(8.dp),
-                                                        modifier = Modifier.fillMaxWidth()
-                                                    ) {
-                                                        Icon(Icons.Default.Image, null, modifier = Modifier.size(14.dp))
-                                                        Spacer(modifier = Modifier.width(4.dp))
-                                                        Text("عرض إشعار التحويل المرفق 📄", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                Column(
+                                                    modifier = Modifier.padding(10.dp).fillMaxWidth(),
+                                                    horizontalAlignment = Alignment.End
+                                                ) {
+                                                    Text(
+                                                        text = "✅ تم تأكيد طريقة الدفع للصيدلية",
+                                                        color = Color.Green,
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 11.sp,
+                                                        modifier = Modifier.padding(bottom = 4.dp)
+                                                    )
+                                                    Text(
+                                                        text = "طريقة السداد: $savedPaymentMethod",
+                                                        color = Color.White,
+                                                        fontSize = 11.sp
+                                                    )
+                                                    if (!savedReceiptBase64.isNullOrBlank()) {
+                                                        Spacer(modifier = Modifier.height(6.dp))
+                                                        Button(
+                                                            onClick = { receiptToShow = savedReceiptBase64 },
+                                                            colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                                                            shape = RoundedCornerShape(8.dp),
+                                                            modifier = Modifier.fillMaxWidth()
+                                                        ) {
+                                                            Icon(Icons.Default.Image, null, modifier = Modifier.size(14.dp))
+                                                            Spacer(modifier = Modifier.width(4.dp))
+                                                            Text("عرض إشعار التحويل المرفق 📄", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                        }
                                                     }
                                                 }
                                             }

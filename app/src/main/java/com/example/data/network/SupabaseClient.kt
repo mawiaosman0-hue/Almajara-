@@ -80,6 +80,7 @@ data class SupabaseProfile(
     @Json(name = "phone") val phone: String? = null,
     @Json(name = "email") val email: String? = null,
     @Json(name = "role") val role: String? = null,
+    @Json(name = "password") val password: String? = null,
     @Json(name = "created_at") val createdAt: String? = null
 )
 
@@ -196,6 +197,15 @@ data class SupabaseAppCoupon(
     @Json(name = "for_user_email") val forUserEmail: String? = null,
     @Json(name = "is_used") val isUsed: Boolean? = null,
     @Json(name = "offer_title") val offerTitle: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class SupabaseAppUpdate(
+    @Json(name = "id") val id: Int? = null,
+    @Json(name = "latest_version_code") val latestVersionCode: Int,
+    @Json(name = "latest_version_name") val latestVersionName: String,
+    @Json(name = "release_date_ms") val releaseDateMs: Long,
+    @Json(name = "update_url") val updateUrl: String = "https://play.google.com/store/apps/details?id=com.aistudio.majarah"
 )
 
 @JsonClass(generateAdapter = true)
@@ -327,6 +337,16 @@ interface SupabaseApi {
     suspend fun deleteProfile(
         @Query("id") idFilter: String
     )
+
+    @GET("rest/v1/app_updates")
+    suspend fun getAppUpdates(
+        @Query("select") select: String = "*"
+    ): List<SupabaseAppUpdate>
+
+    @POST("rest/v1/app_updates")
+    suspend fun insertAppUpdate(
+        @Body updates: List<SupabaseAppUpdate>
+    ): okhttp3.ResponseBody
 
     @GET("rest/v1/couriers")
     suspend fun getCouriers(
