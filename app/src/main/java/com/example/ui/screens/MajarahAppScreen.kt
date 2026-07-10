@@ -3667,14 +3667,13 @@ fun HistoryScreenBody(
                 val customerPhone = firstItem?.customerPhone ?: "09"
                 val customerAddress = firstItem?.customerAddress ?: "السودان"
                 val orderStatus = firstItem?.statusArabic ?: "جاري التجهيز للتوصيل 📦"
-                val isShipped = orderStatus.contains("شحن") || orderStatus.contains("مندوب") || orderStatus.contains("تم")
-                val isDelivered = orderStatus.contains("تم الاستلام") || 
+                val isShipped = orderStatus.contains("مندوب") || orderStatus.contains("شحن") || orderStatus.contains("توصيل") || orderStatus.contains("تم التسليم") || orderStatus.contains("تم التوصيل")
+                val isDelivered = orderStatus.contains("تم التسليم") || 
                         orderStatus.contains("تم التوصيل") || 
-                        orderStatus.contains("تم توصيل") || 
                         orderStatus.contains("تمت التوصيل") || 
+                        orderStatus.contains("تم الاستلام") ||
                         orderStatus.contains("تمام") || 
-                        orderStatus.contains("بنجاح") || 
-                        orderStatus.contains("تم التسليم")
+                        orderStatus.contains("بنجاح")
                 val orderDateMillis = firstItem?.orderDate ?: System.currentTimeMillis()
                 val courierName = firstItem?.courierName ?: ""
                 val courierPhone = firstItem?.courierPhone ?: ""
@@ -3966,7 +3965,7 @@ fun HistoryScreenBody(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = if (isPharmacyOrder) "توصيل الدواء مجان 🌸" else (if (showDeliveryPrice) "${formatPrice(deliveryPrice)} ج.س" else viewModel.t("يحدد عند تسليم المندوب 🚴", "To be determined upon delivery 🚴")),
+                                text = if (isPharmacyOrder) "توصيل الدواء مجان 🌸" else (if (showDeliveryPrice) "${formatPrice(deliveryPrice)} ج.س" else "يحدد لاحقاً ⏳🚴"),
                                 color = if (isPharmacyOrder) Color.Green else (if (showDeliveryPrice) Color.White else CosmicSecondary),
                                 fontSize = 12.sp,
                                 fontWeight = if (isPharmacyOrder || !showDeliveryPrice) FontWeight.Bold else FontWeight.Normal
@@ -3981,13 +3980,13 @@ fun HistoryScreenBody(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "${formatPrice(grandTotal)} ج.س",
+                                text = if (showDeliveryPrice) "${formatPrice(grandTotal)} ج.س" else "يحدد لاحقاً ⏳🚴",
                                 fontWeight = FontWeight.Bold,
-                                color = CosmicTertiary,
+                                color = if (showDeliveryPrice) CosmicTertiary else CosmicSecondary,
                                 fontSize = 14.sp
                             )
                             Text(
-                                text = if (showDeliveryPrice) "المبلغ الإجمالي الكلي:" else "المبلغ الإجمالي للمشتريات (غير شامل التوصيل):",
+                                text = if (showDeliveryPrice) "المبلغ الإجمالي الكلي:" else "المبلغ الإجمالي الكلي للفاتورة:",
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 12.sp
@@ -4031,7 +4030,8 @@ fun HistoryScreenBody(
                             ViewReceiptDialog(receiptToShow!!) { receiptToShow = null }
                         }
 
-                        if (isDelivered) {
+                        val isCourierAssigned = orderStatus.contains("تسليم المندوب") || orderStatus.contains("تسليم لمندوب") || courierName.isNotBlank() || isDelivered
+                        if (isCourierAssigned) {
                             val savedPaymentMethod = firstItem?.paymentMethod ?: ""
                             val savedReceiptBase64 = firstItem?.bankReceiptImageUri
 
@@ -4061,7 +4061,7 @@ fun HistoryScreenBody(
                                         horizontalAlignment = Alignment.End
                                     ) {
                                         Text(
-                                            text = "✅ تم تأكيد طريقة الدفع للطلب",
+                                            text = "✅ تم تأكيد طريقة الدفع للطلب ومطابقة الفاتورة",
                                             color = Color.Green,
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 11.sp,
@@ -4084,6 +4084,51 @@ fun HistoryScreenBody(
                                                 Spacer(modifier = Modifier.width(4.dp))
                                                 Text("عرض إشعار التحويل المرفق 📄", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                             }
+                                        }
+                                        
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        val whatsappContext = androidx.compose.ui.platform.LocalContext.current
+                                        Button(
+                                            onClick = {
+                                                val phone = firstItem?.courierPhone ?: ""
+                                                val cleanPhone = phone.replace("+", "").replace(" ", "")
+                                                val itemsSummary = orderItems.joinToString("\n") { "- ${it.productName} (العدد: ${it.quantity}) - ${formatPrice(it.priceAtOrder)} ج.س" }
+                                                val shareMsg = """
+                                                    🌌 فاتورة مندوب منتجات كوني 🌌
+                                                    ------------------------------
+                                                    👤 الزبون: $customerName
+                                                    📞 هاتف: $customerPhone
+                                                    📍 العنوان: $customerAddress
+                                                    ------------------------------
+                                                    📦 المشتريات:
+                                                    $itemsSummary
+                                                    ------------------------------
+                                                    🚚 رسوم التوصيل: ${formatPrice(deliveryPrice)} ج.س
+                                                    💰 إجمالي المبلغ الكلي: ${formatPrice(grandTotal)} ج.س
+                                                    💳 طريقة السداد: $savedPaymentMethod
+                                                    حالة الفاتورة: تم تأكيد الدفع ومطابقتها من العميل بنجاح مغلق 🔒✅
+                                                """.trimIndent()
+                                                
+                                                try {
+                                                    val intent = android.content.Intent(
+                                                        android.content.Intent.ACTION_VIEW,
+                                                        android.net.Uri.parse("https://api.whatsapp.com/send?phone=$cleanPhone&text=${android.net.Uri.encode(shareMsg)}")
+                                                    )
+                                                    whatsappContext.startActivity(intent)
+                                                } catch (e: Exception) {
+                                                    val clipboard = whatsappContext.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                                    val clip = android.content.ClipData.newPlainText("Majarah Invoice", shareMsg)
+                                                    clipboard.setPrimaryClip(clip)
+                                                    android.widget.Toast.makeText(whatsappContext, "تم نسخ تفاصيل الفاتورة! شاركها مع المندوب يدوياً 📋", android.widget.Toast.LENGTH_LONG).show()
+                                                }
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                                            shape = RoundedCornerShape(8.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Icon(Icons.Default.Share, null, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("مشاركة الفاتورة المؤكدة مع المندوب 🚴💬", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                         }
                                     }
                                 }
@@ -4554,7 +4599,6 @@ fun LoginScreenBody(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(androidx.compose.foundation.rememberScrollState())
                 .padding(16.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -12199,13 +12243,16 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
 
     // Restaurant counts
     val activeRestaurantsCount = myAssignedRestaurantOrders.count {
-        !it.status.contains("تم") && !it.status.contains("تسليم") && !it.status.contains("ملغ")
+        val isCompleted = (it.status.startsWith("تم التسليم") || it.status.contains("إغلاق") || it.status.contains("تسليم العميل")) && !it.status.contains("المندوب")
+        val isCancelled = it.status.contains("ملغ") || it.status.contains("ملغي")
+        !isCompleted && !isCancelled
     }
     val completedRestaurantsCount = myAssignedRestaurantOrders.count {
-        it.status.contains("تم") || it.status.contains("تسليم")
+        val isCompleted = (it.status.startsWith("تم التسليم") || it.status.contains("إغلاق") || it.status.contains("تسليم العميل")) && !it.status.contains("المندوب")
+        isCompleted
     }
     val cancelledRestaurantsCount = myAssignedRestaurantOrders.count {
-        it.status.contains("ملغ")
+        it.status.contains("ملغ") || it.status.contains("ملغي")
     }
 
     // Pharmacy counts
@@ -12796,7 +12843,7 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                 }
 
                 val filteredRestaurantOrders = myAssignedRestaurantOrders.filter { order ->
-                    val isActuallyCompleted = order.status.contains("تم") || order.status.contains("تسليم")
+                    val isActuallyCompleted = (order.status.startsWith("تم التسليم") || order.status.contains("إغلاق") || order.status.contains("تسليم العميل")) && !order.status.contains("المندوب")
                     val isCancelled = order.status.contains("ملغ") || order.status.contains("ملغي")
                     when (courierOrdersTab) {
                         0 -> !isActuallyCompleted && !isCancelled
@@ -13038,7 +13085,39 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                                         }
 
                                         if (isCompleted) {
+                                            var selectedInvoiceType by remember { mutableStateOf("مندوب منتج") }
+
                                             Spacer(modifier = Modifier.height(10.dp))
+                                            Text(
+                                                text = "تحديد نوع الفاتورة للمشاركة مع المدير:",
+                                                fontSize = 10.sp,
+                                                color = CosmicSecondary,
+                                                modifier = Modifier.fillMaxWidth(),
+                                                textAlign = TextAlign.Right
+                                            )
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)
+                                            ) {
+                                                listOf("مندوب صيدلية", "مندوب منتج", "مندوب مطعم").forEach { type ->
+                                                    val isSelected = selectedInvoiceType == type
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .background(if (isSelected) CosmicSecondary else CosmicSurfaceVariant, RoundedCornerShape(12.dp))
+                                                            .clickable { selectedInvoiceType = type }
+                                                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = type,
+                                                            fontSize = 9.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = if (isSelected) Color.Black else Color.White
+                                                        )
+                                                    }
+                                                }
+                                            }
+
+                                            Spacer(modifier = Modifier.height(6.dp))
                                             Button(
                                                 onClick = {
                                                     val itemsText = itemsList.joinToString("\n") { "• ${it.productName} (العدد: ${it.quantity}) - ${viewModel.formatPrice(it.priceAtOrder * it.quantity)}" }
@@ -13046,13 +13125,14 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                                                     val invoiceMsg = """
  🌌 فاتورة تسليم طلبية المجرة 🌌
  ---------------------------
- 🚴 نوع الفاتورة: فاتورة مندوب
+ 🚴 نوع الفاتورة: فاتورة $selectedInvoiceType 📦
  ✍️ اسم المندوب: ${myCourierInfo?.name ?: "مندوب مجرة"}
  👤 اسم الزبون: ${parent?.customerName ?: "غير معروف"}
  📞 هاتف الزبون: ${parent?.customerPhone ?: "غير معروف"}
  📍 عنوان التسليم: ${parent?.customerAddress ?: "السودان"}
  📦 رقم الطلب: #$orderId
- 💳 طريقة الدفع والاستلام: ${parent?.statusArabic ?: "غير محدد"}
+ 💳 طريقة السداد للطلب: ${parent?.paymentMethod ?: "كاش 💵"}
+ 📝 حالة الفاتورة: ${parent?.statusArabic ?: "غير محدد"}
  ---------------------------
  💸 تفاصيل الفاتورة والمنتجات:
  $itemsText
@@ -13093,7 +13173,7 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                             }
                         } else if (courierMainCategoryTab == 1) {
                             items(filteredRestaurantOrders) { order ->
-                                val isCompleted = order.status.contains("تم") || order.status.contains("تسليم")
+                                val isCompleted = (order.status.startsWith("تم التسليم") || order.status.contains("إغلاق") || order.status.contains("تسليم العميل")) && !order.status.contains("المندوب")
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
                                     colors = CardDefaults.cardColors(containerColor = CosmicSurface),
@@ -13178,13 +13258,45 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                                         }
 
                                         if (isCompleted) {
+                                            var selectedInvoiceType by remember { mutableStateOf("مندوب مطعم") }
+
                                             Spacer(modifier = Modifier.height(10.dp))
+                                            Text(
+                                                text = "تحديد نوع الفاتورة للمشاركة مع المدير:",
+                                                fontSize = 10.sp,
+                                                color = CosmicSecondary,
+                                                modifier = Modifier.fillMaxWidth(),
+                                                textAlign = TextAlign.Right
+                                            )
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)
+                                            ) {
+                                                listOf("مندوب صيدلية", "مندوب منتج", "مندوب مطعم").forEach { type ->
+                                                    val isSelected = selectedInvoiceType == type
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .background(if (isSelected) CosmicSecondary else CosmicSurfaceVariant, RoundedCornerShape(12.dp))
+                                                            .clickable { selectedInvoiceType = type }
+                                                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = type,
+                                                            fontSize = 9.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = if (isSelected) Color.Black else Color.White
+                                                        )
+                                                    }
+                                                }
+                                            }
+
+                                            Spacer(modifier = Modifier.height(6.dp))
                                             Button(
                                                 onClick = {
                                                     val invoiceMsg = """
  🍔 فاتورة تسليم وجبة مطعم 🍔
  ---------------------------
- 🚴 نوع الفاتورة: فاتورة مطاعم
+ 🚴 نوع الفاتورة: فاتورة $selectedInvoiceType
  ✍️ اسم المندوب: ${myCourierInfo?.name ?: "مندوب مجرة"}
  👤 اسم الزبون: ${order.customerName}
  📞 هاتف الزبون: ${order.customerPhone}
@@ -13315,13 +13427,45 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                                         }
 
                                         if (isCompleted) {
+                                            var selectedInvoiceType by remember { mutableStateOf("مندوب صيدلية") }
+
                                             Spacer(modifier = Modifier.height(10.dp))
+                                            Text(
+                                                text = "تحديد نوع الفاتورة للمشاركة مع المدير:",
+                                                fontSize = 10.sp,
+                                                color = CosmicSecondary,
+                                                modifier = Modifier.fillMaxWidth(),
+                                                textAlign = TextAlign.Right
+                                            )
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)
+                                            ) {
+                                                listOf("مندوب صيدلية", "مندوب منتج", "مندوب مطعم").forEach { type ->
+                                                    val isSelected = selectedInvoiceType == type
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .background(if (isSelected) CosmicSecondary else CosmicSurfaceVariant, RoundedCornerShape(12.dp))
+                                                            .clickable { selectedInvoiceType = type }
+                                                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = type,
+                                                            fontSize = 9.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = if (isSelected) Color.Black else Color.White
+                                                        )
+                                                    }
+                                                }
+                                            }
+
+                                            Spacer(modifier = Modifier.height(6.dp))
                                             Button(
                                                 onClick = {
                                                     val invoiceMsg = """
  💊 فاتورة تسليم دواء صيدلية 💊
  ---------------------------
- 🚴 نوع الفاتورة: فاتورة صيدلية
+ 🚴 نوع الفاتورة: فاتورة $selectedInvoiceType
  ✍️ اسم المندوب: ${myCourierInfo?.name ?: "مندوب مجرة"}
  👤 اسم المريض/الزبون: ${order.customerName}
  📞 هاتف الزبون: ${order.customerPhone}
@@ -13755,8 +13899,10 @@ fun OrderPostDeliveryPaymentBlock(
     onSavePayment: (paymentMethod: String, receiptBase64: String?) -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
     var selectedOption by remember { mutableStateOf(if (currentPaymentMethod.contains("بنك")) "bank" else "cash") }
     var attachedReceiptBase64 by remember { mutableStateOf(currentReceiptBase64) }
+    var transactionId by remember { mutableStateOf("") }
     var isSaving by remember { mutableStateOf(false) }
 
     val cameraLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -13769,6 +13915,28 @@ fun OrderPostDeliveryPaymentBlock(
             val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.DEFAULT)
             attachedReceiptBase64 = base64
             android.widget.Toast.makeText(context, "تم التقاط صورة الإشعار بنجاح! 📸", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val galleryLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
+                if (bitmap != null) {
+                    val outputStream = java.io.ByteArrayOutputStream()
+                    bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, outputStream)
+                    val bytes = outputStream.toByteArray()
+                    val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.DEFAULT)
+                    attachedReceiptBase64 = base64
+                    android.widget.Toast.makeText(context, "تم اختيار صورة الإشعار بنجاح! 🖼️", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                android.widget.Toast.makeText(context, "فشل قراءة الصورة", android.widget.Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -13844,62 +14012,183 @@ fun OrderPostDeliveryPaymentBlock(
             }
 
             if (selectedOption == "bank") {
+                Spacer(modifier = Modifier.height(10.dp))
+                
+                // Bank Details Box
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = CosmicSurfaceVariant.copy(0.3f)),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, CosmicSecondary.copy(0.2f)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp).fillMaxWidth(),
+                        horizontalAlignment = Alignment.End
+                    ) {
+                        Text(
+                            text = "🏦 بيانات الحساب للتحويل البنكي:",
+                            color = CosmicSecondary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("بنك الخرطوم 🇸🇩", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("اسم البنك:", color = Color.Gray, fontSize = 10.sp)
+                        }
+                        
+                        Spacer(modifier = Modifier.height(4.dp))
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                TextButton(
+                                    onClick = {
+                                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString("معاوية عثمان احمد ياسين"))
+                                        android.widget.Toast.makeText(context, "تم نسخ الاسم بنجاح! 📋", android.widget.Toast.LENGTH_SHORT).show()
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                    modifier = Modifier.height(24.dp)
+                                ) {
+                                    Text("نسخ 📋", fontSize = 9.sp, color = CosmicSecondary, fontWeight = FontWeight.Bold)
+                                }
+                                Text("معاوية عثمان احمد ياسين", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Text("الاسم كامل:", color = Color.Gray, fontSize = 10.sp)
+                        }
+                        
+                        Spacer(modifier = Modifier.height(4.dp))
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                TextButton(
+                                    onClick = {
+                                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString("3414879"))
+                                        android.widget.Toast.makeText(context, "تم نسخ رقم الحساب! 📋", android.widget.Toast.LENGTH_SHORT).show()
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                    modifier = Modifier.height(24.dp)
+                                ) {
+                                    Text("نسخ 📋", fontSize = 9.sp, color = CosmicSecondary, fontWeight = FontWeight.Bold)
+                                }
+                                Text("3414879", color = CosmicSecondary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Text("رقم الحساب:", color = Color.Gray, fontSize = 10.sp)
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(10.dp))
+                
+                // Transaction ID Field
+                Text(
+                    text = "رقم المعاملة أو العملية البنكية:",
+                    color = Color.White.copy(0.8f),
+                    fontSize = 10.sp,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                OutlinedTextField(
+                    value = transactionId,
+                    onValueChange = { transactionId = it },
+                    placeholder = { Text("أدخل رقم العملية البنكية هنا (إن وجد)", fontSize = 10.sp, color = Color.White.copy(0.4f)) },
+                    singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 11.sp, textAlign = TextAlign.Right),
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = CosmicSecondary,
+                        unfocusedBorderColor = Color.White.copy(0.3f)
+                    )
+                )
+                
                 Spacer(modifier = Modifier.height(8.dp))
+                
+                // Image Attach Section (Camera and Gallery buttons side by side)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Capture receipt button
+                    // Camera
                     Button(
                         onClick = { cameraLauncher.launch(null) },
                         colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant, contentColor = Color.White),
                         shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.weight(1.2f),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(vertical = 8.dp)
                     ) {
-                        Icon(Icons.Default.CameraAlt, null, modifier = Modifier.size(14.dp))
+                        Icon(Icons.Default.CameraAlt, null, modifier = Modifier.size(14.dp), tint = CosmicSecondary)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("إرفاق إشعار 📸", fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        Text("التقاط بالكاميرا 📸", fontSize = 9.sp, fontWeight = FontWeight.Bold)
                     }
 
-                    if (attachedReceiptBase64 != null) {
-                        Text(
-                            text = "تم إرفاق الإشعار بنجاح ✅",
-                            color = Color.Green,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.weight(1f),
-                            textAlign = TextAlign.Center
-                        )
-                    } else {
-                        Text(
-                            text = "الرجاء تصوير إشعار التحويل ⚠️",
-                            color = Color.Yellow,
-                            fontSize = 9.sp,
-                            modifier = Modifier.weight(1f),
-                            textAlign = TextAlign.Center
-                        )
+                    // Gallery
+                    Button(
+                        onClick = { galleryLauncher.launch("image/*") },
+                        colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant, contentColor = Color.White),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(vertical = 8.dp)
+                    ) {
+                        Icon(Icons.Default.Image, null, modifier = Modifier.size(14.dp), tint = CosmicSecondary)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("إرفاق من الاستوديو 🖼️", fontSize = 9.sp, fontWeight = FontWeight.Bold)
                     }
+                }
+                
+                Spacer(modifier = Modifier.height(6.dp))
+                
+                if (attachedReceiptBase64 != null) {
+                    Text(
+                        text = "تم إرفاق إشعار الدفع بنجاح ✅",
+                        color = Color.Green,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
+                    )
+                } else {
+                    Text(
+                        text = "يرجى كتابة رقم العملية أو إرفاق صورة الإشعار للتأكيد ⚠️",
+                        color = Color.Yellow,
+                        fontSize = 10.sp,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
+                    )
                 }
             }
 
             Spacer(modifier = Modifier.height(10.dp))
 
+            val isSubmitEnabled = selectedOption == "cash" || transactionId.isNotBlank() || attachedReceiptBase64 != null
+
             Button(
                 onClick = {
                     isSaving = true
-                    onSavePayment(
-                        if (selectedOption == "bank") "تحويل بنكي" else "كاش",
-                        if (selectedOption == "bank") attachedReceiptBase64 else null
-                    )
+                    val methodStr = if (selectedOption == "bank") {
+                        if (transactionId.isNotBlank()) "تحويل بنكي (رقم العملية: ${transactionId.trim()})" else "تحويل بنكي"
+                    } else {
+                        "كاش"
+                    }
+                    onSavePayment(methodStr, attachedReceiptBase64)
                     isSaving = false
                 },
-                enabled = !isSaving && (selectedOption == "cash" || attachedReceiptBase64 != null),
+                enabled = !isSaving && isSubmitEnabled,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
                 shape = RoundedCornerShape(8.dp),
-                contentPadding = PaddingValues(vertical = 8.dp)
+                contentPadding = PaddingValues(vertical = 10.dp)
             ) {
                 Text("تأكيد وإرسال تفاصيل الدفع 🚀", fontWeight = FontWeight.Bold, fontSize = 11.sp)
             }

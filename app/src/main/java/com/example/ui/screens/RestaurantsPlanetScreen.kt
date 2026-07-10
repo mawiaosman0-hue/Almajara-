@@ -109,11 +109,25 @@ fun RestaurantsPlanetSection(
     }
 
     val myCustomerActiveOrders = remember(myCustomerOrders) {
-        myCustomerOrders.filter { it.status != "تم تسليم العميل وإغلاق الفاتورة ✅" && !it.status.contains("مغلقة") }
+        myCustomerOrders.filter {
+            val isClosedForCustomer = it.status == "تم تسليم العميل وإغلاق الفاتورة ✅" ||
+                    it.status.contains("مغلقة") ||
+                    it.status == "بانتظار تأكيد التسليم من المندوب" ||
+                    it.status.startsWith("تم التسليم") ||
+                    it.paymentMethod.isNotBlank()
+            !isClosedForCustomer
+        }
     }
 
     val myCustomerPastOrders = remember(myCustomerOrders) {
-        myCustomerOrders.filter { it.status == "تم تسليم العميل وإغلاق الفاتورة ✅" || it.status.contains("مغلقة") }
+        myCustomerOrders.filter {
+            val isClosedForCustomer = it.status == "تم تسليم العميل وإغلاق الفاتورة ✅" ||
+                    it.status.contains("مغلقة") ||
+                    it.status == "بانتظار تأكيد التسليم من المندوب" ||
+                    it.status.startsWith("تم التسليم") ||
+                    it.paymentMethod.isNotBlank()
+            isClosedForCustomer
+        }
     }
 
     // Determine tabs based on role
@@ -288,28 +302,78 @@ fun RestaurantsPlanetSection(
                             }
                         }
                     } else {
-                        if (myRestaurantOrders.isEmpty()) {
-                            Box(
-                                modifier = Modifier.fillMaxSize().padding(32.dp),
-                                contentAlignment = Alignment.Center
+                        var restaurantOwnerOrdersSubTab by remember { mutableStateOf(0) } // 0: Active, 1: Completed
+                        val activeRestaurantOrders = myRestaurantOrders.filter {
+                            val status = it.status
+                            !status.contains("تم تسليم العميل") && !status.contains("إغلاق") && !status.contains("تم التسليم") && !status.contains("كاش") && !status.contains("بنكي")
+                        }
+                        val completedRestaurantOrders = myRestaurantOrders.filter {
+                            val status = it.status
+                            status.contains("تم تسليم العميل") || status.contains("إغلاق") || status.contains("تم التسليم") || status.contains("كاش") || status.contains("بنكي")
+                        }
+                        val displayedOrders = if (restaurantOwnerOrdersSubTab == 0) activeRestaurantOrders else completedRestaurantOrders
+
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            // Owner Orders Tabs
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                                    .background(CosmicSurfaceVariant.copy(0.3f), RoundedCornerShape(10.dp))
+                                    .padding(4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Text("لا توجد طلبات واردة لمطعمك حالياً 🪐🍔", color = Color.Gray, fontSize = 14.sp, textAlign = TextAlign.Center)
+                                Button(
+                                    onClick = { restaurantOwnerOrdersSubTab = 0 },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (restaurantOwnerOrdersSubTab == 0) CosmicSecondary else Color.Transparent,
+                                        contentColor = if (restaurantOwnerOrdersSubTab == 0) Color.Black else Color.White
+                                    )
+                                ) {
+                                    Text("الطلبات النشطة 🍳 (${activeRestaurantOrders.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Button(
+                                    onClick = { restaurantOwnerOrdersSubTab = 1 },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (restaurantOwnerOrdersSubTab == 1) Color.Green.copy(0.8f) else Color.Transparent,
+                                        contentColor = if (restaurantOwnerOrdersSubTab == 1) Color.Black else Color.White
+                                    )
+                                ) {
+                                    Text("المكتملة والمنفذة ✅ (${completedRestaurantOrders.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
                             }
-                        } else {
-                            LazyColumn(
-                                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                item {
+
+                            if (displayedOrders.isEmpty()) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize().padding(32.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
                                     Text(
-                                        "طلبات مطعمك الواردة (${myRestaurantOrders.size} طلبات) 🔔",
-                                        color = CosmicSecondary,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 15.sp,
-                                        modifier = Modifier.padding(top = 8.dp)
+                                        text = if (restaurantOwnerOrdersSubTab == 0) "لا توجد طلبات جارية أو نشطة حالياً لمطعمك 🪐🍔" else "سجل الفواتير والطلبات المكتملة فارغ حالياً 📜💼",
+                                        color = Color.Gray,
+                                        fontSize = 13.sp,
+                                        textAlign = TextAlign.Center
                                     )
                                 }
-                                items(myRestaurantOrders) { ord ->
+                            } else {
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    item {
+                                        Text(
+                                            text = if (restaurantOwnerOrdersSubTab == 0) "طلبات مطعمك النشطة والمطروحة للتحضير 🍳" else "أرشيف فواتير طلبات مطعمك المكتملة كلياً 📜✅",
+                                            color = CosmicSecondary,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            modifier = Modifier.padding(top = 4.dp)
+                                        )
+                                    }
+                                    items(displayedOrders) { ord ->
                                     val orderIndex = myRestaurantOrders.indexOf(ord) + 1
                                     Card(
                                         modifier = Modifier.fillMaxWidth(),
@@ -422,6 +486,7 @@ fun RestaurantsPlanetSection(
                             }
                         }
                     }
+                }
                 } else {
                     // Regular customer orders separated into active and past
                     var customerSubTab by remember { mutableStateOf(0) } // 0: Active, 1: Past
@@ -1651,6 +1716,11 @@ fun RestaurantOrderCard(
                 maxLines = 2
             )
 
+            if (!isAdmin) {
+                Spacer(modifier = Modifier.height(12.dp))
+                RestaurantOrderTrackingPipeline(order.status)
+            }
+
             Spacer(modifier = Modifier.height(10.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -2326,4 +2396,123 @@ fun AddRestaurantDialog(
         },
         containerColor = CosmicSurface
     )
+}
+
+@Composable
+fun RestaurantOrderTrackingPipeline(status: String, modifier: Modifier = Modifier) {
+    // Steps:
+    // 1. قيد التحضير بالمطعم 🍳 (Active: "معلق", "قيد التحضير". Done: "جاهز للتوصيل" or higher)
+    // 2. تم تسليم المندوب 🚴 (Active: contains "المندوب" or "التوصيل" or "تأكيد". Done: "تم التسليم" or higher)
+    // 3. تم التسليم ✅ (Active/Done: contains "تم التسليم" or is "تم تسليم العميل وإغلاق الفاتورة ✅")
+    
+    val step1State = when {
+        status == "معلق" || status.contains("التحضير") -> StepState.ACTIVE
+        status.contains("جاهز") || status.contains("المندوب") || status.contains("التسليم") || status.contains("تأكيد") || status.contains("إغلاق") -> StepState.DONE
+        else -> StepState.AWAITING
+    }
+    
+    val step2State = when {
+        status.contains("المندوب") || status.contains("التوصيل") || status.contains("تأكيد") -> {
+            if (status.contains("تم التسليم") || status.contains("إغلاق") || status.contains("تسليم العميل")) StepState.DONE else StepState.ACTIVE
+        }
+        status.contains("تم التسليم") || status.contains("إغلاق") || status.contains("تسليم العميل") -> StepState.DONE
+        else -> StepState.AWAITING
+    }
+    
+    val step3State = when {
+        status.contains("تم التسليم") || status.contains("إغلاق") || status.contains("تسليم العميل") -> StepState.DONE
+        else -> StepState.AWAITING
+    }
+    
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = CosmicSurfaceVariant.copy(0.2f)),
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.dp, CosmicSurfaceVariant.copy(0.5f))
+    ) {
+        Row(
+            modifier = Modifier.padding(10.dp).fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Step 1: تجهيز الطلب
+            TrackingStepItem(
+                title = "تجهيز الطلب 🍳",
+                state = step1State
+            )
+            
+            // Connection line 1
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(2.dp)
+                    .background(if (step2State != StepState.AWAITING) CosmicSecondary else Color.DarkGray)
+            )
+            
+            // Step 2: تم تسليم المندوب
+            TrackingStepItem(
+                title = "تم تسليم المندوب 🚴",
+                state = step2State
+            )
+            
+            // Connection line 2
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(2.dp)
+                    .background(if (step3State == StepState.DONE) Color.Green else Color.DarkGray)
+            )
+            
+            // Step 3: تم التسليم
+            TrackingStepItem(
+                title = "تم التسليم ✅",
+                state = step3State
+            )
+        }
+    }
+}
+
+enum class StepState {
+    AWAITING, ACTIVE, DONE
+}
+
+@Composable
+fun TrackingStepItem(title: String, state: StepState) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier
+                .size(24.dp)
+                .background(
+                    color = when (state) {
+                        StepState.DONE -> Color.Green
+                        StepState.ACTIVE -> CosmicSecondary
+                        StepState.AWAITING -> Color.DarkGray
+                    },
+                    shape = CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = when (state) {
+                    StepState.DONE -> Icons.Default.Check
+                    StepState.ACTIVE -> Icons.Default.DirectionsRun
+                    StepState.AWAITING -> Icons.Default.HourglassEmpty
+                },
+                contentDescription = null,
+                tint = Color.Black,
+                modifier = Modifier.size(12.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = title,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            color = when (state) {
+                StepState.DONE -> Color.Green
+                StepState.ACTIVE -> CosmicSecondary
+                StepState.AWAITING -> Color.White.copy(0.5f)
+            }
+        )
+    }
 }

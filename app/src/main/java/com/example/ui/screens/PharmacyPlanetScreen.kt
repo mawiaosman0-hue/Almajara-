@@ -924,10 +924,10 @@ fun PharmacistOrdersTab(
     var subTabState by remember { mutableStateOf(0) } // 0: Active, 1: Previous Prescriptions
     
     val activeOrders = remember(myPharmacyOrders) {
-        myPharmacyOrders.filter { it.status == "بانتظار الصيدلي" || it.status == "بانتظار المدير" }
+        myPharmacyOrders.filter { !it.status.contains("تم التسليم") && !it.status.contains("تم تسليم") && !it.status.contains("إغلاق") && !it.status.contains("تم التوصيل") && !it.status.contains("كاش") && !it.status.contains("بنكي") }
     }
     val previousOrders = remember(myPharmacyOrders) {
-        myPharmacyOrders.filter { it.status != "بانتظار الصيدلي" && it.status != "بانتظار المدير" }
+        myPharmacyOrders.filter { it.status.contains("تم التسليم") || it.status.contains("تم تسليم") || it.status.contains("إغلاق") || it.status.contains("تم التوصيل") || it.status.contains("كاش") || it.status.contains("بنكي") }
     }
 
     val displayOrders = if (subTabState == 0) activeOrders else previousOrders
