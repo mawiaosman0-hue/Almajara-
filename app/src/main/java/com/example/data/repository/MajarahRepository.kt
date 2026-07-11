@@ -49,43 +49,141 @@ class MajarahRepository(
     }
 
     suspend fun insertRestaurant(restaurant: com.example.data.db.RestaurantEntity): Long {
-        return restaurantDao.insertRestaurant(restaurant)
+        val id = restaurantDao.insertRestaurant(restaurant)
+        try {
+            val sup = com.example.data.network.SupabaseRestaurant(
+                id = if (id == 0L) null else id.toInt(),
+                name = restaurant.name,
+                phone = restaurant.phone,
+                isApproved = restaurant.isApproved,
+                logoImageUri = restaurant.logoImageUri,
+                menuImageUri = restaurant.menuImageUri
+            )
+            com.example.data.network.SupabaseClient.api.insertRestaurants(listOf(sup))
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return id
     }
 
     suspend fun deleteRestaurant(id: Int) {
         restaurantDao.deleteRestaurant(id)
+        try {
+            com.example.data.network.SupabaseClient.api.deleteRestaurant("eq.$id")
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     suspend fun updateRestaurantApproval(id: Int, approved: Boolean) {
         restaurantDao.updateRestaurantApproval(id, approved)
+        try {
+            val list = restaurantDao.getAllRestaurantsSnapshot()
+            val restaurant = list.find { it.id == id }
+            if (restaurant != null) {
+                updateRestaurant(restaurant.copy(isApproved = approved))
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     suspend fun insertRestaurantOrder(order: com.example.data.db.RestaurantOrderEntity): Long {
-        return restaurantOrderDao.insertOrder(order)
+        val id = restaurantOrderDao.insertOrder(order)
+        try {
+            val sup = com.example.data.network.SupabaseRestaurantOrder(
+                id = if (id == 0L) null else id.toInt(),
+                restaurantName = order.restaurantName,
+                restaurantPhone = order.restaurantPhone,
+                customerName = order.customerName,
+                customerPhone = order.customerPhone,
+                itemsAndNotes = order.itemsAndNotes,
+                paymentMethod = order.paymentMethod,
+                deliveryFee = order.deliveryFee,
+                status = order.status,
+                courierName = order.courierName,
+                courierPhone = order.courierPhone,
+                createdAt = order.createdAt
+            )
+            com.example.data.network.SupabaseClient.api.insertRestaurantOrders(listOf(sup))
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return id
     }
 
     suspend fun updateRestaurantOrderStatus(id: Int, status: String) {
         restaurantOrderDao.updateOrderStatus(id, status)
+        try {
+            val fields = mapOf("status" to status)
+            com.example.data.network.SupabaseClient.api.updateRestaurantOrder("eq.$id", fields)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     suspend fun updateRestaurant(restaurant: com.example.data.db.RestaurantEntity) {
         restaurantDao.updateRestaurant(restaurant)
+        try {
+            val sup = com.example.data.network.SupabaseRestaurant(
+                id = restaurant.id,
+                name = restaurant.name,
+                phone = restaurant.phone,
+                isApproved = restaurant.isApproved,
+                logoImageUri = restaurant.logoImageUri,
+                menuImageUri = restaurant.menuImageUri
+            )
+            com.example.data.network.SupabaseClient.api.updateRestaurant("eq.${restaurant.id}", sup)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     suspend fun updateRestaurantOrderPriceAndStatus(id: Int, status: String, foodPrice: Double) {
         restaurantOrderDao.updateRestaurantOrderPriceAndStatus(id, status, foodPrice)
+        try {
+            val fields = mapOf("status" to status, "items_and_notes" to "السعر المعدل للطعام: $foodPrice")
+            com.example.data.network.SupabaseClient.api.updateRestaurantOrder("eq.$id", fields)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     suspend fun updateRestaurantOrderPayment(id: Int, paymentMethod: String, bankReceiptImageUri: String?) {
         restaurantOrderDao.updateRestaurantOrderPayment(id, paymentMethod, bankReceiptImageUri)
+        try {
+            val fields = mapOf(
+                "payment_method" to paymentMethod,
+                "items_and_notes" to "تم تحديث الدفع: $paymentMethod - إشعار: ${bankReceiptImageUri ?: "لا يوجد"}"
+            )
+            com.example.data.network.SupabaseClient.api.updateRestaurantOrder("eq.$id", fields)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     suspend fun assignCourierToRestaurantOrder(id: Int, status: String, courierName: String, courierPhone: String, deliveryFee: Double) {
         restaurantOrderDao.assignCourierToRestaurantOrder(id, status, courierName, courierPhone, deliveryFee)
+        try {
+            val fields = mapOf(
+                "status" to status,
+                "courier_name" to courierName,
+                "courier_phone" to courierPhone,
+                "delivery_fee" to deliveryFee.toString()
+            )
+            com.example.data.network.SupabaseClient.api.updateRestaurantOrder("eq.$id", fields)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     suspend fun deleteRestaurantOrder(id: Int) {
         restaurantOrderDao.deleteOrder(id)
+        try {
+            com.example.data.network.SupabaseClient.api.deleteRestaurantOrder("eq.$id")
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     // --- Planet Pharmacy / Pharmacy Doctor Methods ---
@@ -96,19 +194,65 @@ class MajarahRepository(
     }
 
     suspend fun insertPharmacy(pharmacy: com.example.data.db.PharmacyEntity): Long {
-        return pharmacyDao.insertPharmacy(pharmacy)
+        val id = pharmacyDao.insertPharmacy(pharmacy)
+        try {
+            val sup = com.example.data.network.SupabasePharmacy(
+                id = if (id == 0L) null else id.toInt(),
+                name = pharmacy.name,
+                doctorName = pharmacy.doctorName,
+                phone = pharmacy.phone,
+                location = pharmacy.location,
+                pharmacistEmail = pharmacy.pharmacistEmail,
+                isApproved = pharmacy.isApproved,
+                imageBase64 = pharmacy.imageBase64,
+                hasCosmetics = pharmacy.hasCosmetics
+            )
+            com.example.data.network.SupabaseClient.api.insertPharmacies(listOf(sup))
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return id
     }
 
     suspend fun updatePharmacy(pharmacy: com.example.data.db.PharmacyEntity) {
         pharmacyDao.updatePharmacy(pharmacy)
+        try {
+            val sup = com.example.data.network.SupabasePharmacy(
+                id = pharmacy.id,
+                name = pharmacy.name,
+                doctorName = pharmacy.doctorName,
+                phone = pharmacy.phone,
+                location = pharmacy.location,
+                pharmacistEmail = pharmacy.pharmacistEmail,
+                isApproved = pharmacy.isApproved,
+                imageBase64 = pharmacy.imageBase64,
+                hasCosmetics = pharmacy.hasCosmetics
+            )
+            com.example.data.network.SupabaseClient.api.updatePharmacy("eq.${pharmacy.id}", sup)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     suspend fun updatePharmacyApproval(id: Int, isApproved: Boolean) {
         pharmacyDao.updatePharmacyApproval(id, isApproved)
+        try {
+            val pharmacy = pharmacyDao.getPharmacyById(id)
+            if (pharmacy != null) {
+                updatePharmacy(pharmacy.copy(isApproved = isApproved))
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     suspend fun deletePharmacy(id: Int) {
         pharmacyDao.deletePharmacy(id)
+        try {
+            com.example.data.network.SupabaseClient.api.deletePharmacy("eq.$id")
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     // --- Pharmacy Products ---
@@ -119,7 +263,23 @@ class MajarahRepository(
     val allPharmacyProducts: Flow<List<com.example.data.db.PharmacyProductEntity>> = pharmacyProductDao.getAllPharmacyProductsFlow()
 
     suspend fun insertPharmacyProduct(product: com.example.data.db.PharmacyProductEntity): Long {
-        return pharmacyProductDao.insertProduct(product)
+        val id = pharmacyProductDao.insertProduct(product)
+        try {
+            val sup = com.example.data.network.SupabasePharmacyProduct(
+                id = if (id == 0L) null else id.toInt(),
+                pharmacyId = product.pharmacyId,
+                name = product.name,
+                description = product.company,
+                price = product.price,
+                category = product.type,
+                isAvailable = product.isApproved,
+                imageBase64 = product.imageBase64
+            )
+            com.example.data.network.SupabaseClient.api.insertPharmacyProducts(listOf(sup))
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return id
     }
 
     suspend fun updatePharmacyProductApproval(id: Int, isApproved: Boolean) {
@@ -128,6 +288,11 @@ class MajarahRepository(
 
     suspend fun deletePharmacyProduct(id: Int) {
         pharmacyProductDao.deleteProduct(id)
+        try {
+            com.example.data.network.SupabaseClient.api.deletePharmacyProduct("eq.$id")
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     // --- Pharmacy Orders / Prescriptions ---
@@ -146,23 +311,74 @@ class MajarahRepository(
     }
 
     suspend fun insertPharmacyOrder(order: com.example.data.db.PharmacyOrderEntity): Long {
-        return pharmacyOrderDao.insertOrder(order)
+        val id = pharmacyOrderDao.insertOrder(order)
+        try {
+            val sup = com.example.data.network.SupabasePharmacyOrder(
+                id = if (id == 0L) null else id.toInt(),
+                pharmacyId = order.pharmacyId,
+                pharmacyName = "",
+                customerName = order.customerName,
+                customerPhone = order.customerPhone,
+                itemsAndNotes = order.deliveryLocation,
+                paymentMethod = "كاش",
+                deliveryFee = 0.0,
+                status = order.status,
+                courierName = "",
+                courierPhone = "",
+                createdAt = order.createdAt
+            )
+            com.example.data.network.SupabaseClient.api.insertPharmacyOrders(listOf(sup))
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return id
     }
 
     suspend fun updatePharmacyOrderPriceAndStatus(id: Int, status: String, price: Double, medicinesJson: String) {
         pharmacyOrderDao.updateOrderPriceAndStatus(id, status, price, medicinesJson)
+        try {
+            val fields = mapOf(
+                "status" to status,
+                "items_and_notes" to "السعر: $price - الأدوية: $medicinesJson"
+            )
+            com.example.data.network.SupabaseClient.api.updatePharmacyOrder("eq.$id", fields)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     suspend fun assignPharmacyOrderCourierAndDeliveryFee(id: Int, status: String, courierName: String, courierPhone: String, deliveryFee: Double) {
         pharmacyOrderDao.assignOrderCourierAndDeliveryFee(id, status, courierName, courierPhone, deliveryFee)
+        try {
+            val fields = mapOf(
+                "status" to status,
+                "courier_name" to courierName,
+                "courier_phone" to courierPhone,
+                "delivery_fee" to deliveryFee.toString()
+            )
+            com.example.data.network.SupabaseClient.api.updatePharmacyOrder("eq.$id", fields)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     suspend fun updatePharmacyOrderStatus(id: Int, status: String) {
         pharmacyOrderDao.updateOrderStatus(id, status)
+        try {
+            val fields = mapOf("status" to status)
+            com.example.data.network.SupabaseClient.api.updatePharmacyOrder("eq.$id", fields)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     suspend fun deletePharmacyOrder(id: Int) {
         pharmacyOrderDao.deleteOrder(id)
+        try {
+            com.example.data.network.SupabaseClient.api.deletePharmacyOrder("eq.$id")
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     // Register and sync profile to Supabase

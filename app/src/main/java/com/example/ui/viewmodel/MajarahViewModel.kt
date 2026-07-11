@@ -381,6 +381,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                         _selectedCategory.value = "restaurant"
                         _currentScreen.value = Screen.Home
                     } else {
+                        _selectedCategory.value = ""
                         _currentScreen.value = Screen.Home
                     }
                     
@@ -492,6 +493,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                                 _selectedCategory.value = "restaurant"
                                 _currentScreen.value = Screen.Home
                             } else {
+                                _selectedCategory.value = ""
                                 _currentScreen.value = Screen.Home
                             }
 
@@ -536,6 +538,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                                 _selectedCategory.value = "restaurant"
                                 _currentScreen.value = Screen.Home
                             } else {
+                                _selectedCategory.value = ""
                                 _currentScreen.value = Screen.Home
                             }
 
@@ -586,6 +589,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                             _selectedCategory.value = "restaurant"
                             _currentScreen.value = Screen.Home
                         } else {
+                            _selectedCategory.value = ""
                             _currentScreen.value = Screen.Home
                         }
                     } else if (error != null && (error.contains("Email not confirmed", ignoreCase = true) || error.contains("تأكيد", ignoreCase = true))) {
@@ -912,6 +916,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                     _selectedCategory.value = "restaurant"
                     _currentScreen.value = Screen.Home
                 } else {
+                    _selectedCategory.value = ""
                     _currentScreen.value = Screen.Home
                 }
             } else {
@@ -2157,15 +2162,26 @@ $couponMessage---------------------------
                     android.util.Log.e("MajarahViewModel", "Failed to sync coupon to Supabase: ${e.message}")
                 }
                 
+                val toastMessage = when {
+                    classification.contains("ذهبي") -> {
+                        "شكراً لك عميلنا الذهبي على تقييمك ورأيك الغالي! 👑✨ لقد فزت بكوبون عرض كوني: $couponCode 🌌✨"
+                    }
+                    classification.contains("مميز") -> {
+                        "شكراً لك عميلنا المميز على تقييمك ورأيك الغالي! ⭐✨ لقد فزت بكوبون عرض كوني: $couponCode 🌌✨"
+                    }
+                    else -> {
+                        "تهانينا يا عميلنا الذهبي/المميز! لقد فزت بكوبون عرض كوني: $couponCode 🌌✨"
+                    }
+                }
                 android.widget.Toast.makeText(
                     getApplication(), 
-                    "تهانينا يا عميلنا الذهبي/المميز! لقد فزت بكوبون عرض كوني: $couponCode 🌌✨", 
+                    toastMessage, 
                     android.widget.Toast.LENGTH_LONG
                 ).show()
             } else {
                 android.widget.Toast.makeText(
                     getApplication(), 
-                    "شكراً لتقييمك الغالي ومساهمتك في تطوير المجرة! ✨🚀", 
+                    "شكراً لك عميل المجرة على تقييمك ورأيك الغالي! 🌌✨", 
                     android.widget.Toast.LENGTH_LONG
                 ).show()
             }

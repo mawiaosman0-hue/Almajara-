@@ -168,6 +168,12 @@ fun CosmicLogoLoaderDialog() {
 
 @Composable
 fun ProductImagePlaceholder(imageName: String, modifier: Modifier = Modifier) {
+    val finalModifier = if (modifier == Modifier || modifier == Modifier.fillMaxWidth()) {
+        modifier.fillMaxWidth().height(150.dp)
+    } else {
+        modifier
+    }
+
     if (imageName.length > 50) {
         val bitmap = remember(imageName) {
             try {
@@ -182,10 +188,7 @@ fun ProductImagePlaceholder(imageName: String, modifier: Modifier = Modifier) {
             Image(
                 bitmap = bitmap.asImageBitmap(),
                 contentDescription = "صورة المنتج",
-                modifier = modifier
-                    .fillMaxWidth()
-                    .height(150.dp)
-                    .clip(RoundedCornerShape(12.dp)),
+                modifier = finalModifier.clip(RoundedCornerShape(12.dp)),
                 contentScale = ContentScale.Crop
             )
             return
@@ -193,9 +196,7 @@ fun ProductImagePlaceholder(imageName: String, modifier: Modifier = Modifier) {
     }
 
     Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(150.dp)
+        modifier = finalModifier
             .background(
                 brush = Brush.verticalGradient(
                     colors = listOf(Color(0xFF19113B), CosmicSurfaceVariant)
@@ -308,6 +309,14 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
     val allRatings by viewModel.allRatingsFlow.collectAsStateWithLifecycle()
     val allRestaurantOrders by viewModel.allRestaurantOrders.collectAsStateWithLifecycle()
     var showAppRatingDialog by remember { mutableStateOf(false) }
+    var ratingOrderIdToSubmit by remember { mutableStateOf<String?>(null) }
+
+    val ratedPrefs = remember { context.getSharedPreferences("majarah_completed_ratings", android.content.Context.MODE_PRIVATE) }
+    var ratedOrderIds by remember {
+        mutableStateOf(
+            ratedPrefs.getStringSet("rated_order_ids", emptySet()) ?: emptySet()
+        )
+    }
 
     val ratingPrefs = remember { context.getSharedPreferences("majarah_prompted_ratings", android.content.Context.MODE_PRIVATE) }
     var promptedRatings by remember {
@@ -347,6 +356,7 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
             val updated = promptedRatings + allNewlyDelivered
             promptedRatings = updated
             ratingPrefs.edit().putStringSet("prompted_order_ids", updated).apply()
+            ratingOrderIdToSubmit = allNewlyDelivered.first()
             showAppRatingDialog = true
         }
     }
@@ -393,10 +403,19 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
     Box(modifier = Modifier.fillMaxSize()) {
         if (showAppRatingDialog) {
             AppRatingDialog(
-                onDismiss = { showAppRatingDialog = false },
+                onDismiss = { 
+                    showAppRatingDialog = false
+                    ratingOrderIdToSubmit = null
+                },
                 onSubmit = { stars, comment ->
                     viewModel.submitAppRating(stars, comment)
+                    ratingOrderIdToSubmit?.let { oId ->
+                        val updated = ratedOrderIds + oId
+                        ratedOrderIds = updated
+                        ratedPrefs.edit().putStringSet("rated_order_ids", updated).apply()
+                    }
                     showAppRatingDialog = false
+                    ratingOrderIdToSubmit = null
                 }
             )
         }
@@ -832,7 +851,11 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                             onClearHistory = { viewModel.clearHistory() },
                             formatPrice = { viewModel.formatPrice(it) },
                             viewModel = viewModel,
-                            onRateAppClick = { showAppRatingDialog = true }
+                            onRateAppClick = { orderKey ->
+                                ratingOrderIdToSubmit = orderKey
+                                showAppRatingDialog = true
+                            },
+                            ratedOrderIds = ratedOrderIds
                         )
                     } else {
                         Box(
@@ -3504,11 +3527,13 @@ fun HistoryScreenBody(
     onClearHistory: () -> Unit,
     formatPrice: (Double) -> String,
     viewModel: MajarahViewModel,
-    onRateAppClick: () -> Unit
+    onRateAppClick: (String?) -> Unit,
+    ratedOrderIds: Set<String>
 ) {
     var isRefreshing by remember { mutableStateOf(false) }
     val activeProfile by viewModel.activeProfile.collectAsStateWithLifecycle()
     val allRatings by viewModel.allRatingsFlow.collectAsStateWithLifecycle()
+    val userClassificationState by viewModel.userClassification.collectAsStateWithLifecycle()
 
     LaunchedEffect(activeProfile, orders, allRatings) {
         if (activeProfile != null) {
@@ -3527,7 +3552,7 @@ fun HistoryScreenBody(
             val hasAlreadyRated = allRatings.any { it.customerEmail.trim().lowercase() == userEmail }
 
             if (hasCompletedOrder && !hasAlreadyRated) {
-                onRateAppClick()
+                onRateAppClick(null)
             }
         }
     }
@@ -3675,6 +3700,7 @@ fun HistoryScreenBody(
                         orderStatus.contains("تمام") || 
                         orderStatus.contains("بنجاح")
                 val orderDateMillis = firstItem?.orderDate ?: System.currentTimeMillis()
+                val isDeliveredAndRated = isDelivered && ratedOrderIds.contains("std_$orderId")
                 val courierName = firstItem?.courierName ?: ""
                 val courierPhone = firstItem?.courierPhone ?: ""
                 
@@ -3858,7 +3884,7 @@ fun HistoryScreenBody(
                                 // Line 2
                                 Divider(
                                     modifier = Modifier.weight(1f).padding(horizontal = 4.dp), 
-                                    color = if (isDelivered) CosmicSecondary else CosmicSurfaceVariant
+                                    color = if (isDeliveredAndRated) CosmicSecondary else CosmicSurfaceVariant
                                 )
                                 
                                 // Step 3: Delivered
@@ -3867,18 +3893,18 @@ fun HistoryScreenBody(
                                         modifier = Modifier
                                             .size(24.dp)
                                             .clip(RoundedCornerShape(50))
-                                            .background(if (isDelivered) CosmicSecondary else CosmicSurfaceVariant),
+                                            .background(if (isDeliveredAndRated) CosmicSecondary else CosmicSurfaceVariant),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
-                                            imageVector = if (isDelivered) Icons.Default.Check else Icons.Default.Home,
+                                            imageVector = if (isDeliveredAndRated) Icons.Default.Check else Icons.Default.Home,
                                             contentDescription = null,
                                             modifier = Modifier.size(12.dp),
-                                            tint = if (isDelivered) Color.Black else Color.White
+                                            tint = if (isDeliveredAndRated) Color.Black else Color.White
                                         )
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Text("تم التوصيل", color = if (isDelivered) Color.White else MediumContrastTextDark, fontSize = 9.sp)
+                                    Text("تم التوصيل", color = if (isDeliveredAndRated) Color.White else MediumContrastTextDark, fontSize = 9.sp)
                                 }
                             }
                         }
@@ -4164,43 +4190,78 @@ fun HistoryScreenBody(
                                     }
                                 }
 
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .background(Color.Gray.copy(0.12f), RoundedCornerShape(10.dp))
-                                        .border(1.dp, Color.Gray.copy(0.3f), RoundedCornerShape(10.dp))
-                                        .padding(12.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.Center
+                                if (isDeliveredAndRated) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(Color.Gray.copy(0.12f), RoundedCornerShape(10.dp))
+                                            .border(1.dp, Color.Gray.copy(0.3f), RoundedCornerShape(10.dp))
+                                            .padding(12.dp),
+                                        contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(Icons.Default.Lock, null, tint = Color.LightGray, modifier = Modifier.size(14.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = "هذه الفاتورة مكتملة ومغلقة كلياً وتعتبر نهائية غير قابلة للإرسال أو التعديل 🔒",
-                                            color = Color.LightGray,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            textAlign = TextAlign.Center
-                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.Center
+                                        ) {
+                                            Icon(Icons.Default.Lock, null, tint = Color.LightGray, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "هذه الفاتورة مكتملة ومغلقة كلياً وتعتبر نهائية غير قابلة للإرسال أو التعديل 🔒",
+                                                color = Color.LightGray,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                textAlign = TextAlign.Center
+                                            )
+                                        }
                                     }
-                                }
 
-                                Button(
-                                    onClick = onRateAppClick,
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700), contentColor = Color.Black),
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(10.dp)
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.Center
+                                    // Custom Thank You Message based on user classification
+                                    val userClassification = userClassificationState
+                                    val feedbackMessage = when {
+                                        userClassification.contains("ذهبي") -> {
+                                            "شكراً لك عميلنا الذهبي على تقييمك ورأيك الغالي! 👑✨ لقد فزت بكوبون خصم مميز! سيظهر في تبويبة الكوبونات الخاصة بك."
+                                        }
+                                        userClassification.contains("مميز") -> {
+                                            "شكراً لك عميلنا المميز على تقييمك ورأيك الغالي! ⭐✨ لقد فزت بكوبون خصم مميز! سيظهر في تبويبة الكوبونات الخاصة بك."
+                                        }
+                                        else -> {
+                                            "شكراً لك عميل المجرة على تقييمك ورأيك الغالي! 🌌✨"
+                                        }
+                                    }
+
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, CosmicSecondary.copy(alpha = 0.4f)),
+                                        shape = RoundedCornerShape(10.dp)
                                     ) {
-                                        Icon(Icons.Default.Star, null, tint = Color.Black, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("تقييم تجربة الاستلام والتطبيق ⭐", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                        Column(modifier = Modifier.padding(12.dp).fillMaxWidth(), horizontalAlignment = Alignment.End) {
+                                            Text(
+                                                text = feedbackMessage,
+                                                color = CosmicSecondary,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 11.sp,
+                                                textAlign = TextAlign.Right,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    // Not rated yet
+                                    Button(
+                                        onClick = { onRateAppClick("std_$orderId") },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700), contentColor = Color.Black),
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.Center
+                                        ) {
+                                            Icon(Icons.Default.Star, null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("تقييم تجربة الاستلام والتوصيل ⭐ لتأكيد التوصيل", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                        }
                                     }
                                 }
                             }
@@ -9591,6 +9652,7 @@ CREATE POLICY "Allow update app_coupons" ON public.app_coupons FOR UPDATE USING 
                     var newSellerClass by remember { mutableStateOf("تاجر المجرة ⭐") }
                     var newSellerCommission by remember { mutableStateOf("10") } // in %
                     var sellerSearchQuery by remember { mutableStateOf("") }
+                    var sellersSubTab by remember { mutableStateOf(0) } // 0: Sellers list, 1: Approved Merchant Requests
 
                     val filteredSellers = remember(sellers, sellerSearchQuery) {
                         if (sellerSearchQuery.isBlank()) {
@@ -9605,373 +9667,488 @@ CREATE POLICY "Allow update app_coupons" ON public.app_coupons FOR UPDATE USING 
                         }
                     }
 
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        item {
-                            Text(
-                                "إدارة تجار المجرة وبرنامج العمولات 🧑‍💼 🌌",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp,
-                                textAlign = TextAlign.Right,
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        // Sub-tabs
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp)
+                                .background(CosmicSurfaceVariant.copy(0.3f), RoundedCornerShape(10.dp))
+                                .padding(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Button(
+                                onClick = { sellersSubTab = 0 },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (sellersSubTab == 0) CosmicSecondary else Color.Transparent,
+                                    contentColor = if (sellersSubTab == 0) Color.Black else Color.White
+                                )
+                            ) {
+                                Text("إدارة وتصنيف التجار 🧑‍💼", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Button(
+                                onClick = { sellersSubTab = 1 },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (sellersSubTab == 1) CosmicSecondary else Color.Transparent,
+                                    contentColor = if (sellersSubTab == 1) Color.Black else Color.White
+                                )
+                            ) {
+                                val approvedCount = allProducts.count { it.isApproved && it.sellerEmail.isNotBlank() }
+                                Text("طلبات التجار المعتمدة 📜 ($approvedCount)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
 
-                        // Form to add seller
-                        item {
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(containerColor = CosmicSurface),
-                                border = BorderStroke(1.dp, CosmicSecondary.copy(alpha = 0.3f))
+                        if (sellersSubTab == 0) {
+                            LazyColumn(
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier.fillMaxSize()
                             ) {
-                                Column(
-                                    modifier = Modifier.padding(14.dp).fillMaxWidth(),
-                                    horizontalAlignment = Alignment.End
-                                ) {
+                                item {
                                     Text(
-                                        "تسجيل تاجر جديد في التطبيق ➕",
+                                        "إدارة تجار المجرة وبرنامج العمولات 🧑‍💼 🌌",
+                                        color = Color.White,
                                         fontWeight = FontWeight.Bold,
-                                        color = CosmicSecondary,
-                                        fontSize = 12.sp,
+                                        fontSize = 14.sp,
                                         textAlign = TextAlign.Right,
                                         modifier = Modifier.fillMaxWidth()
                                     )
-                                    Spacer(modifier = Modifier.height(10.dp))
-
-                                    OutlinedTextField(
-                                        value = newSellerName,
-                                        onValueChange = { newSellerName = it },
-                                        label = { Text("اسم التاجر الكامل", color = Color.Gray) },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            focusedBorderColor = CosmicSecondary,
-                                            unfocusedBorderColor = CosmicSurfaceVariant,
-                                            focusedTextColor = Color.White,
-                                            unfocusedTextColor = Color.White
-                                        ),
-                                        textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Right)
-                                    )
-
-                                    Spacer(modifier = Modifier.height(6.dp))
-
-                                    OutlinedTextField(
-                                        value = newSellerEmail,
-                                        onValueChange = { newSellerEmail = it },
-                                        label = { Text("البريد الإلكتروني المعتمد للدخول", color = Color.Gray) },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            focusedBorderColor = CosmicSecondary,
-                                            unfocusedBorderColor = CosmicSurfaceVariant,
-                                            focusedTextColor = Color.White,
-                                            unfocusedTextColor = Color.White
-                                        ),
-                                        textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Right)
-                                    )
-
-                                    Spacer(modifier = Modifier.height(6.dp))
-
-                                    OutlinedTextField(
-                                        value = newSellerPhone,
-                                        onValueChange = { newSellerPhone = it },
-                                        label = { Text("رقم الهاتف أو الواتساب", color = Color.Gray) },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            focusedBorderColor = CosmicSecondary,
-                                            unfocusedBorderColor = CosmicSurfaceVariant,
-                                            focusedTextColor = Color.White,
-                                            unfocusedTextColor = Color.White
-                                        ),
-                                        textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Right)
-                                    )
-
-                                    Spacer(modifier = Modifier.height(6.dp))
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        OutlinedTextField(
-                                            value = newSellerCommission,
-                                            onValueChange = { newSellerCommission = it },
-                                            label = { Text("عمولة التطبيق (%)", color = Color.Gray) },
-                                            modifier = Modifier.weight(1f),
-                                            colors = OutlinedTextFieldDefaults.colors(
-                                                focusedBorderColor = CosmicSecondary,
-                                                unfocusedBorderColor = CosmicSurfaceVariant,
-                                                focusedTextColor = Color.White,
-                                                unfocusedTextColor = Color.White
-                                            ),
-                                            textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Right)
-                                        )
-
-                                        OutlinedTextField(
-                                            value = newSellerClass,
-                                            onValueChange = { newSellerClass = it },
-                                            label = { Text("تصنيف التاجر", color = Color.Gray) },
-                                            modifier = Modifier.weight(1.5f),
-                                            colors = OutlinedTextFieldDefaults.colors(
-                                                focusedBorderColor = CosmicSecondary,
-                                                unfocusedBorderColor = CosmicSurfaceVariant,
-                                                focusedTextColor = Color.White,
-                                                unfocusedTextColor = Color.White
-                                            ),
-                                            textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Right)
-                                        )
-                                    }
-
-                                    Spacer(modifier = Modifier.height(12.dp))
-
-                                    Button(
-                                        onClick = {
-                                            if (newSellerName.trim().isEmpty() || newSellerEmail.trim().isEmpty() || newSellerPhone.trim().isEmpty()) {
-                                                Toast.makeText(context, "الرجاء ملء جميع الحقول المطلوبة! ⚠️", Toast.LENGTH_SHORT).show()
-                                            } else {
-                                                val comm = newSellerCommission.toDoubleOrNull() ?: 10.0
-                                                viewModel.addSeller(
-                                                    name = newSellerName.trim(),
-                                                    email = newSellerEmail.trim().lowercase(),
-                                                    phone = newSellerPhone.trim(),
-                                                    classification = newSellerClass.trim(),
-                                                    commissionRate = comm / 100.0
-                                                ) { err ->
-                                                    if (err == null) {
-                                                        Toast.makeText(context, "تم تسجيل التاجر ${newSellerName} بنجاح! 🎉", Toast.LENGTH_SHORT).show()
-                                                        newSellerName = ""
-                                                        newSellerEmail = ""
-                                                        newSellerPhone = ""
-                                                    } else {
-                                                        Toast.makeText(context, "فشل الحفظ: $err", Toast.LENGTH_LONG).show()
-                                                    }
-                                                }
-                                            }
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text("تسجيل التاجر وحفظه سحابياً 🌌", fontWeight = FontWeight.Bold)
-                                    }
                                 }
-                            }
-                        }
 
-                        item {
-                            Text(
-                                "قائمة التجار النشطين وإحصائيات العمولات 📊",
-                                color = CosmicSecondary,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp,
-                                textAlign = TextAlign.Right,
-                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-                            )
-                        }
-
-                        // Search Bar for Sellers
-                        item {
-                            OutlinedTextField(
-                                value = sellerSearchQuery,
-                                onValueChange = { sellerSearchQuery = it },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("seller_search_bar"),
-                                placeholder = {
-                                    Text(
-                                        "ابحث باسم التاجر أو البريد أو الهاتف أو التصنيف...",
-                                        color = MediumContrastTextDark,
-                                        fontSize = 12.sp,
+                                // Form to add seller
+                                item {
+                                    Card(
                                         modifier = Modifier.fillMaxWidth(),
-                                        textAlign = TextAlign.Right
-                                    )
-                                },
-                                trailingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.Search,
-                                        contentDescription = null,
-                                        tint = CosmicSecondary
-                                    )
-                                },
-                                leadingIcon = {
-                                    if (sellerSearchQuery.isNotEmpty()) {
-                                        IconButton(onClick = { sellerSearchQuery = "" }) {
-                                            Icon(
-                                                imageVector = Icons.Default.Clear,
-                                                contentDescription = "مسح البحث",
-                                                tint = Color.White.copy(alpha = 0.7f),
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
-                                    }
-                                },
-                                singleLine = true,
-                                shape = RoundedCornerShape(24.dp),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = CosmicSecondary,
-                                    unfocusedBorderColor = CosmicSurfaceVariant,
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White,
-                                    focusedContainerColor = CosmicSurface,
-                                    unfocusedContainerColor = CosmicSurface
-                                ),
-                                textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Right)
-                            )
-                        }
-
-                        if (sellers.isEmpty()) {
-                            item {
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = CardDefaults.cardColors(containerColor = CosmicSurface.copy(0.5f))
-                                ) {
-                                    Text(
-                                        "لا يوجد أي تجار مسجلين حالياً. 📭",
-                                        color = Color.LightGray,
-                                        fontSize = 12.sp,
-                                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                        textAlign = TextAlign.Center
-                                    )
-                                }
-                            }
-                        } else if (filteredSellers.isEmpty()) {
-                            item {
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = CardDefaults.cardColors(containerColor = CosmicSurface.copy(0.3f))
-                                ) {
-                                    Text(
-                                        "لم يتم العثور على أي تجار يطابقون البحث الحالي! 🔍",
-                                        color = CosmicSecondary,
-                                        fontSize = 12.sp,
-                                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                        textAlign = TextAlign.Center
-                                    )
-                                }
-                            }
-                        } else {
-                            items(filteredSellers) { seller ->
-                                // Calculate sales stats for this seller
-                                val sellerProducts = allProducts.filter { it.sellerEmail.trim().lowercase() == seller.email.trim().lowercase() }
-                                val sellerProductIds = sellerProducts.map { it.id }.toSet()
-                                val sellerOrderItems = allOrders.filter { it.productId in sellerProductIds && (it.statusArabic.contains("تم") || it.statusArabic.contains("تمام") || it.statusArabic.contains("التوصيل") || it.statusArabic.contains("شحن")) }
-                                
-                                val totalRevenue = sellerOrderItems.sumOf { it.priceAtOrder * it.quantity }
-                                val appCommission = totalRevenue * seller.commissionRate
-                                val sellerNet = totalRevenue - appCommission
-
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = CardDefaults.cardColors(containerColor = CosmicSurface),
-                                    border = BorderStroke(1.dp, CosmicSecondary.copy(alpha = 0.2f))
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(14.dp).fillMaxWidth(),
-                                        horizontalAlignment = Alignment.End
+                                        colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                                        border = BorderStroke(1.dp, CosmicSecondary.copy(alpha = 0.3f))
                                     ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
+                                        Column(
+                                            modifier = Modifier.padding(14.dp).fillMaxWidth(),
+                                            horizontalAlignment = Alignment.End
                                         ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .background(CosmicSecondary.copy(0.1f), RoundedCornerShape(8.dp))
-                                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                                            Text(
+                                                "تسجيل تاجر جديد في التطبيق ➕",
+                                                fontWeight = FontWeight.Bold,
+                                                color = CosmicSecondary,
+                                                fontSize = 12.sp,
+                                                textAlign = TextAlign.Right,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                            Spacer(modifier = Modifier.height(10.dp))
+
+                                            OutlinedTextField(
+                                                value = newSellerName,
+                                                onValueChange = { newSellerName = it },
+                                                label = { Text("اسم التاجر الكامل", color = Color.Gray) },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                colors = OutlinedTextFieldDefaults.colors(
+                                                    focusedBorderColor = CosmicSecondary,
+                                                    unfocusedBorderColor = CosmicSurfaceVariant,
+                                                    focusedTextColor = Color.White,
+                                                    unfocusedTextColor = Color.White
+                                                ),
+                                                textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Right)
+                                            )
+
+                                            Spacer(modifier = Modifier.height(6.dp))
+
+                                            OutlinedTextField(
+                                                value = newSellerEmail,
+                                                onValueChange = { newSellerEmail = it },
+                                                label = { Text("البريد الإلكتروني المعتمد للدخول", color = Color.Gray) },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                colors = OutlinedTextFieldDefaults.colors(
+                                                    focusedBorderColor = CosmicSecondary,
+                                                    unfocusedBorderColor = CosmicSurfaceVariant,
+                                                    focusedTextColor = Color.White,
+                                                    unfocusedTextColor = Color.White
+                                                ),
+                                                textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Right)
+                                            )
+
+                                            Spacer(modifier = Modifier.height(6.dp))
+
+                                            OutlinedTextField(
+                                                value = newSellerPhone,
+                                                onValueChange = { newSellerPhone = it },
+                                                label = { Text("رقم الهاتف أو الواتساب", color = Color.Gray) },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                colors = OutlinedTextFieldDefaults.colors(
+                                                    focusedBorderColor = CosmicSecondary,
+                                                    unfocusedBorderColor = CosmicSurfaceVariant,
+                                                    focusedTextColor = Color.White,
+                                                    unfocusedTextColor = Color.White
+                                                ),
+                                                textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Right)
+                                            )
+
+                                            Spacer(modifier = Modifier.height(6.dp))
+
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                                             ) {
-                                                Text(
-                                                    seller.classification,
-                                                    color = CosmicSecondary,
-                                                    fontSize = 11.sp,
-                                                    fontWeight = FontWeight.Bold
+                                                OutlinedTextField(
+                                                    value = newSellerCommission,
+                                                    onValueChange = { newSellerCommission = it },
+                                                    label = { Text("عمولة التطبيق (%)", color = Color.Gray) },
+                                                    modifier = Modifier.weight(1f),
+                                                    colors = OutlinedTextFieldDefaults.colors(
+                                                        focusedBorderColor = CosmicSecondary,
+                                                        unfocusedBorderColor = CosmicSurfaceVariant,
+                                                        focusedTextColor = Color.White,
+                                                        unfocusedTextColor = Color.White
+                                                    ),
+                                                    textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Right)
+                                                )
+
+                                                OutlinedTextField(
+                                                    value = newSellerClass,
+                                                    onValueChange = { newSellerClass = it },
+                                                    label = { Text("تصنيف التاجر", color = Color.Gray) },
+                                                    modifier = Modifier.weight(1.5f),
+                                                    colors = OutlinedTextFieldDefaults.colors(
+                                                        focusedBorderColor = CosmicSecondary,
+                                                        unfocusedBorderColor = CosmicSurfaceVariant,
+                                                        focusedTextColor = Color.White,
+                                                        unfocusedTextColor = Color.White
+                                                    ),
+                                                    textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Right)
                                                 )
                                             }
 
-                                            Text(
-                                                seller.name,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color.White,
-                                                fontSize = 14.sp
-                                            )
-                                        }
+                                            Spacer(modifier = Modifier.height(12.dp))
 
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text("البريد: ${seller.email}", color = Color.LightGray, fontSize = 11.sp)
-                                        Text("الهاتف: ${seller.phone}", color = Color.LightGray, fontSize = 11.sp)
-                                        Spacer(modifier = Modifier.height(8.dp))
-
-                                        // Finance breakdown
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .background(Color.White.copy(0.02f), RoundedCornerShape(6.dp))
-                                                .padding(6.dp),
-                                            horizontalArrangement = Arrangement.SpaceAround
-                                        ) {
-                                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                                Text("صافي التاجر 💰", color = Color.Green, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                                Text("${viewModel.formatPrice(sellerNet)}", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                            }
-                                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                                Text("عمولة التطبيق (${(seller.commissionRate * 100).toInt()}%) 📐", color = CosmicSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                                Text("${viewModel.formatPrice(appCommission)}", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                            }
-                                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                                Text("إجمالي المبيعات 📈", color = Color.Cyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                                Text("${viewModel.formatPrice(totalRevenue)}", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                            }
-                                        }
-
-                                        Spacer(modifier = Modifier.height(10.dp))
-
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            // WhatsApp Invoice button
                                             Button(
                                                 onClick = {
-                                                    val invoiceText = StringBuilder()
-                                                    invoiceText.append("🌌 *مبيعات التاجر في المجرة للتسوق* 🌌\n\n")
-                                                    invoiceText.append("👤 *التاجر:* ${seller.name}\n")
-                                                    invoiceText.append("⭐ *التصنيف:* ${seller.classification}\n\n")
-                                                    invoiceText.append("📋 *تفاصيل الطلبيات الخاضعة للفوترة الصافية:*\n")
-                                                    sellerOrderItems.forEach { item ->
-                                                        invoiceText.append("- ${item.productName} (العدد: ${item.quantity}) سعره: ${viewModel.formatPrice(item.priceAtOrder * item.quantity)}\n")
-                                                    }
-                                                    invoiceText.append("\n-----------------------------------\n")
-                                                    invoiceText.append("📊 *إجمالي قيمة مبيعات التاجر:* ${viewModel.formatPrice(totalRevenue)}\n")
-                                                    invoiceText.append("💵 *المبلغ المستحق لك بالكامل (دون عمولة التطبيق):* ${viewModel.formatPrice(sellerNet)}\n\n")
-                                                    invoiceText.append("🚀 *تمت الفوترة والتصدير تلقائياً عبر نظام المجرة الذكي بنجاح!*")
-
-                                                    val encoded = java.net.URLEncoder.encode(invoiceText.toString(), "UTF-8")
-                                                    val url = "https://wa.me/${seller.phone}?text=$encoded"
-                                                    val waIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                                                    context.startActivity(waIntent)
-                                                },
-                                                modifier = Modifier.weight(1.5f),
-                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
-                                                shape = RoundedCornerShape(8.dp),
-                                                contentPadding = PaddingValues(vertical = 4.dp)
-                                            ) {
-                                                Icon(Icons.Default.Share, null, modifier = Modifier.size(12.dp), tint = Color.White)
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Text("إرسال فاتورة وتفاصيل عبر واتساب 💬", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                            }
-
-                                            // Delete seller button
-                                            IconButton(
-                                                onClick = {
-                                                    viewModel.removeSeller(seller.id) { err ->
-                                                        if (err == null) {
-                                                            Toast.makeText(context, "تم حذف التاجر بنجاح! 🗑️", Toast.LENGTH_SHORT).show()
+                                                    if (newSellerName.trim().isEmpty() || newSellerEmail.trim().isEmpty() || newSellerPhone.trim().isEmpty()) {
+                                                        Toast.makeText(context, "الرجاء ملء جميع الحقول المطلوبة! ⚠️", Toast.LENGTH_SHORT).show()
+                                                    } else {
+                                                        val comm = newSellerCommission.toDoubleOrNull() ?: 10.0
+                                                        viewModel.addSeller(
+                                                            name = newSellerName.trim(),
+                                                            email = newSellerEmail.trim().lowercase(),
+                                                            phone = newSellerPhone.trim(),
+                                                            classification = newSellerClass.trim(),
+                                                            commissionRate = comm / 100.0
+                                                        ) { err ->
+                                                            if (err == null) {
+                                                                Toast.makeText(context, "تم تسجيل التاجر ${newSellerName} بنجاح! 🎉", Toast.LENGTH_SHORT).show()
+                                                                newSellerName = ""
+                                                                newSellerEmail = ""
+                                                                newSellerPhone = ""
+                                                            } else {
+                                                                Toast.makeText(context, "فشل الحفظ: $err", Toast.LENGTH_LONG).show()
+                                                            }
                                                         }
                                                     }
                                                 },
-                                                modifier = Modifier
-                                                    .background(Color.Red.copy(0.1f), RoundedCornerShape(8.dp))
-                                                    .size(36.dp)
+                                                colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                                                modifier = Modifier.fillMaxWidth()
                                             ) {
-                                                Icon(Icons.Default.Delete, "حذف", tint = Color.Red, modifier = Modifier.size(16.dp))
+                                                Text("تسجيل التاجر وحفظه سحابياً 🌌", fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                }
+
+                                item {
+                                    Text(
+                                        "قائمة التجار النشطين وإحصائيات العمولات 📊",
+                                        color = CosmicSecondary,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        textAlign = TextAlign.Right,
+                                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                                    )
+                                }
+
+                                // Search Bar for Sellers
+                                item {
+                                    OutlinedTextField(
+                                        value = sellerSearchQuery,
+                                        onValueChange = { sellerSearchQuery = it },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("seller_search_bar"),
+                                        placeholder = {
+                                            Text(
+                                                "ابحث باسم التاجر أو البريد أو الهاتف أو التصنيف...",
+                                                color = MediumContrastTextDark,
+                                                fontSize = 12.sp,
+                                                modifier = Modifier.fillMaxWidth(),
+                                                textAlign = TextAlign.Right
+                                            )
+                                        },
+                                        trailingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.Search,
+                                                contentDescription = null,
+                                                tint = CosmicSecondary
+                                            )
+                                        },
+                                        leadingIcon = {
+                                            if (sellerSearchQuery.isNotEmpty()) {
+                                                IconButton(onClick = { sellerSearchQuery = "" }) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Clear,
+                                                        contentDescription = "مسح البحث",
+                                                        tint = Color.White.copy(alpha = 0.7f),
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                }
+                                            }
+                                        },
+                                        singleLine = true,
+                                        shape = RoundedCornerShape(24.dp),
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedBorderColor = CosmicSecondary,
+                                            unfocusedBorderColor = CosmicSurfaceVariant,
+                                            focusedTextColor = Color.White,
+                                            unfocusedTextColor = Color.White,
+                                            focusedContainerColor = CosmicSurface,
+                                            unfocusedContainerColor = CosmicSurface
+                                        ),
+                                        textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Right)
+                                    )
+                                }
+
+                                if (sellers.isEmpty()) {
+                                    item {
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = CardDefaults.cardColors(containerColor = CosmicSurface.copy(0.5f))
+                                        ) {
+                                            Text(
+                                                "لا يوجد أي تجار مسجلين حالياً. 📭",
+                                                color = Color.LightGray,
+                                                fontSize = 12.sp,
+                                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                                textAlign = TextAlign.Center
+                                            )
+                                        }
+                                    }
+                                } else if (filteredSellers.isEmpty()) {
+                                    item {
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = CardDefaults.cardColors(containerColor = CosmicSurface.copy(0.3f))
+                                        ) {
+                                            Text(
+                                                "لم يتم العثور على أي تجار يطابقون البحث الحالي! 🔍",
+                                                color = CosmicSecondary,
+                                                fontSize = 12.sp,
+                                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                                textAlign = TextAlign.Center
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    items(filteredSellers) { seller ->
+                                        // Calculate sales stats for this seller
+                                        val sellerProducts = allProducts.filter { it.sellerEmail.trim().lowercase() == seller.email.trim().lowercase() }
+                                        val sellerProductIds = sellerProducts.map { it.id }.toSet()
+                                        val sellerOrderItems = allOrders.filter { it.productId in sellerProductIds && (it.statusArabic.contains("تم") || it.statusArabic.contains("تمام") || it.statusArabic.contains("التوصيل") || it.statusArabic.contains("شحن")) }
+                                        
+                                        val totalRevenue = sellerOrderItems.sumOf { it.priceAtOrder * it.quantity }
+                                        val appCommission = totalRevenue * seller.commissionRate
+                                        val sellerNet = totalRevenue - appCommission
+
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                                            border = BorderStroke(1.dp, CosmicSecondary.copy(alpha = 0.2f))
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.padding(14.dp).fillMaxWidth(),
+                                                horizontalAlignment = Alignment.End
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .background(CosmicSecondary.copy(0.1f), RoundedCornerShape(8.dp))
+                                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                                    ) {
+                                                        Text(
+                                                            seller.classification,
+                                                            color = CosmicSecondary,
+                                                            fontSize = 11.sp,
+                                                            fontWeight = FontWeight.Bold
+                                                        )
+                                                    }
+
+                                                    Text(
+                                                        seller.name,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color.White,
+                                                        fontSize = 14.sp
+                                                    )
+                                                }
+
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text("البريد: ${seller.email}", color = Color.LightGray, fontSize = 11.sp)
+                                                Text("الهاتف: ${seller.phone}", color = Color.LightGray, fontSize = 11.sp)
+                                                Spacer(modifier = Modifier.height(8.dp))
+
+                                                // Finance breakdown
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .background(Color.White.copy(0.02f), RoundedCornerShape(6.dp))
+                                                        .padding(6.dp),
+                                                    horizontalArrangement = Arrangement.SpaceAround
+                                                ) {
+                                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                        Text("صافي التاجر 💰", color = Color.Green, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                        Text("${viewModel.formatPrice(sellerNet)}", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                        Text("عمولة التطبيق (${(seller.commissionRate * 100).toInt()}%) 📐", color = CosmicSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                        Text("${viewModel.formatPrice(appCommission)}", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                        Text("إجمالي المبيعات 📈", color = Color.Cyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                        Text("${viewModel.formatPrice(totalRevenue)}", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                }
+
+                                                Spacer(modifier = Modifier.height(10.dp))
+
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    // WhatsApp Invoice button
+                                                    Button(
+                                                        onClick = {
+                                                            val invoiceText = StringBuilder()
+                                                            invoiceText.append("🌌 *مبيعات التاجر في المجرة للتسوق* 🌌\n\n")
+                                                            invoiceText.append("👤 *التاجر:* ${seller.name}\n")
+                                                            invoiceText.append("⭐ *التصنيف:* ${seller.classification}\n\n")
+                                                            invoiceText.append("📋 *تفاصيل الطلبيات الخاضعة للفوترة الصافية:*\n")
+                                                            sellerOrderItems.forEach { item ->
+                                                                invoiceText.append("- ${item.productName} (العدد: ${item.quantity}) سعره: ${viewModel.formatPrice(item.priceAtOrder * item.quantity)}\n")
+                                                            }
+                                                            invoiceText.append("\n-----------------------------------\n")
+                                                            invoiceText.append("📊 *إجمالي قيمة مبيعات التاجر:* ${viewModel.formatPrice(totalRevenue)}\n")
+                                                            invoiceText.append("💵 *المبلغ المستحق لك بالكامل (دون عمولة التطبيق):* ${viewModel.formatPrice(sellerNet)}\n\n")
+                                                            invoiceText.append("🚀 *تمت الفوترة والتصدير تلقائياً عبر نظام المجرة الذكي بنجاح!*")
+
+                                                            val encoded = java.net.URLEncoder.encode(invoiceText.toString(), "UTF-8")
+                                                            val url = "https://wa.me/${seller.phone}?text=$encoded"
+                                                            val waIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                                                            context.startActivity(waIntent)
+                                                        },
+                                                        modifier = Modifier.weight(1.5f),
+                                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
+                                                        shape = RoundedCornerShape(8.dp),
+                                                        contentPadding = PaddingValues(vertical = 4.dp)
+                                                    ) {
+                                                        Icon(Icons.Default.Share, null, modifier = Modifier.size(12.dp), tint = Color.White)
+                                                        Spacer(modifier = Modifier.width(4.dp))
+                                                        Text("إرسال فاتورة وتفاصيل عبر واتساب 💬", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                                    }
+
+                                                    // Delete seller button
+                                                    IconButton(
+                                                        onClick = {
+                                                            viewModel.removeSeller(seller.id) { err ->
+                                                                if (err == null) {
+                                                                    Toast.makeText(context, "تم حذف التاجر بنجاح! 🗑️", Toast.LENGTH_SHORT).show()
+                                                                }
+                                                            }
+                                                        },
+                                                        modifier = Modifier
+                                                            .background(Color.Red.copy(0.1f), RoundedCornerShape(8.dp))
+                                                            .size(36.dp)
+                                                    ) {
+                                                        Icon(Icons.Default.Delete, "حذف", tint = Color.Red, modifier = Modifier.size(16.dp))
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            // Approved Merchant Requests List
+                            val approvedMerchantProducts = allProducts.filter { it.isApproved && it.sellerEmail.isNotBlank() }
+                            LazyColumn(
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                item {
+                                    Text(
+                                        "طلبات التجار المعتمدة كلياً في النظام 📜✨",
+                                        color = CosmicSecondary,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                        textAlign = TextAlign.Right,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        "هنا تظهر كافة منتجات السادة التجار التي تم قبولها وتعميدها وتعديل أسعارها بالعمولة ونشرها بالمتجر الكوني.",
+                                        color = Color.Gray,
+                                        fontSize = 11.sp,
+                                        textAlign = TextAlign.Right,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        lineHeight = 16.sp
+                                    )
+                                }
+
+                                if (approvedMerchantProducts.isEmpty()) {
+                                    item {
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                                            colors = CardDefaults.cardColors(containerColor = CosmicSurface)
+                                        ) {
+                                            Box(modifier = Modifier.padding(24.dp).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                                Text("لا توجد طلبات تجار معتمدة أو منشورة حالياً! 📭", color = Color.Gray, fontSize = 12.sp)
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    items(approvedMerchantProducts) { prod ->
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                                            border = BorderStroke(1.dp, Color.Green.copy(0.3f))
+                                        ) {
+                                            Column(modifier = Modifier.padding(14.dp).fillMaxWidth(), horizontalAlignment = Alignment.End) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .background(Color.Green.copy(0.12f), RoundedCornerShape(6.dp))
+                                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    ) {
+                                                        Text("معتمد ومنشور ✅", color = Color.Green, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                    Text(prod.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                                }
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text("صاحب السلعة (التاجر): ${prod.sellerEmail}", color = Color.LightGray, fontSize = 11.sp)
+                                                Text("الوصف: ${prod.description}", color = Color.Gray, fontSize = 11.sp)
+                                                Spacer(modifier = Modifier.height(8.dp))
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text("المخزون المتاح: ${prod.stock} قطعة", color = Color.White, fontSize = 11.sp)
+                                                    Text("سعر البيع النهائي: ${viewModel.formatPrice(prod.price)}", color = CosmicSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                                }
                                             }
                                         }
                                     }
@@ -11487,6 +11664,7 @@ fun SellerDashboardScreenBody(viewModel: MajarahViewModel) {
     val activeProfile by viewModel.activeProfile.collectAsStateWithLifecycle()
     val sellers by viewModel.allSellers.collectAsStateWithLifecycle()
     val allProducts by viewModel.allProducts.collectAsStateWithLifecycle()
+    val allOrders by viewModel.allOrdersFlow.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
 
     val currentSeller = sellers.find { s -> s.email.trim().lowercase() == activeProfile?.email?.trim()?.lowercase() }
@@ -11626,12 +11804,13 @@ fun SellerDashboardScreenBody(viewModel: MajarahViewModel) {
         // Tab Selector Row
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             val myProductsCount = allProducts.count { it.sellerEmail.trim().lowercase() == activeProfile?.email?.trim()?.lowercase() }
             val tabs = listOf(
                 "منتجاتي ($myProductsCount) 🛍️" to 0,
+                "مراقبة الطلبات 📊" to 3,
                 "إضافة منتج ➕" to 1,
                 "الدعم والتواصل 💬" to 2
             )
@@ -12148,6 +12327,159 @@ fun SellerDashboardScreenBody(viewModel: MajarahViewModel) {
                                     Icon(Icons.Default.Message, null, modifier = Modifier.size(16.dp), tint = Color.White)
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text("محادثة المدير العام عبر واتساب 💬", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                }
+                            }
+                        }
+                    }
+                }
+                3 -> {
+                    // ORDER MONITORING (مراقبة الطلبات)
+                    val merchantOrders = remember(allOrders, allProducts, activeProfile) {
+                        allOrders.filter { order ->
+                            val prod = allProducts.find { it.id == order.productId }
+                            prod?.sellerEmail?.trim()?.lowercase() == activeProfile?.email?.trim()?.lowercase()
+                        }.groupBy { it.orderId }
+                    }
+
+                    if (merchantOrders.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(Icons.Default.HourglassEmpty, null, tint = Color.Gray, modifier = Modifier.size(48.dp))
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    "لا توجد مبيعات أو طلبات مسجلة لمنتجاتك حالياً! 📊",
+                                    color = Color.LightGray,
+                                    fontSize = 12.sp,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    } else {
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            items(merchantOrders.entries.toList()) { entry ->
+                                val orderId = entry.key
+                                val orderItems = entry.value
+                                val firstItem = orderItems.firstOrNull()
+                                val customerName = firstItem?.customerName ?: "عميل المجرة الكوني"
+                                val customerPhone = firstItem?.customerPhone ?: "غير معروف"
+                                val customerAddress = firstItem?.customerAddress ?: "السودان"
+                                val status = firstItem?.statusArabic ?: "قيد المراجعة"
+                                val paymentMethod = firstItem?.paymentMethod ?: "كاش"
+                                val receiptImage = firstItem?.bankReceiptImageUri
+                                val orderDateMillis = firstItem?.orderDate ?: System.currentTimeMillis()
+                                val dateStr = java.text.SimpleDateFormat("yyyy/MM/dd HH:mm", java.util.Locale.US).format(java.util.Date(orderDateMillis))
+
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                                    border = BorderStroke(1.dp, CosmicSecondary.copy(alpha = 0.2f))
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp).fillMaxWidth(), horizontalAlignment = Alignment.End) {
+                                        // Header
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .background(CosmicSecondary.copy(0.15f), RoundedCornerShape(6.dp))
+                                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                                            ) {
+                                                Text(
+                                                    text = status,
+                                                    color = CosmicSecondary,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                            Column(horizontalAlignment = Alignment.End) {
+                                                Text(
+                                                    text = "فاتورة بيع #: $orderId",
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White,
+                                                    fontSize = 12.sp
+                                                )
+                                                Text(
+                                                    text = dateStr,
+                                                    color = Color.Gray,
+                                                    fontSize = 9.sp
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Divider(color = CosmicSurfaceVariant.copy(0.4f))
+                                        Spacer(modifier = Modifier.height(8.dp))
+
+                                        // Customer Info
+                                        Text("👤 بيانات المشتري والتوصيل:", fontSize = 11.sp, color = CosmicSecondary, fontWeight = FontWeight.Bold)
+                                        Text("الاسم: $customerName", fontSize = 10.sp, color = Color.White)
+                                        Text("الهاتف: $customerPhone", fontSize = 10.sp, color = Color.White)
+                                        Text("العنوان: $customerAddress", fontSize = 10.sp, color = Color.White)
+
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Divider(color = CosmicSurfaceVariant.copy(0.4f))
+                                        Spacer(modifier = Modifier.height(8.dp))
+
+                                        // Items Purchased
+                                        Text("📦 المنتجات المبيعة:", fontSize = 11.sp, color = CosmicSecondary, fontWeight = FontWeight.Bold)
+                                        orderItems.forEach { item ->
+                                            val itemTotal = item.priceAtOrder * item.quantity
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Text(
+                                                    text = "${viewModel.formatPrice(itemTotal)} SDG",
+                                                    color = Color.Green,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Text(
+                                                    text = "${item.productName} (الكمية: ${item.quantity})",
+                                                    color = Color.White,
+                                                    fontSize = 11.sp,
+                                                    textAlign = TextAlign.Right
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Divider(color = CosmicSurfaceVariant.copy(0.4f))
+                                        Spacer(modifier = Modifier.height(8.dp))
+
+                                        // Payment details
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            if (paymentMethod != "كاش" && !receiptImage.isNullOrBlank()) {
+                                                var showReceiptDialog by remember { mutableStateOf(false) }
+                                                if (showReceiptDialog) {
+                                                    ViewReceiptDialog(receiptImage) { showReceiptDialog = false }
+                                                }
+                                                TextButton(
+                                                    onClick = { showReceiptDialog = true },
+                                                    modifier = Modifier.height(28.dp).padding(0.dp)
+                                                ) {
+                                                    Text("عرض إشعار التحويل 🖼️", color = CosmicSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                            } else {
+                                                Spacer(modifier = Modifier.width(1.dp))
+                                            }
+                                            Text(
+                                                text = "طريقة الدفع: $paymentMethod",
+                                                color = Color.White,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
