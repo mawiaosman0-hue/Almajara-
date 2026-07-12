@@ -915,6 +915,11 @@ fun PharmacistOrdersTab(
 ) {
     val context = LocalContext.current
     var selectedOrderForExecution by remember { mutableStateOf<PharmacyOrderEntity?>(null) }
+    var showEnlargeForImage by remember { mutableStateOf<String?>(null) }
+    
+    if (showEnlargeForImage != null) {
+        EnlargeImageDialog(showEnlargeForImage!!) { showEnlargeForImage = null }
+    }
     
     // Filter orders specifically for this pharmacist's pharmacy
     val myPharmacyOrders = remember(orders, pharmacyId) {
@@ -1042,18 +1047,38 @@ fun PharmacistOrdersTab(
                                     }
                                 }
                                 if (bitmap != null) {
-                                    Image(
-                                        bitmap = bitmap.asImageBitmap(),
-                                        contentDescription = "صورة الروشتة المرفوعة",
+                                    Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .height(130.dp)
                                             .clip(RoundedCornerShape(8.dp))
+                                            .background(Color.Black.copy(0.2f))
                                             .clickable {
-                                                // Optional fullscreen pop
+                                                showEnlargeForImage = order.prescriptionImageBase64
                                             },
-                                        contentScale = ContentScale.Inside
-                                    )
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Image(
+                                            bitmap = bitmap.asImageBitmap(),
+                                            contentDescription = "صورة الروشتة المرفوعة",
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Inside
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(Color.Black.copy(0.25f)),
+                                            contentAlignment = Alignment.BottomCenter
+                                        ) {
+                                            Text(
+                                                "اضغط لتكبير الروشتة 🔍",
+                                                color = CosmicSecondary,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(bottom = 4.dp)
+                                            )
+                                        }
+                                    }
                                 }
                             }
 
@@ -1409,6 +1434,8 @@ fun CustomerPharmacyView(
 
     var activeWellWishesOrder by remember { mutableStateOf<PharmacyOrderEntity?>(null) }
     var showLocalRatingDialog by remember { mutableStateOf(false) }
+    var orderForRatingByCustomer by remember { mutableStateOf<PharmacyOrderEntity?>(null) }
+    val coroutineScope = rememberCoroutineScope()
 
     val sharedPref = remember(context) { context.getSharedPreferences("pharmacy_ratings_pref", android.content.Context.MODE_PRIVATE) }
     LaunchedEffect(myPharmacyOrders) {
@@ -1417,9 +1444,7 @@ fun CustomerPharmacyView(
         }
         if (newlyCompletedOrder != null) {
             sharedPref.edit().putBoolean("well_wishes_shown_${newlyCompletedOrder.id}", true).apply()
-            activeWellWishesOrder = newlyCompletedOrder
-            kotlinx.coroutines.delay(5000)
-            activeWellWishesOrder = null
+            orderForRatingByCustomer = newlyCompletedOrder
             showLocalRatingDialog = true
         }
     }
@@ -1428,9 +1453,24 @@ fun CustomerPharmacyView(
         PharmacyWellWishesOverlay()
     }
     if (showLocalRatingDialog) {
-        PharmacyAppRatingDialog {
-            showLocalRatingDialog = false
-        }
+        PharmacyAppRatingDialog(
+            viewModel = viewModel,
+            onRateDismiss = { stars, comment ->
+                showLocalRatingDialog = false
+                if (stars > 0) {
+                    viewModel.submitAppRating(stars, comment ?: "تقييم تطبيق الصيدليات بالمجرة")
+                }
+                val ord = orderForRatingByCustomer
+                if (ord != null) {
+                    activeWellWishesOrder = ord
+                    coroutineScope.launch {
+                        kotlinx.coroutines.delay(5000)
+                        activeWellWishesOrder = null
+                        orderForRatingByCustomer = null
+                    }
+                }
+            }
+        )
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -1738,6 +1778,57 @@ fun CustomerPharmacyView(
                                     PharmacyOrderTracker(order.status)
                                     Spacer(modifier = Modifier.height(6.dp))
 
+                                    if (order.prescriptionImageBase64.isNotBlank()) {
+                                        var showEnlarge by remember { mutableStateOf(false) }
+                                        if (showEnlarge) {
+                                            EnlargeImageDialog(order.prescriptionImageBase64) { showEnlarge = false }
+                                        }
+                                        val bitmap = remember(order.prescriptionImageBase64) {
+                                            try {
+                                                val clean = if (order.prescriptionImageBase64.contains(",")) order.prescriptionImageBase64.substringAfter(",") else order.prescriptionImageBase64
+                                                val bytes = android.util.Base64.decode(clean, android.util.Base64.DEFAULT)
+                                                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                            } catch (e: Exception) {
+                                                null
+                                            }
+                                        }
+                                        if (bitmap != null) {
+                                            Card(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(110.dp)
+                                                    .padding(vertical = 4.dp)
+                                                    .clickable { showEnlarge = true },
+                                                colors = CardDefaults.cardColors(containerColor = CosmicDeepSpace),
+                                                border = BorderStroke(1.dp, CosmicSurfaceVariant),
+                                                shape = RoundedCornerShape(8.dp)
+                                            ) {
+                                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                                    Image(
+                                                        bitmap = bitmap.asImageBitmap(),
+                                                        contentDescription = "الروشتة المرفقة",
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        contentScale = ContentScale.Inside
+                                                    )
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxSize()
+                                                            .background(Color.Black.copy(0.3f)),
+                                                        contentAlignment = Alignment.BottomCenter
+                                                    ) {
+                                                        Text(
+                                                            "اضغط لتكبير الروشتة 🔍",
+                                                            color = CosmicSecondary,
+                                                            fontSize = 10.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            modifier = Modifier.padding(bottom = 4.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
                                     Text("الصيدلية: ${pharm?.name ?: "صيدلية معتمدة بالمجرة"}", color = CosmicSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                     
                                     if (order.medicinesJson.isNotBlank()) {
@@ -1758,6 +1849,49 @@ fun CustomerPharmacyView(
 
                                     if (order.courierName.isNotBlank()) {
                                         Text("المندوب المعين: ${order.courierName} (${order.courierPhone}) 🚴", color = Color.White, fontSize = 10.sp)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Button(
+                                            onClick = {
+                                                val phone = order.courierPhone ?: ""
+                                                val cleanPhone = phone.replace("+", "").replace(" ", "")
+                                                val shareMsg = """
+                                                    🌌 فاتورة صيدلية كوني 🌌
+                                                    ------------------------------
+                                                    👤 الزبون: ${order.customerName}
+                                                    📞 هاتف: ${order.customerPhone}
+                                                    📍 العنوان: ${order.deliveryLocation}
+                                                    ------------------------------
+                                                    📦 الأدوية المسعرة:
+                                                    ${order.medicinesJson}
+                                                    ------------------------------
+                                                    💰 المجموع الكلي للدواء: ${viewModel.formatPrice(order.medicinePrice)} SDG
+                                                    حالة الفاتورة: ${order.status}
+                                                    بالشفاء العاجل والشفاء التام إن شاء الله 🤲🩺
+                                                """.trimIndent()
+                                                
+                                                try {
+                                                    val intent = android.content.Intent(
+                                                        android.content.Intent.ACTION_VIEW,
+                                                        android.net.Uri.parse("https://api.whatsapp.com/send?phone=$cleanPhone&text=${android.net.Uri.encode(shareMsg)}")
+                                                     )
+                                                     context.startActivity(intent)
+                                                } catch (e: Exception) {
+                                                     val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                                     val clip = android.content.ClipData.newPlainText("Majarah Pharmacy Invoice", shareMsg)
+                                                     clipboard.setPrimaryClip(clip)
+                                                     Toast.makeText(context, "تم نسخ تفاصيل الفاتورة! شاركها مع المندوب يدوياً 📋", Toast.LENGTH_LONG).show()
+                                                }
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary.copy(0.12f), contentColor = CosmicSecondary),
+                                            border = BorderStroke(1.dp, CosmicSecondary),
+                                            shape = RoundedCornerShape(8.dp),
+                                            modifier = Modifier.fillMaxWidth(),
+                                            contentPadding = PaddingValues(vertical = 4.dp, horizontal = 8.dp)
+                                        ) {
+                                            Icon(Icons.Default.Share, null, modifier = Modifier.size(12.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("مشاركة تفاصيل الفاتورة والروشتة مع المندوب 🚴💬", fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                        }
                                     }
 
                                      // Display "بالشفاء العاجل لك إن شاء الله 🤲✨" when order.status == "تم التوصيل"
@@ -1849,6 +1983,48 @@ fun CustomerPharmacyView(
                                                             Spacer(modifier = Modifier.width(4.dp))
                                                             Text("عرض إشعار التحويل المرفق 📄", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                                         }
+                                                    }
+                                                    
+                                                    Spacer(modifier = Modifier.height(8.dp))
+                                                    Button(
+                                                        onClick = {
+                                                            val phone = order.courierPhone ?: ""
+                                                            val cleanPhone = phone.replace("+", "").replace(" ", "")
+                                                            val shareMsg = """
+                                                                🌌 فاتورة صيدلية كوني 🌌
+                                                                ------------------------------
+                                                                👤 الزبون: ${order.customerName}
+                                                                📞 هاتف: ${order.customerPhone}
+                                                                📍 العنوان: ${order.deliveryLocation}
+                                                                ------------------------------
+                                                                📦 الأدوية:
+                                                                ${order.medicinesJson}
+                                                                ------------------------------
+                                                                💰 المجموع الكلي: ${viewModel.formatPrice(order.medicinePrice)} SDG
+                                                                💳 طريقة السداد: $savedPaymentMethod
+                                                                حالة الفاتورة: تم تأكيد الدفع ومطابقتها من العميل بنجاح مغلق 🔒✅
+                                                            """.trimIndent()
+                                                            
+                                                            try {
+                                                                val intent = android.content.Intent(
+                                                                    android.content.Intent.ACTION_VIEW,
+                                                                    android.net.Uri.parse("https://api.whatsapp.com/send?phone=$cleanPhone&text=${android.net.Uri.encode(shareMsg)}")
+                                                                )
+                                                                localContext.startActivity(intent)
+                                                            } catch (e: Exception) {
+                                                                val clipboard = localContext.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                                                val clip = android.content.ClipData.newPlainText("Majarah Pharmacy Invoice", shareMsg)
+                                                                clipboard.setPrimaryClip(clip)
+                                                                android.widget.Toast.makeText(localContext, "تم نسخ تفاصيل الفاتورة! شاركها مع المندوب يدوياً 📋", android.widget.Toast.LENGTH_LONG).show()
+                                                            }
+                                                        },
+                                                        colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                                                        shape = RoundedCornerShape(8.dp),
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    ) {
+                                                        Icon(Icons.Default.Share, null, modifier = Modifier.size(14.dp))
+                                                        Spacer(modifier = Modifier.width(6.dp))
+                                                        Text("مشاركة الفاتورة المؤكدة مع المندوب 🚴💬", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                                     }
                                                 }
                                             }
@@ -2121,6 +2297,11 @@ fun AdminPharmacyPortal(
     val orders by viewModel.allPharmacyOrders.collectAsStateWithLifecycle()
     val couriers by viewModel.allCouriers.collectAsStateWithLifecycle()
     val isGeneralAdmin by viewModel.isGeneralAdmin.collectAsStateWithLifecycle()
+    
+    var showEnlargeForImage by remember { mutableStateOf<String?>(null) }
+    if (showEnlargeForImage != null) {
+        EnlargeImageDialog(showEnlargeForImage!!) { showEnlargeForImage = null }
+    }
 
     var activeSubTab by remember { mutableStateOf(0) } // 0: Pharmacies, 1: Products, 2: Orders
 
@@ -2487,15 +2668,38 @@ fun AdminPharmacyPortal(
                                             }
                                         }
                                         if (bitmap != null) {
-                                            Image(
-                                                bitmap = bitmap.asImageBitmap(),
-                                                contentDescription = null,
+                                            Box(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
                                                     .height(130.dp)
-                                                    .clip(RoundedCornerShape(8.dp)),
-                                                contentScale = ContentScale.Inside
-                                            )
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(Color.Black.copy(0.2f))
+                                                    .clickable {
+                                                        showEnlargeForImage = order.prescriptionImageBase64
+                                                    },
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Image(
+                                                    bitmap = bitmap.asImageBitmap(),
+                                                    contentDescription = "الروشتة الطبية مكبرة",
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    contentScale = ContentScale.Inside
+                                                )
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .background(Color.Black.copy(0.25f)),
+                                                    contentAlignment = Alignment.BottomCenter
+                                                ) {
+                                                    Text(
+                                                        "اضغط لتكبير الروشتة 🔍",
+                                                        color = CosmicSecondary,
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        modifier = Modifier.padding(bottom = 4.dp)
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
 
@@ -3007,10 +3211,14 @@ fun PharmacyWellWishesOverlay() {
 }
 
 @Composable
-fun PharmacyAppRatingDialog(onRateDismiss: () -> Unit) {
-    var rating by remember { mutableStateOf(5) }
+fun PharmacyAppRatingDialog(
+    viewModel: MajarahViewModel,
+    onRateDismiss: (stars: Int, comment: String?) -> Unit
+) {
+    var rating by remember { mutableStateOf(7) }
+    var comment by remember { mutableStateOf("") }
     AlertDialog(
-        onDismissRequest = onRateDismiss,
+        onDismissRequest = { onRateDismiss(0, null) },
         title = {
             Text(
                 text = "تقييم تطبيق مجرة الصيدليات 🌌⭐",
@@ -3027,33 +3235,46 @@ fun PharmacyAppRatingDialog(onRateDismiss: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "نتمنى أن تكون تجربتك رائعة! يرجى تقييم جودة الخدمة والمندوب وصيدلية المجرة:",
+                    text = "نتمنى أن تكون تجربتك رائعة! يرجى تقييم جودة الخدمة والمندوب وصيدلية المجرة (تقييم من 7 نجوم):",
                     fontSize = 11.sp,
                     color = Color.White.copy(0.8f),
                     textAlign = TextAlign.Right,
                     modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
                 )
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    (1..5).forEach { star ->
-                        IconButton(onClick = { rating = star }) {
+                    (1..7).forEach { star ->
+                        IconButton(onClick = { rating = star }, modifier = Modifier.size(28.dp)) {
                             Icon(
                                 imageVector = if (star <= rating) Icons.Default.Star else Icons.Default.StarBorder,
                                 contentDescription = null,
-                                tint = if (star <= rating) Color(0xFFFFC107) else Color.Gray,
-                                modifier = Modifier.size(32.dp)
+                                tint = if (star <= rating) Color(0xFFFFD700) else Color.Gray,
+                                modifier = Modifier.size(26.dp)
                             )
                         }
                     }
                 }
+                Spacer(modifier = Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = comment,
+                    onValueChange = { comment = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("اكتب رأيك هنا أو أي ملاحظات للمدير... ✍️", color = Color.Gray, fontSize = 11.sp) },
+                    textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 11.sp, textAlign = TextAlign.Right),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = CosmicSecondary,
+                        unfocusedBorderColor = CosmicSurfaceVariant
+                    )
+                )
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    onRateDismiss()
+                    onRateDismiss(rating, comment.trim().ifBlank { null })
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black)
             ) {
@@ -3061,7 +3282,7 @@ fun PharmacyAppRatingDialog(onRateDismiss: () -> Unit) {
             }
         },
         dismissButton = {
-            TextButton(onClick = onRateDismiss) {
+            TextButton(onClick = { onRateDismiss(0, null) }) {
                 Text("تخطي", color = Color.White.copy(0.6f))
             }
         },
@@ -3069,3 +3290,64 @@ fun PharmacyAppRatingDialog(onRateDismiss: () -> Unit) {
         shape = RoundedCornerShape(16.dp)
     )
 }
+
+@Composable
+fun EnlargeImageDialog(imageBase64: String, onDismiss: () -> Unit) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+            border = BorderStroke(1.5.dp, CosmicSecondary),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "عرض الروشتة الطبية بوضوح 📸🔬",
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+                val bitmap = remember(imageBase64) {
+                    try {
+                        val clean = if (imageBase64.contains(",")) imageBase64.substringAfter(",") else imageBase64
+                        val bytes = android.util.Base64.decode(clean, android.util.Base64.DEFAULT)
+                        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = "الروشتة الطبية مكبرة",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 420.dp)
+                            .clip(RoundedCornerShape(8.dp)),
+                        contentScale = ContentScale.Fit
+                    )
+                } else {
+                    Text("تعذر تحميل الصورة ❌", color = Color.Red, fontSize = 12.sp)
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("إغلاق العرض ❌", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+

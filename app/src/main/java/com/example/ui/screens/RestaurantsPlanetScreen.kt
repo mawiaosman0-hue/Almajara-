@@ -173,16 +173,18 @@ fun RestaurantsPlanetSection(
             }
             if (deliveredCustomerOrder != null) {
                 shownDeliveredNotifications.add(deliveredCustomerOrder.id)
-                activeDeliveredOverlayOrderId = deliveredCustomerOrder.id
+                activeRatingDialogOrderId = deliveredCustomerOrder.id
             }
         }
     }
 
     LaunchedEffect(activeDeliveredOverlayOrderId) {
         if (activeDeliveredOverlayOrderId != null) {
+            val orderId = activeDeliveredOverlayOrderId!!
             kotlinx.coroutines.delay(5000)
-            activeRatingDialogOrderId = activeDeliveredOverlayOrderId
-            activeDeliveredOverlayOrderId = null
+            viewModel.updateRestaurantOrderStatus(orderId, "تم تسليم العميل وإغلاق الفاتورة ✅") { err ->
+                activeDeliveredOverlayOrderId = null
+            }
         }
     }
 
@@ -443,33 +445,15 @@ fun RestaurantsPlanetSection(
                                                     Icon(Icons.Default.Phone, "اتصال بالعميل", tint = Color.White, modifier = Modifier.size(16.dp))
                                                 }
 
-                                                if (ord.status == "معلق") {
+                                                if (ord.status == "معلق" || ord.status == "قيد التحضير بالمطعم 🍳") {
                                                     Button(
                                                         onClick = {
-                                                            viewModel.updateRestaurantOrderStatus(ord.id, "قيد التحضير بالمطعم 🍳") { err ->
-                                                                if (err == null) {
-                                                                    Toast.makeText(context, "تم قبول وبدء التجهيز والتحضير! 🍳🧑‍🍳", Toast.LENGTH_SHORT).show()
-                                                                }
-                                                            }
+                                                            pricingOrderTarget = ord
                                                         },
                                                         colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
                                                         shape = RoundedCornerShape(8.dp)
                                                     ) {
-                                                        Text("قبول وبدء التجهيز 🍳🧑‍🍳", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                                    }
-                                                } else if (ord.status == "قيد التحضير بالمطعم 🍳") {
-                                                    Button(
-                                                        onClick = {
-                                                            viewModel.updateRestaurantOrderStatus(ord.id, "جاهز للتوصيل (بانتظار المدير) 🛵") { err ->
-                                                                if (err == null) {
-                                                                    Toast.makeText(context, "تم تجهيز الوجبة وإرسالها للمدير لتعيين مندوب! 🚀🛵", Toast.LENGTH_SHORT).show()
-                                                                }
-                                                            }
-                                                        },
-                                                        colors = ButtonDefaults.buttonColors(containerColor = Color.Green, contentColor = Color.Black),
-                                                        shape = RoundedCornerShape(8.dp)
-                                                    ) {
-                                                        Text("تم التجهيز وإرسال للمدير لتعيين مندوب 🛵", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                        Text("قبول الطلب وتحديد السعر الكلي 🍳💰", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                                     }
                                                 } else {
                                                     Text(
@@ -1046,7 +1030,14 @@ fun RestaurantsPlanetSection(
                     logoImageUri = logoImageBase64
                 ) { err ->
                     if (err == null) {
-                        Toast.makeText(context, "تم حفظ بيانات المطعم بنجاح! 🏪🎉", Toast.LENGTH_LONG).show()
+                        try {
+                            val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+                            val r = android.media.RingtoneManager.getRingtone(context, alertUri)
+                            r?.play()
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                        Toast.makeText(context, "تم تسجيل المطعم بنجاح! المطعم حالياً بانتظار موافقة المدير العام لتأكيد التوثيق ⏳🏪", Toast.LENGTH_LONG).show()
                         showAddRestaurantDialog = false
                     } else {
                         Toast.makeText(context, "فشل حفظ بيانات المطعم: $err", Toast.LENGTH_LONG).show()
@@ -1279,7 +1270,9 @@ fun RestaurantsPlanetSection(
             confirmButton = {
                 Button(
                     onClick = {
+                        viewModel.submitAppRating(stars = ratingStars, comment = reviewText)
                         Toast.makeText(context, "شكراً جزيلاً لتقييمك الكوني المميز! ❤️🌌", Toast.LENGTH_LONG).show()
+                        activeDeliveredOverlayOrderId = activeRatingDialogOrderId
                         activeRatingDialogOrderId = null
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
@@ -1289,7 +1282,12 @@ fun RestaurantsPlanetSection(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { activeRatingDialogOrderId = null }) {
+                TextButton(
+                    onClick = {
+                        activeDeliveredOverlayOrderId = activeRatingDialogOrderId
+                        activeRatingDialogOrderId = null
+                    }
+                ) {
                     Text("تخطي", color = Color.White.copy(0.6f))
                 }
             }
@@ -1744,7 +1742,7 @@ fun RestaurantOrderCard(
                 ViewReceiptDialog(receiptToShow!!) { receiptToShow = null }
             }
 
-            val isDelivered = order.status.contains("تم") || order.status.contains("تسليم")
+            val isDelivered = order.status.contains("تم") || order.status.contains("تسليم") || order.status.contains("المندوب") || order.status.contains("التوصيل")
             if (!isAdmin && isDelivered) {
                 if (order.paymentMethod.isBlank()) {
                     OrderPostDeliveryPaymentBlock(
@@ -2005,6 +2003,40 @@ fun InvoiceDialog(
     onDismiss: () -> Unit,
     onShareWhatsApp: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    
+    val fullInvoiceMsg = """
+🌌 *فاتورة وجبة مطعم كوكب المطاعم - تطبيق المجرة* 🌌
+---------------------------
+📌 *رقم الفاتورة:* #${order.id}
+🏪 *المطعم:* ${order.restaurantName}
+📞 *هاتف المطعم:* ${order.restaurantPhone}
+👤 *العميل:* ${order.customerName}
+📞 *هاتف العميل:* ${order.customerPhone}
+📍 *العنوان:* ${order.deliveryLocation.ifBlank { "السودان" }}
+---------------------------
+🍟 *الوجبات والطلبات:*
+${order.itemsAndNotes}
+---------------------------
+💵 *سعر الوجبات:* ${order.foodPrice} SDG
+🚚 *رسوم التوصيل الكونية:* ${order.deliveryFee} SDG
+💰 *الإجمالي الكلي للتحصيل:* ${order.foodPrice + order.deliveryFee} SDG
+💳 *طريقة الدفع:* ${if (order.paymentMethod.isNotBlank()) order.paymentMethod else "لم تحدد بعد"}
+⏱️ *حالة الطلب:* ${order.status}
+🚴 *المندوب المعين:* ${if (order.courierName.isNotBlank()) "${order.courierName} (${order.courierPhone})" else "بانتظار تعيين مندوب"}
+---------------------------
+شكراً لتعاملكم مع تطبيق المجرة للتسوق 🪐✨
+""".trimIndent()
+
+    val orderNumberMsg = """
+🌌 *تطبيق المجرة - رقم طلب المطعم الكوني* 🌌
+📦 *رقم الطلب:* #REST-${order.id}
+🏪 *المطعم:* ${order.restaurantName}
+👤 *العميل:* ${order.customerName}
+📞 *هاتف العميل:* ${order.customerPhone}
+💰 *الإجمالي للتحصيل:* ${order.foodPrice + order.deliveryFee} SDG
+""".trimIndent()
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -2062,8 +2094,10 @@ fun InvoiceDialog(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            InvoiceRow(label = "طريقة الدفع", value = order.paymentMethod)
-                            InvoiceRow(label = "رسوم التوصيل الكوني", value = "${order.deliveryFee} ج.س")
+                            InvoiceRow(label = "سعر الوجبات", value = "${order.foodPrice} SDG")
+                            InvoiceRow(label = "رسوم التوصيل الكوني", value = "${order.deliveryFee} SDG")
+                            InvoiceRow(label = "المجموع الإجمالي", value = "${order.foodPrice + order.deliveryFee} SDG")
+                            InvoiceRow(label = "طريقة الدفع", value = if (order.paymentMethod.isNotBlank()) order.paymentMethod else "لم تحدد بعد")
                             InvoiceRow(label = "الحالة الحالية", value = order.status)
                         }
                     }
@@ -2093,22 +2127,90 @@ fun InvoiceDialog(
                         }
                     }
                 }
+
+                item {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "خيارات مشاركة الفاتورة 📲:",
+                            color = CosmicSecondary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Right
+                        )
+                        
+                        // Share with Restaurant (WhatsApp)
+                        Button(
+                            onClick = onShareWhatsApp,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366), contentColor = Color.White),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Send, null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("مشاركة الفاتورة مع المطعم 🏪💬", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        // Share with Courier (WhatsApp) - Only if assigned
+                        if (order.courierPhone.isNotBlank()) {
+                            Button(
+                                onClick = {
+                                    try {
+                                        var phone = order.courierPhone.trim().replace("+", "").replace(" ", "")
+                                        if (phone.startsWith("0")) {
+                                            phone = "249" + phone.substring(1)
+                                        } else if (!phone.startsWith("249")) {
+                                            phone = "249" + phone
+                                        }
+                                        val url = "https://api.whatsapp.com/send?phone=$phone&text=${java.net.URLEncoder.encode(fullInvoiceMsg, "UTF-8")}"
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                        context.startActivity(intent)
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "الرجاء تثبيت واتساب لمشاركة الفاتورة", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2), contentColor = Color.White),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.Share, null, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("مشاركة الفاتورة مع المندوب 🚴💬", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        // Share order number (General chooser)
+                        Button(
+                            onClick = {
+                                try {
+                                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_TEXT, orderNumberMsg)
+                                    }
+                                    context.startActivity(Intent.createChooser(shareIntent, "مشاركة رقم الطلب"))
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "حدث خطأ أثناء المشاركة", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7B1FA2), contentColor = Color.White),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Numbers, null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("مشاركة رقم طلب المطعم والمندوب 🔢💬", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
             }
         },
-        confirmButton = {
-            Button(
-                onClick = onShareWhatsApp,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366), contentColor = Color.White),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Icon(Icons.Default.Send, null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("إرسال للمطعم عبر WhatsApp 💬", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            }
-        },
+        confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("إغلاق الفاتورة", color = Color.White)
+                Text("إغلاق الفاتورة ❌", color = Color.White, fontWeight = FontWeight.Bold)
             }
         },
         containerColor = CosmicSurface

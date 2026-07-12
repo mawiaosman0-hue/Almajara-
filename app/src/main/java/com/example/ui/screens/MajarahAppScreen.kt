@@ -3692,17 +3692,18 @@ fun HistoryScreenBody(
                 val customerPhone = firstItem?.customerPhone ?: "09"
                 val customerAddress = firstItem?.customerAddress ?: "السودان"
                 val orderStatus = firstItem?.statusArabic ?: "جاري التجهيز للتوصيل 📦"
-                val isShipped = orderStatus.contains("مندوب") || orderStatus.contains("شحن") || orderStatus.contains("توصيل") || orderStatus.contains("تم التسليم") || orderStatus.contains("تم التوصيل")
                 val isDelivered = orderStatus.contains("تم التسليم") || 
                         orderStatus.contains("تم التوصيل") || 
                         orderStatus.contains("تمت التوصيل") || 
                         orderStatus.contains("تم الاستلام") ||
                         orderStatus.contains("تمام") || 
                         orderStatus.contains("بنجاح")
-                val orderDateMillis = firstItem?.orderDate ?: System.currentTimeMillis()
-                val isDeliveredAndRated = isDelivered && ratedOrderIds.contains("std_$orderId")
                 val courierName = firstItem?.courierName ?: ""
                 val courierPhone = firstItem?.courierPhone ?: ""
+                val isCourierAssigned = courierName.isNotBlank() || isDelivered
+                val isShipped = isCourierAssigned
+                val orderDateMillis = firstItem?.orderDate ?: System.currentTimeMillis()
+                val isDeliveredAndRated = isDelivered && ratedOrderIds.contains("std_$orderId")
                 
                 val dateStr = java.text.SimpleDateFormat("yyyy/MM/dd HH:mm", java.util.Locale.US).format(java.util.Date(orderDateMillis))
                 val totalItemsSum = orderItems.sumOf { it.priceAtOrder * it.quantity }
@@ -3710,7 +3711,7 @@ fun HistoryScreenBody(
                     val prod = viewModel.allProducts.value.find { it.id == item.productId }
                     prod?.category == "pharmacy" || prod?.categoryArabic?.contains("صيدلي") == true || item.productName.contains("دواء") || item.productName.contains("روشتة")
                 }
-                val showDeliveryPrice = orderStatus.contains("تسليم المندوب") || orderStatus.contains("تسليم لمندوب") || isDelivered || courierName.isNotBlank()
+                val showDeliveryPrice = isCourierAssigned
                 val deliveryPrice = if (isPharmacyOrder) 0.0 else (if ((firstItem?.deliveryFee ?: 0.0) <= 0.0) 5000.0 else firstItem!!.deliveryFee)
                 val grandTotal = if (isPharmacyOrder) totalItemsSum else (if (showDeliveryPrice) (totalItemsSum + deliveryPrice) else totalItemsSum)
                 
@@ -3858,33 +3859,33 @@ fun HistoryScreenBody(
                                 // Line 1
                                 Divider(
                                     modifier = Modifier.weight(1f).padding(horizontal = 4.dp), 
-                                    color = if (isShipped) CosmicSecondary else CosmicSurfaceVariant
+                                    color = if (isCourierAssigned) CosmicSecondary else CosmicSurfaceVariant
                                 )
                                 
-                                // Step 2: Shipped / Out
+                                // Step 2: Courier Assigned
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Box(
                                         modifier = Modifier
                                             .size(24.dp)
                                             .clip(RoundedCornerShape(50))
-                                            .background(if (isShipped) CosmicSecondary else CosmicSurfaceVariant),
+                                            .background(if (isCourierAssigned) CosmicSecondary else CosmicSurfaceVariant),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
-                                            imageVector = if (isShipped) Icons.Default.Check else Icons.Default.DirectionsBike,
+                                            imageVector = if (isCourierAssigned) Icons.Default.Check else Icons.Default.DirectionsBike,
                                             contentDescription = null,
                                             modifier = Modifier.size(12.dp),
-                                            tint = if (isShipped) Color.Black else Color.White
+                                            tint = if (isCourierAssigned) Color.Black else Color.White
                                         )
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Text("تم تسليم المندوب", color = if (isShipped) Color.White else MediumContrastTextDark, fontSize = 9.sp)
+                                    Text("تم تعيين مندوب", color = if (isCourierAssigned) Color.White else MediumContrastTextDark, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                                 }
                                 
                                 // Line 2
                                 Divider(
                                     modifier = Modifier.weight(1f).padding(horizontal = 4.dp), 
-                                    color = if (isDeliveredAndRated) CosmicSecondary else CosmicSurfaceVariant
+                                    color = if (isDelivered) CosmicSecondary else CosmicSurfaceVariant
                                 )
                                 
                                 // Step 3: Delivered
@@ -3893,18 +3894,18 @@ fun HistoryScreenBody(
                                         modifier = Modifier
                                             .size(24.dp)
                                             .clip(RoundedCornerShape(50))
-                                            .background(if (isDeliveredAndRated) CosmicSecondary else CosmicSurfaceVariant),
+                                            .background(if (isDelivered) CosmicSecondary else CosmicSurfaceVariant),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
-                                            imageVector = if (isDeliveredAndRated) Icons.Default.Check else Icons.Default.Home,
+                                            imageVector = if (isDelivered) Icons.Default.Check else Icons.Default.Home,
                                             contentDescription = null,
                                             modifier = Modifier.size(12.dp),
-                                            tint = if (isDeliveredAndRated) Color.Black else Color.White
+                                            tint = if (isDelivered) Color.Black else Color.White
                                         )
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Text("تم التوصيل", color = if (isDeliveredAndRated) Color.White else MediumContrastTextDark, fontSize = 9.sp)
+                                    Text("تم التسليم", color = if (isDelivered) Color.White else MediumContrastTextDark, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -4056,8 +4057,107 @@ fun HistoryScreenBody(
                             ViewReceiptDialog(receiptToShow!!) { receiptToShow = null }
                         }
 
-                        val isCourierAssigned = orderStatus.contains("تسليم المندوب") || orderStatus.contains("تسليم لمندوب") || courierName.isNotBlank() || isDelivered
-                        if (isCourierAssigned) {
+                        val isCourierAssigned = courierName.isNotBlank() || isDelivered
+                        if (isDelivered) {
+                            val savedPaymentMethod = firstItem?.paymentMethod ?: "كاش للمندوب"
+                            val savedReceiptBase64 = firstItem?.bankReceiptImageUri
+                            
+                            Card(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                colors = CardDefaults.cardColors(containerColor = CosmicDeepSpace),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color.Green.copy(0.4f)),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(14.dp).fillMaxWidth(),
+                                    horizontalAlignment = Alignment.End
+                                ) {
+                                    Text(
+                                        text = "🔒 الفاتورة مغلقة ومكتملة بنجاح ✅",
+                                        color = Color.Green,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        modifier = Modifier.padding(bottom = 6.dp)
+                                    )
+                                    Text(
+                                        text = "لقد تم تسليم شحنتكم بنجاح ومطابقتها وتأكيدها. الفاتورة مغلقة حالياً ولا يمكن تعديل تفاصيلها من العميل أو المندوب.",
+                                        color = Color.LightGray,
+                                        fontSize = 11.sp,
+                                        textAlign = TextAlign.Right,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Text(
+                                        text = "💳 طريقة السداد للطلب: $savedPaymentMethod",
+                                        color = Color.White,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    
+                                    if (!savedReceiptBase64.isNullOrBlank()) {
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Button(
+                                            onClick = { receiptToShow = savedReceiptBase64 },
+                                            colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                                            shape = RoundedCornerShape(8.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Icon(Icons.Default.Image, null, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("عرض إشعار التحويل المرفق 📄", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                    
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    
+                                    // Button to share invoice with courier (مشاركة الفاتورة مع المندوب)
+                                    val whatsappContext = androidx.compose.ui.platform.LocalContext.current
+                                    Button(
+                                        onClick = {
+                                            val phone = firstItem?.courierPhone ?: ""
+                                            val cleanPhone = phone.replace("+", "").replace(" ", "")
+                                            val itemsSummary = orderItems.joinToString("\n") { "- ${it.productName} (العدد: ${it.quantity}) - ${formatPrice(it.priceAtOrder)} ج.س" }
+                                            val shareMsg = """
+                                                🌌 فاتورة مندوب منتجات كوني 🌌
+                                                ------------------------------
+                                                👤 الزبون: $customerName
+                                                📞 هاتف: $customerPhone
+                                                📍 العنوان: $customerAddress
+                                                ------------------------------
+                                                📦 المشتريات:
+                                                $itemsSummary
+                                                ------------------------------
+                                                🚚 رسوم التوصيل: ${formatPrice(deliveryPrice)} ج.س
+                                                💰 إجمالي المبلغ الكلي: ${formatPrice(grandTotal)} ج.س
+                                                💳 طريقة السداد: $savedPaymentMethod
+                                                حالة الفاتورة: تم تأكيد الدفع ومطابقتها من العميل بنجاح مغلق 🔒✅
+                                            """.trimIndent()
+                                            
+                                            try {
+                                                val intent = android.content.Intent(
+                                                    android.content.Intent.ACTION_VIEW,
+                                                    android.net.Uri.parse("https://api.whatsapp.com/send?phone=$cleanPhone&text=${android.net.Uri.encode(shareMsg)}")
+                                                )
+                                                whatsappContext.startActivity(intent)
+                                            } catch (e: Exception) {
+                                                val clipboard = whatsappContext.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                                val clip = android.content.ClipData.newPlainText("Majarah Invoice", shareMsg)
+                                                clipboard.setPrimaryClip(clip)
+                                                android.widget.Toast.makeText(whatsappContext, "تم نسخ تفاصيل الفاتورة! شاركها مع المندوب يدوياً 📋", android.widget.Toast.LENGTH_LONG).show()
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(Icons.Default.Share, null, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("مشاركة الفاتورة مع المندوب 🚴💬", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        } else if (isCourierAssigned) {
                             val savedPaymentMethod = firstItem?.paymentMethod ?: ""
                             val savedReceiptBase64 = firstItem?.bankReceiptImageUri
 
@@ -6344,6 +6444,128 @@ fun ProfileScreenBody(
                                     Text("• عميل ذهبي 👑:", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                 }
                             }
+                        }
+                    }
+                }
+            }
+
+            if (!isCourier && !isSeller && !isPharmacist && !isRestaurant && !isGeneralAdmin && !isAdmin) {
+                val couponsList by viewModel.allCouponsFlow.collectAsStateWithLifecycle()
+                val isEligibleForCoupon = currentClassification.contains("مميز") || currentClassification.contains("ذهبي")
+                val myCoupons = couponsList.filter { it.forUserEmail.trim().lowercase() == email.trim().lowercase() }
+                
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF161F30)),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, CosmicSecondary.copy(alpha = 0.3f))
+                ) {
+                    Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = "🎁 كوبونات الفوز الكونية الخاصة بك",
+                            color = CosmicSecondary,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.align(Alignment.End)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        if (isEligibleForCoupon) {
+                            if (myCoupons.isEmpty()) {
+                                Text(
+                                    text = "ليست لديك أي كوبونات فوز حالياً. قيّم التطبيق والطلبات بعد تسليمها للحصول على كوبونات وجوائز رائعة! 🌌✨",
+                                    color = Color.LightGray,
+                                    fontSize = 12.sp,
+                                    textAlign = TextAlign.Right,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            } else {
+                                Text(
+                                    text = "انسخ كود الكوبون واستخدمه عند إكمال سلتك للحصول على خصومات وهدايا كوزموس الفورية! 🎫",
+                                    color = Color.LightGray,
+                                    fontSize = 11.sp,
+                                    textAlign = TextAlign.Right,
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                                )
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    myCoupons.forEach { coupon ->
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = if (coupon.isUsed) Color.Red.copy(0.1f) else Color.Green.copy(0.12f)
+                                            ),
+                                            border = BorderStroke(1.dp, if (coupon.isUsed) Color.Red.copy(0.3f) else Color.Green.copy(0.4f)),
+                                            shape = RoundedCornerShape(10.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth().padding(10.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                if (!coupon.isUsed) {
+                                                    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+                                                    Button(
+                                                        onClick = {
+                                                            clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(coupon.code))
+                                                            Toast.makeText(context, "تم نسخ كود الكوبون: ${coupon.code} 📋", Toast.LENGTH_SHORT).show()
+                                                        },
+                                                        colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                                                        shape = RoundedCornerShape(8.dp),
+                                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                                        modifier = Modifier.height(30.dp)
+                                                    ) {
+                                                        Text("نسخ الكود 📋", fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                } else {
+                                                    Text(
+                                                        text = "تم الاستخدام 🔒",
+                                                        color = Color.Red,
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
+                                                
+                                                Column(horizontalAlignment = Alignment.End) {
+                                                    Text(
+                                                        text = coupon.code,
+                                                        color = Color.White,
+                                                        fontSize = 13.sp,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                    Text(
+                                                        text = coupon.offerTitle,
+                                                        color = CosmicSecondary,
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        textAlign = TextAlign.Right
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            // Non-eligible customer
+                            Text(
+                                text = "⚠️ كوبونات الفوز الكونية والجوائز مخصصة فقط لعملاء الفئة المميزة ⭐ والذهبية 👑.",
+                                color = Color(0xFFFF9800),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Right,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "تابع إكمال طلباتك الكونية لترقية تصنيف حسابك إلى فئة مميزة أو ذهبية وتفعيل الجوائز الفورية تلقائياً! 🚀🌌",
+                                color = Color.LightGray,
+                                fontSize = 11.sp,
+                                textAlign = TextAlign.Right,
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
                     }
                 }
@@ -13417,6 +13639,37 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                                         }
 
                                         if (isCompleted) {
+                                            Card(
+                                                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                                colors = CardDefaults.cardColors(containerColor = CosmicDeepSpace.copy(0.6f)),
+                                                border = BorderStroke(1.dp, Color.Green.copy(0.3f)),
+                                                shape = RoundedCornerShape(10.dp)
+                                            ) {
+                                                Column(modifier = Modifier.padding(10.dp).fillMaxWidth(), horizontalAlignment = Alignment.End) {
+                                                    Text("🔒 الفاتورة مغلقة ومكتملة بالتسليم بنجاح ✅", color = Color.Green, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Text("طريقة السداد المؤكدة: ${parent?.paymentMethod ?: "كاش للمندوب"}", color = Color.White, fontSize = 10.sp)
+                                                    
+                                                     if (!parent?.bankReceiptImageUri.isNullOrBlank()) {
+                                                         var showReceiptForCourier by remember { mutableStateOf(false) }
+                                                         if (showReceiptForCourier) {
+                                                             ViewReceiptDialog(parent!!.bankReceiptImageUri!!) { showReceiptForCourier = false }
+                                                         }
+                                                         Spacer(modifier = Modifier.height(6.dp))
+                                                         Button(
+                                                             onClick = { showReceiptForCourier = true },
+                                                             colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                                                             shape = RoundedCornerShape(8.dp),
+                                                             modifier = Modifier.fillMaxWidth()
+                                                         ) {
+                                                             Icon(Icons.Default.Image, null, modifier = Modifier.size(12.dp))
+                                                             Spacer(modifier = Modifier.width(4.dp))
+                                                             Text("عرض إشعار التحويل البنكي المرفق من الزبون 📄", fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                                         }
+                                                     }
+                                                }
+                                            }
+
                                             var selectedInvoiceType by remember { mutableStateOf("مندوب منتج") }
 
                                             Spacer(modifier = Modifier.height(10.dp))
@@ -13640,8 +13893,9 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
  🍟 تفاصيل الوجبة والطلب:
  ${order.itemsAndNotes}
  ---------------------------
+ 💵 سعر الوجبات: ${viewModel.formatPrice(order.foodPrice)} SDG
  🚚 سعر التوصيل: ${viewModel.formatPrice(order.deliveryFee)} SDG
- 💰 إجمالي التحصيل: ${viewModel.formatPrice(order.deliveryFee)} SDG
+ 💰 إجمالي التحصيل: ${viewModel.formatPrice(order.foodPrice + order.deliveryFee)} SDG
  ---------------------------
  تم تسليم الشحنة بنجاح من قبل مندوب التوصيل المعتمد.
  شكراً لثقتكم بمجرة التسوق الإلكتروني 🌌⚡
