@@ -2,6 +2,8 @@ package com.example.ui.screens
 
 import android.content.Context
 import android.content.Intent
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -55,6 +57,7 @@ fun RestaurantsPlanetSection(
     forceAdminPortal: Boolean = false
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val restaurants by viewModel.allRestaurants.collectAsStateWithLifecycle()
     val orders by viewModel.allRestaurantOrders.collectAsStateWithLifecycle()
     val activeProfile by viewModel.activeProfile.collectAsStateWithLifecycle()
@@ -231,7 +234,25 @@ fun RestaurantsPlanetSection(
                             unfocusedTextColor = Color.White
                         )
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (isGeneralAdmin) {
+                        Button(
+                            onClick = { showAddRestaurantDialog = true },
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(Icons.Default.Add, null, tint = Color.Black)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("إضافة مطعم كوني جديد فوراً ➕🍔", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.Black)
+                            }
+                        }
+                    }
 
                     val filtered = restaurants.filter { 
                         (it.isApproved || isAdmin || isRestaurant) && 
@@ -611,6 +632,37 @@ fun RestaurantsPlanetSection(
                                 shape = RoundedCornerShape(16.dp)
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
+                                    if (!myRestaurant.isApproved) {
+                                        Card(
+                                            colors = CardDefaults.cardColors(containerColor = Color(0xFFFF9800).copy(alpha = 0.12f)),
+                                            border = BorderStroke(1.dp, Color(0xFFFF9800).copy(alpha = 0.5f)),
+                                            shape = RoundedCornerShape(12.dp),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(bottom = 16.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(12.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Info,
+                                                    contentDescription = null,
+                                                    tint = Color(0xFFFF9800),
+                                                    modifier = Modifier.size(24.dp)
+                                                )
+                                                Text(
+                                                    text = "المطعم قيد الانتظار لموافقة الإدارة العامة لتوثيقه وتفعيله بالمنظومة ⏳🪐",
+                                                    color = Color(0xFFFFD54F),
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    lineHeight = 18.sp
+                                                )
+                                            }
+                                        }
+                                    }
+
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         verticalAlignment = Alignment.CenterVertically,
@@ -1018,12 +1070,13 @@ fun RestaurantsPlanetSection(
 
     // Dialog for adding a restaurant (Admin Portal / Restaurant Owner Portal)
     if (showAddRestaurantDialog) {
+        val isGeneral = isGeneralAdmin
         AddRestaurantDialog(
-            initialRestaurant = myRestaurant,
+            initialRestaurant = if (isGeneral) null else myRestaurant,
             onDismiss = { showAddRestaurantDialog = false },
             onAdd = { name, phone, menuImageBase64, logoImageBase64 ->
                 viewModel.addRestaurant(
-                    id = myRestaurant?.id ?: 0,
+                    id = if (isGeneral) 0 else (myRestaurant?.id ?: 0),
                     name = name,
                     phone = phone,
                     menuImageUri = menuImageBase64,
@@ -1037,7 +1090,18 @@ fun RestaurantsPlanetSection(
                         } catch (e: Exception) {
                             e.printStackTrace()
                         }
-                        Toast.makeText(context, "تم تسجيل المطعم بنجاح! المطعم حالياً بانتظار موافقة المدير العام لتأكيد التوثيق ⏳🏪", Toast.LENGTH_LONG).show()
+                        if (isGeneral) {
+                            // Find and approve restaurant
+                            scope.launch {
+                                delay(1000)
+                                viewModel.allRestaurants.value.find { it.phone.trim() == phone.trim() }?.let { rest ->
+                                    viewModel.approveRestaurant(rest.id) { }
+                                }
+                            }
+                            Toast.makeText(context, "تمت إضافة المطعم بنجاح واعتماده فوراً للمستخدمين! ✅🍔", Toast.LENGTH_LONG).show()
+                        } else {
+                            Toast.makeText(context, "تم تسجيل المطعم بنجاح! المطعم حالياً بانتظار موافقة المدير العام لتأكيد التوثيق ⏳🏪", Toast.LENGTH_LONG).show()
+                        }
                         showAddRestaurantDialog = false
                     } else {
                         Toast.makeText(context, "فشل حفظ بيانات المطعم: $err", Toast.LENGTH_LONG).show()

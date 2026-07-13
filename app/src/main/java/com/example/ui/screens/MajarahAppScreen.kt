@@ -776,23 +776,27 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                     )
                 }
                 is Screen.Home -> {
-                    HomeScreenBody(
-                        searchQuery = searchQuery,
-                        selectedCategory = selectedCategory,
-                        products = filteredProducts,
-                        onQueryChange = { viewModel.updateSearchQuery(it) },
-                        onCategorySelect = { viewModel.setCategory(it) },
-                        onProductClick = { viewModel.navigateTo(Screen.ProductDetail(it.id)) },
-                        onFavoriteToggle = { viewModel.toggleFavorite(it.id) },
-                        onAddToCart = { 
-                            viewModel.addToCart(it.id)
-                            Toast.makeText(context, "تمت إضافة ${it.name} إلى السلة 🛍️", Toast.LENGTH_SHORT).show()
-                        },
-                        viewModel = viewModel
-                    )
+                    if ((isCourier || isSeller || isPharmacist || isRestaurant || isAdmin) && !isGeneralAdmin) {
+                        RestrictedAccessScreenBody(viewModel = viewModel)
+                    } else {
+                        HomeScreenBody(
+                            searchQuery = searchQuery,
+                            selectedCategory = selectedCategory,
+                            products = filteredProducts,
+                            onQueryChange = { viewModel.updateSearchQuery(it) },
+                            onCategorySelect = { viewModel.setCategory(it) },
+                            onProductClick = { viewModel.navigateTo(Screen.ProductDetail(it.id)) },
+                            onFavoriteToggle = { viewModel.toggleFavorite(it.id) },
+                            onAddToCart = { 
+                                viewModel.addToCart(it.id)
+                                Toast.makeText(context, "تمت إضافة ${it.name} إلى السلة 🛍️", Toast.LENGTH_SHORT).show()
+                            },
+                            viewModel = viewModel
+                        )
+                    }
                 }
                 is Screen.Categories -> {
-                    if (isCourier || isSeller || isPharmacist || isRestaurant || isAdmin) {
+                    if ((isCourier || isSeller || isPharmacist || isRestaurant || isAdmin) && !isGeneralAdmin) {
                         RestrictedAccessScreenBody(viewModel = viewModel)
                     } else {
                         CategoriesScreenBody(
@@ -805,7 +809,7 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                     }
                 }
                 is Screen.Cart -> {
-                    if (isCourier || isSeller || isPharmacist || isRestaurant || isAdmin) {
+                    if ((isCourier || isSeller || isPharmacist || isRestaurant || isAdmin) && !isGeneralAdmin) {
                         RestrictedAccessScreenBody(viewModel = viewModel)
                     } else {
                         CartScreenBody(
@@ -820,7 +824,7 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                             onQtyIncrease = { viewModel.updateCartQuantity(it.product.id, it.quantity + 1) },
                             onQtyDecrease = { viewModel.updateCartQuantity(it.product.id, it.quantity - 1) },
                             onRemove = { viewModel.removeFromCart(it.product.id) },
-                            onSubmit = { method, txId -> viewModel.submitCheckout(method, txId) },
+                            onSubmit = { method, txId, receiptBase64 -> viewModel.submitCheckout(method, txId, receiptBase64) },
                             formatPrice = { viewModel.formatPrice(it) },
                             isLoggedIn = isLoggedIn,
                             onRegisterPrompt = {
@@ -832,7 +836,7 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                     }
                 }
                 is Screen.Favorites -> {
-                    if (isCourier || isSeller || isPharmacist || isRestaurant || isAdmin) {
+                    if ((isCourier || isSeller || isPharmacist || isRestaurant || isAdmin) && !isGeneralAdmin) {
                         RestrictedAccessScreenBody(viewModel = viewModel)
                     } else {
                         FavoritesScreenBody(
@@ -843,7 +847,7 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                     }
                 }
                 is Screen.History -> {
-                    if (isCourier || isSeller || isPharmacist || isRestaurant || isAdmin) {
+                    if ((isCourier || isSeller || isPharmacist || isRestaurant || isAdmin) && !isGeneralAdmin) {
                         RestrictedAccessScreenBody(viewModel = viewModel)
                     } else if (isLoggedIn) {
                         HistoryScreenBody(
@@ -2370,6 +2374,8 @@ fun HomeScreenBody(
 ) {
     val isPharmacist by viewModel.isPharmacist.collectAsStateWithLifecycle()
     val isRestaurant by viewModel.isRestaurant.collectAsStateWithLifecycle()
+    val isGeneralAdmin by viewModel.isGeneralAdmin.collectAsStateWithLifecycle()
+    val activeProfile by viewModel.activeProfile.collectAsStateWithLifecycle()
 
     if (isPharmacist) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -2450,7 +2456,6 @@ fun HomeScreenBody(
             Pair("services", "🛠️ كوكب خدمات عامة"),
             Pair("crafts", "🪚 كوكب أعمال حرفية"),
             Pair("estate_cars", "🚗 كوكب بيع العقارات والسيارات"),
-            Pair("rentals", "🔑 كوكب الإيجارات"),
             Pair("pharmacy", "💊 كوكب صيدلية"),
             Pair("restaurant", "🍔 كوكب مطاعم"),
             Pair("kids", "🍼 كوكب مستلزمات أطفال"),
@@ -2459,7 +2464,6 @@ fun HomeScreenBody(
             Pair("travel", "✈️ كوكب وكالات سفر وسياحة"),
             Pair("tickets", "🎟️ كوكب حجوزات تذاكر"),
             Pair("hotels", "🏨 كوكب حجوزات فندقية"),
-            Pair("cosmic_deals", "⭐ كوكب العروض الكونية"),
             Pair("foods", "🍎 كوكب الأغذية والمأكولات"),
             Pair("cosmetics", "💄 كوكب عطور وتجميل"),
             Pair("other", "📦 كوكب منتجات أخرى")
@@ -2503,6 +2507,46 @@ fun HomeScreenBody(
         } else if (selectedCategory == "restaurant") {
             Box(modifier = Modifier.fillMaxSize().weight(1f)) {
                 com.example.ui.screens.RestaurantsPlanetSection(viewModel = viewModel)
+            }
+        } else if (selectedCategory == "women" && !isGeneralAdmin && !isFemaleName(activeProfile?.name ?: "")) {
+            Box(
+                modifier = Modifier.fillMaxSize().weight(1f).padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                    border = BorderStroke(1.2.dp, Color(0xFFE91E63).copy(alpha = 0.5f)),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = null,
+                            tint = Color(0xFFE91E63),
+                            modifier = Modifier.size(56.dp)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "كوكب النساء خاص بالنساء فقط 💅🔒",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = "عذراً يا سيد [${activeProfile?.name ?: "العميل"}]. هذا الكوكب مخصص حصرياً للنساء لضمان الخصوصية والراحة الكاملة في تصفح مستلزمات وحاجيات المرأة العصرية.",
+                            color = MediumContrastTextDark,
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 18.sp
+                        )
+                    }
+                }
             }
         } else {
             LazyColumn(
@@ -2787,7 +2831,6 @@ fun CategoriesScreenBody(
         Triple("services", "🛠️ كوكب خدمات عامة", "مجموعة متكاملة من الخدمات العامة، الصيانة، التوصيل والدعم الفني السريع."),
         Triple("crafts", "🪚 كوكب أعمال حرفية", "أعمال يدوية، نجارة، حدادة، وصناعات حرفية ماهرة بأيدي خبراء."),
         Triple("estate_cars", "🚗 كوكب بيع العقارات والسيارات", "أفضل العروض الحقيقية لبيع وشراء السيارات الحديثة والعقارات والأراضي بالسودان."),
-        Triple("rentals", "🔑 كوكب الإيجارات", "شقق مفروشة، بيوت للإيجار، سيارات فخمة للإيجار اليومي والشهري بأسعار مناسبة."),
         Triple("pharmacy", "💊 كوكب صيدلية", "مستلزمات طبية، أدوية، رعاية صحية، فيتامينات ومستحضرات معتمدة."),
         Triple("restaurant", "🍔 كوكب مطاعم", "أشهى وألذ المأكولات والوجبات السريعة والمشروبات الطازجة المجهزة بكل حب."),
         Triple("kids", "🍼 كوكب مستلزمات أطفال", "ملابس أطفال، ألعاب ذكية، حليب ومستلزمات العناية الكاملة بالمواليد."),
@@ -2796,7 +2839,6 @@ fun CategoriesScreenBody(
         Triple("travel", "✈️ كوكب وكالات سفر وسياحة", "رحلات سياحية، معاملات تأشيرات، رحلات داخلية وخارجية بضمان وموثوقية."),
         Triple("tickets", "🎟️ كوكب حجوزات تذاكر", "حجز تذاكر الطيران، الباصات السفرية، الحفلات والفعاليات بنقرة واحدة."),
         Triple("hotels", "🏨 كوكب حجوزات فندقية", "حجوزات مباشرة للفنادق، الشقق الفندقية، والمنتجعات بأفضل الأسعار بالسودان."),
-        Triple("cosmic_deals", "⭐ كوكب العروض الكونية", "عروض وتخفيضات نارية هائلة لفترة محدودة تلبي كافة الاحتياجات."),
         Triple("foods", "🍎 كوكب الأغذية والمأكولات", "خضروات وفواكه طازجة، لحوم، بقالة ومواد تموينية مغذية للأسرة."),
         Triple("cosmetics", "💄 كوكب عطور وتجميل", "أفخم ماركات العطور والروائح السودانية والمستوردة وأدوات التجميل الأصلية."),
         Triple("other", "📦 كوكب منتجات أخرى", "منتجات متنوعة أخرى وهدايا فريدة تناسب كافة الأوقات.")
@@ -2879,7 +2921,7 @@ fun CartScreenBody(
     onQtyIncrease: (CartItemWithProduct) -> Unit,
     onQtyDecrease: (CartItemWithProduct) -> Unit,
     onRemove: (CartItemWithProduct) -> Unit,
-    onSubmit: (paymentMethod: String, transactionId: String) -> Unit,
+    onSubmit: (paymentMethod: String, transactionId: String, bankReceiptBase64: String?) -> Unit,
     formatPrice: (Double) -> String,
     isLoggedIn: Boolean = true,
     onRegisterPrompt: () -> Unit = {},
@@ -2893,6 +2935,46 @@ fun CartScreenBody(
     var selectedCheckoutPaymentMethod by remember { mutableStateOf("cash") } // "cash" or "bank"
     var showBankDialog by remember { mutableStateOf(false) }
     var bankTransactionId by remember { mutableStateOf("") }
+    var checkoutReceiptBase64 by remember { mutableStateOf<String?>(null) }
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+
+    val cameraLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (bitmap != null) {
+            val outputStream = java.io.ByteArrayOutputStream()
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, outputStream)
+            val bytes = outputStream.toByteArray()
+            val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.DEFAULT)
+            checkoutReceiptBase64 = base64
+            android.widget.Toast.makeText(context, "تم التقاط صورة إشعار التحويل بنجاح! 📸", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val galleryLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
+                if (bitmap != null) {
+                    val outputStream = java.io.ByteArrayOutputStream()
+                    bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, outputStream)
+                    val bytes = outputStream.toByteArray()
+                    val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.DEFAULT)
+                    checkoutReceiptBase64 = base64
+                    android.widget.Toast.makeText(context, "تم اختيار صورة الإشعار بنجاح! 🖼️", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                android.widget.Toast.makeText(context, "فشل قراءة الصورة ❌", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     if (cartItems.isEmpty()) {
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -3269,77 +3351,240 @@ fun CartScreenBody(
                             Spacer(modifier = Modifier.height(16.dp))
 
                             val formValid = nameValue.isNotBlank() && phoneValue.isNotBlank() && addressValue.isNotBlank()
-                            
-                            // Bank dialog to enter transaction number
-                            if (showBankDialog) {
-                                AlertDialog(
-                                    onDismissRequest = { showBankDialog = false },
-                                    title = {
-                                        Text(
-                                            text = "إدخال رقم العملية البنكية 🧾",
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 16.sp,
-                                            modifier = Modifier.fillMaxWidth(),
-                                            textAlign = TextAlign.Right
-                                        )
-                                    },
-                                    text = {
-                                        Column(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalAlignment = Alignment.End
-                                        ) {
-                                            Text(
-                                                text = "يرجى إدخال رقم إشعار التحويل لتتم المطابقة سحابياً وتأكيد الفاتورة:",
-                                                color = Color.White.copy(0.8f),
-                                                fontSize = 12.sp,
-                                                textAlign = TextAlign.Right,
-                                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-                                            )
-                                            OutlinedTextField(
-                                                value = bankTransactionId,
-                                                onValueChange = { bankTransactionId = it },
-                                                placeholder = { Text("أدخل رقم المعاملة البنكية هنا", color = MediumContrastTextDark) },
-                                                modifier = Modifier.fillMaxWidth(),
-                                                singleLine = true,
-                                                colors = OutlinedTextFieldDefaults.colors(
-                                                    focusedTextColor = Color.White,
-                                                    unfocusedTextColor = Color.White,
-                                                    focusedBorderColor = CosmicSecondary,
-                                                    unfocusedBorderColor = CosmicSurfaceVariant
-                                                )
-                                            )
-                                        }
-                                    },
-                                    confirmButton = {
-                                        Button(
-                                            onClick = {
-                                                if (bankTransactionId.isNotBlank()) {
-                                                    showBankDialog = false
-                                                    onSubmit("bank", bankTransactionId)
-                                                }
-                                            },
-                                            enabled = bankTransactionId.isNotBlank(),
-                                            colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black)
-                                        ) {
-                                            Text("تأكيد وإكمال الفاتورة ✅", fontWeight = FontWeight.Bold)
-                                        }
-                                    },
-                                    dismissButton = {
-                                        TextButton(onClick = { showBankDialog = false }) {
-                                            Text("إلغاء", color = Color.Red)
-                                        }
-                                    },
-                                    containerColor = CosmicSurface,
-                                    shape = RoundedCornerShape(16.dp)
-                                )
+
+                            Text(
+                                "💳 طريقة الدفع لطلبك:",
+                                color = CosmicSecondary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(top = 12.dp, bottom = 6.dp)
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                // Cash Option
+                                Card(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable { selectedCheckoutPaymentMethod = "cash" },
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (selectedCheckoutPaymentMethod == "cash") CosmicSecondary.copy(alpha = 0.15f) else CosmicSurfaceVariant.copy(alpha = 0.2f)
+                                    ),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        width = if (selectedCheckoutPaymentMethod == "cash") 1.5.dp else 1.dp,
+                                        color = if (selectedCheckoutPaymentMethod == "cash") CosmicSecondary else CosmicSurfaceVariant
+                                    ),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(8.dp).fillMaxWidth(),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Icon(Icons.Default.Payments, null, tint = if (selectedCheckoutPaymentMethod == "cash") CosmicSecondary else Color.White, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text("كاش عند الاستلام 💵", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+
+                                // Bank Option
+                                Card(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable { selectedCheckoutPaymentMethod = "bank" },
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (selectedCheckoutPaymentMethod == "bank") CosmicSecondary.copy(alpha = 0.15f) else CosmicSurfaceVariant.copy(alpha = 0.2f)
+                                    ),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        width = if (selectedCheckoutPaymentMethod == "bank") 1.5.dp else 1.dp,
+                                        color = if (selectedCheckoutPaymentMethod == "bank") CosmicSecondary else CosmicSurfaceVariant
+                                    ),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(8.dp).fillMaxWidth(),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Icon(Icons.Default.AccountBalance, null, tint = if (selectedCheckoutPaymentMethod == "bank") CosmicSecondary else Color.White, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text("تحويل بنكي 💳", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
                             }
+
+                            if (selectedCheckoutPaymentMethod == "bank") {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = CosmicSurfaceVariant.copy(0.3f)),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, CosmicSecondary.copy(0.2f)),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(10.dp).fillMaxWidth(),
+                                        horizontalAlignment = Alignment.End
+                                    ) {
+                                        Text(
+                                            text = "🏦 بيانات الحساب للتحويل البنكي:",
+                                            color = CosmicSecondary,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 11.sp,
+                                            modifier = Modifier.padding(bottom = 6.dp)
+                                        )
+                                        
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text("بنك الخرطوم 🇸🇩", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            Text("اسم البنك:", color = Color.Gray, fontSize = 10.sp)
+                                        }
+                                        
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                TextButton(
+                                                    onClick = {
+                                                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString("معاوية عثمان احمد ياسين"))
+                                                        android.widget.Toast.makeText(context, "تم نسخ الاسم بنجاح! 📋", android.widget.Toast.LENGTH_SHORT).show()
+                                                    },
+                                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                                    modifier = Modifier.height(24.dp)
+                                                ) {
+                                                    Text("نسخ 📋", fontSize = 9.sp, color = CosmicSecondary, fontWeight = FontWeight.Bold)
+                                                }
+                                                Text("معاوية عثمان احمد ياسين", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                            Text("الاسم كامل:", color = Color.Gray, fontSize = 10.sp)
+                                        }
+                                        
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                TextButton(
+                                                    onClick = {
+                                                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString("3414879"))
+                                                        android.widget.Toast.makeText(context, "تم نسخ رقم الحساب! 📋", android.widget.Toast.LENGTH_SHORT).show()
+                                                    },
+                                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                                    modifier = Modifier.height(24.dp)
+                                                ) {
+                                                    Text("نسخ 📋", fontSize = 9.sp, color = CosmicSecondary, fontWeight = FontWeight.Bold)
+                                                }
+                                                Text("3414879", color = CosmicSecondary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                            Text("رقم الحساب:", color = Color.Gray, fontSize = 10.sp)
+                                        }
+                                    }
+                                }
+                                
+                                Spacer(modifier = Modifier.height(10.dp))
+                                
+                                Text(
+                                    text = "رقم المعاملة أو العملية البنكية:",
+                                    color = Color.White.copy(0.8f),
+                                    fontSize = 10.sp,
+                                    modifier = Modifier.padding(bottom = 4.dp).fillMaxWidth(),
+                                    textAlign = TextAlign.Right
+                                )
+                                OutlinedTextField(
+                                    value = bankTransactionId,
+                                    onValueChange = { bankTransactionId = it },
+                                    placeholder = { Text("أدخل رقم العملية البنكية هنا للتأكيد", fontSize = 10.sp, color = Color.White.copy(0.4f)) },
+                                    singleLine = true,
+                                    textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 11.sp, textAlign = TextAlign.Right),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = CosmicSecondary,
+                                        unfocusedBorderColor = Color.White.copy(0.3f)
+                                    )
+                                )
+                                
+                                Spacer(modifier = Modifier.height(8.dp))
+                                
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // Camera
+                                    Button(
+                                        onClick = { cameraLauncher.launch(null) },
+                                        colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant, contentColor = Color.White),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.weight(1f),
+                                        contentPadding = PaddingValues(vertical = 8.dp)
+                                    ) {
+                                        Icon(Icons.Default.CameraAlt, null, modifier = Modifier.size(14.dp), tint = CosmicSecondary)
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("التقاط بالكاميرا 📸", fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    }
+
+                                    // Gallery
+                                    Button(
+                                        onClick = { galleryLauncher.launch("image/*") },
+                                        colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant, contentColor = Color.White),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.weight(1f),
+                                        contentPadding = PaddingValues(vertical = 8.dp)
+                                    ) {
+                                        Icon(Icons.Default.Image, null, modifier = Modifier.size(14.dp), tint = CosmicSecondary)
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("إرفاق من الاستوديو 🖼️", fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                                
+                                Spacer(modifier = Modifier.height(6.dp))
+                                
+                                if (checkoutReceiptBase64 != null) {
+                                    Text(
+                                        text = "تم إرفاق إشعار الدفع بنجاح ✅",
+                                        color = Color.Green,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textAlign = TextAlign.Center
+                                    )
+                                } else {
+                                    Text(
+                                        text = "يرجى كتابة رقم العملية أو إرفاق صورة الإشعار للتأكيد ⚠️",
+                                        color = Color.Yellow,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
 
                             Button(
                                 onClick = {
-                                    onSubmit("pending_delivery", "")
+                                    if (selectedCheckoutPaymentMethod == "bank") {
+                                        if (bankTransactionId.trim().isEmpty() && checkoutReceiptBase64 == null) {
+                                            android.widget.Toast.makeText(context, "الرجاء إدخال رقم العملية أو إرفاق صورة الإشعار للتحويل البنكي", android.widget.Toast.LENGTH_LONG).show()
+                                        } else {
+                                            onSubmit("bank", bankTransactionId.trim(), checkoutReceiptBase64)
+                                        }
+                                    } else {
+                                        onSubmit("pending_delivery", "", null)
+                                    }
                                 },
-                                enabled = formValid,
+                                enabled = formValid && (selectedCheckoutPaymentMethod == "cash" || bankTransactionId.isNotBlank() || checkoutReceiptBase64 != null),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("checkout_submit_btn"),
@@ -6003,10 +6248,10 @@ fun ProfileScreenBody(
                 activeProfile?.email?.trim()?.lowercase() == "mawiaosman0@gmail.com" -> "المدير العام للمجرة 👑"
                 isGeneralAdmin -> "المدير العام للمجرة 👑"
                 isAdmin -> "مدير إداري 🏛️"
-                isCourier -> "مندوب توصيل 🚴"
+                isCourier -> "مندوب المجرة 🚴"
                 isSeller -> "تاجر المجرة 🛒"
                 isPharmacist -> "صيدلي المجرة 💊"
-                isRestaurant -> "صاحب مطعم 🍔"
+                isRestaurant -> "مطعم المجرة 🍔"
                 else -> "عميل المجرة 🌌"
             }
             Text(
@@ -6926,7 +7171,7 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                     ) {
                                         Column(modifier = Modifier.padding(14.dp).fillMaxWidth(), horizontalAlignment = Alignment.End) {
                                             Text(
-                                                "إضافة مندوب توصيل جديد ➕",
+                                                "إضافة مندوب المجرة جديد ➕",
                                                 fontWeight = FontWeight.Bold,
                                                 color = CosmicSecondary,
                                                 fontSize = 13.sp
@@ -7222,8 +7467,8 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                     add("إضافة ➕" to 1)
                     add("مفاتيح الربط🔑" to 5)
                 }
-                add((if (pendingPharmacyCount > 0) "طلبات الصيدليات 💊 ($pendingPharmacyCount)" else "طلبات الصيدليات 💊") to 9)
-                add((if (pendingRestaurantOrdersCount > 0) "طلبات المطاعم 🍔 ($pendingRestaurantOrdersCount)" else "طلبات المطاعم 🍔") to 11)
+                add((if (pendingPharmacyCount > 0) "توثيق وطلبات الصيدليات 💊 ($pendingPharmacyCount)" else "توثيق وطلبات الصيدليات 💊") to 9)
+                add((if (pendingRestaurantOrdersCount > 0) "توثيق وطلبات المطاعم 🍔 ($pendingRestaurantOrdersCount)" else "توثيق وطلبات المطاعم 🍔") to 11)
                 
                 // Expose Ratings to both General Manager and Administrative Manager
                 if (isGeneralAdmin || isAdministrativeManager) {
@@ -7607,7 +7852,6 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                 Triple("services", "كوكب خدمات عامة", "services"),
                                 Triple("crafts", "كوكب أعمال حرفية", "crafts"),
                                 Triple("estate_cars", "كوكب بيع العقارات والسيارات", "estate_cars"),
-                                Triple("rentals", "كوكب الإيجارات", "rentals"),
                                 Triple("pharmacy", "كوكب صيدلية", "pharmacy"),
                                 Triple("restaurant", "كوكب مطاعم", "restaurant"),
                                 Triple("kids", "كوكب مستلزمات أطفال", "kids"),
@@ -7616,7 +7860,6 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                 Triple("travel", "كوكب وكالات سفر وسياحة", "travel"),
                                 Triple("tickets", "كوكب حجوزات تذاكر", "tickets"),
                                 Triple("hotels", "كوكب حجوزات فندقية", "hotels"),
-                                Triple("cosmic_deals", "كوكب العروض الكونية", "cosmic_deals"),
                                 Triple("foods", "كوكب الأغذية والمأكولات", "foods"),
                                 Triple("cosmetics", "كوكب عطور وتجميل", "cosmetics"),
                                 Triple("other", "كوكب منتجات أخرى", "other")
@@ -8366,7 +8609,7 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                             ) {
                                 Column(modifier = Modifier.padding(14.dp).fillMaxWidth(), horizontalAlignment = Alignment.End) {
                                     Text(
-                                        "إضافة مندوب توصيل جديد للقاعدة ➕",
+                                        "إضافة مندوب المجرة جديد للقاعدة ➕",
                                         fontWeight = FontWeight.Bold,
                                         color = CosmicSecondary,
                                         fontSize = 13.sp
@@ -8808,7 +9051,7 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                     
                                     if (allCouriers.isEmpty()) {
                                         Text(
-                                            "⚠️ الرجاء تسجيل مندوب توصيل أولاً بالعلّو لعرض البوابة الذكية.",
+                                            "⚠️ الرجاء تسجيل مندوب المجرة أولاً بالعلّو لعرض البوابة الذكية.",
                                             fontSize = 10.sp,
                                             color = Color.Red,
                                             textAlign = TextAlign.Right,
@@ -11956,7 +12199,6 @@ fun SellerDashboardScreenBody(viewModel: MajarahViewModel) {
         "services" to "كوكب خدمات عامة",
         "crafts" to "كوكب أعمال حرفية",
         "estate_cars" to "كوكب بيع العقارات والسيارات",
-        "rentals" to "كوكب الإيجارات",
         "pharmacy" to "كوكب صيدلية",
         "restaurant" to "كوكب مطاعم",
         "kids" to "كوكب مستلزمات أطفال",
@@ -11965,7 +12207,6 @@ fun SellerDashboardScreenBody(viewModel: MajarahViewModel) {
         "travel" to "كوكب وكالات سفر وسياحة",
         "tickets" to "كوكب حجوزات تذاكر",
         "hotels" to "كوكب حجوزات فندقية",
-        "cosmic_deals" to "كوكب العروض الكونية",
         "foods" to "كوكب الأغذية والمأكولات",
         "cosmetics" to "كوكب عطور وتجميل",
         "other" to "كوكب منتجات أخرى"
@@ -12023,6 +12264,33 @@ fun SellerDashboardScreenBody(viewModel: MajarahViewModel) {
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        val myActiveOrdersCount = remember(allOrders, allProducts, activeProfile) {
+            val email = activeProfile?.email?.trim()?.lowercase() ?: ""
+            allOrders.filter { order ->
+                val prod = allProducts.find { it.id == order.productId }
+                prod?.sellerEmail?.trim()?.lowercase() == email
+            }.groupBy { it.orderId }.keys.count { orderId ->
+                val parent = allOrders.firstOrNull { it.orderId == orderId }
+                val status = parent?.statusArabic ?: ""
+                !status.contains("تم توصيل") && !status.contains("ملغي") && !status.contains("تم التسليم")
+            }
+        }
+
+        var previousSellerActiveOrdersCount by remember { mutableStateOf(myActiveOrdersCount) }
+
+        LaunchedEffect(myActiveOrdersCount) {
+            if (myActiveOrdersCount > previousSellerActiveOrdersCount) {
+                try {
+                    val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+                    val r = android.media.RingtoneManager.getRingtone(context, alertUri)
+                    r?.play()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            previousSellerActiveOrdersCount = myActiveOrdersCount
+        }
+
         // Tab Selector Row
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -12032,7 +12300,7 @@ fun SellerDashboardScreenBody(viewModel: MajarahViewModel) {
             val myProductsCount = allProducts.count { it.sellerEmail.trim().lowercase() == activeProfile?.email?.trim()?.lowercase() }
             val tabs = listOf(
                 "منتجاتي ($myProductsCount) 🛍️" to 0,
-                "مراقبة الطلبات 📊" to 3,
+                "الطلبات ${if (myActiveOrdersCount > 0) "($myActiveOrdersCount)" else ""} 📊" to 3,
                 "إضافة منتج ➕" to 1,
                 "الدعم والتواصل 💬" to 2
             )
@@ -14839,4 +15107,42 @@ fun ViewReceiptDialog(
         shape = RoundedCornerShape(16.dp)
     )
 }
+
+fun isFemaleName(name: String): Boolean {
+    val clean = name.trim()
+    if (clean.isEmpty()) return false
+    
+    // We split the name into words and inspect the first word (usually the first name)
+    val firstName = clean.split(Regex("\\s+")).firstOrNull() ?: clean
+    
+    // A comprehensive set of common female first names in Arabic/Sudanese context
+    val femaleNames = setOf(
+        "فاطمة", "عائشة", "مريم", "زينب", "خديجة", "سارة", "أميرة", "هدى", "منى", "رنا", "ريهام", 
+        "هبة", "أمل", "رحاب", "ولاء", "نور", "أسماء", "آلاء", "نهى", "نادية", "داليا", "سحر", "سمر", 
+        "خلود", "مي", "مها", "يسرى", "ليلى", "سلوى", "نجلاء", "غادة", "رشا", "رانيا", "عبير", "إيناس", 
+        "هالة", "مروة", "شيرين", "بسمة", "منال", "إيمان", "نهاد", "شيماء", "وفاء", "رجاء", "حنان", 
+        "جميلة", "رباب", "وصال", "تهاني", "سعاد", "سناء", "صفاء", "روان", "تسنيم", "سجى", "ضحى", 
+        "إسراء", "أفنان", "ندى", "آية", "فدوى", "أمينة", "لبنى", "سوسن", "منى", "فرح", "سلمى", "يارا",
+        "لجين", "رهف", "شهد", "مرام", "رنا", "هند", "يسرا", "سالي", "جنا", "ريماس", "تالا", "حلا", "ديما",
+        "نورهان", "منة", "تسنيم", "صفية", "مواهب", "إخلاص", "التومة", "ام سلمة", "امنة", "كلتوم", "علوية",
+        "سميرة", "نبيلة", "سليمة", "فايزة", "كريمة", "لينا", "نيرمين", "ندين", "رندة", "غدير", "وسام"
+    )
+    
+    // Check if the first name is in our predefined female names set
+    if (femaleNames.contains(firstName)) return true
+    
+    // Also check for common suffixes/prefixes of female names
+    // Sudanese/Arabic female names often end with:
+    // 'ة' (ta marbouta), 'ى' (alif maqsoura), or 'اء' (alif hamza)
+    // But we need to make sure it's not a common male name like "حمزة", "طلحة", "عبيدة", "حذيفة", "عقبة", "أسامة", "جمعة", "علاء", "بهاء", "ضياء"
+    val maleExceptions = setOf("حمزة", "طلحة", "عبيدة", "حذيفة", "عقبة", "أسامة", "جمعة", "علاء", "بهاء", "ضياء", "مصطفى", "مرتضى", "مجتبى", "رضا", "يحيى", "موسى", "عيسى")
+    if (maleExceptions.contains(firstName)) return false
+    
+    if (firstName.endsWith("ة") || firstName.endsWith("ى") || firstName.endsWith("اء") || firstName.endsWith("يه")) {
+        return true
+    }
+    
+    return false
+}
+
 

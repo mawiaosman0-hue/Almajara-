@@ -1013,7 +1013,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun submitCheckout(paymentMethod: String = "cash", transactionId: String = "") {
+    fun submitCheckout(paymentMethod: String = "cash", transactionId: String = "", bankReceiptBase64: String? = null) {
         val phone = checkoutPhone.value.trim()
         val address = checkoutAddress.value.trim()
         val name = checkoutName.value.trim()
@@ -1042,7 +1042,8 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                 customerAddress = address,
                 items = currentItems,
                 discountFactor = discountFactor,
-                paymentMethod = methodLabel
+                paymentMethod = methodLabel,
+                bankReceiptImageUri = bankReceiptBase64
             )
 
             val netTotal = calculateDiscountedSum(currentItems, coupon)

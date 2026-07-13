@@ -1168,7 +1168,8 @@ class MajarahRepository(
         customerAddress: String,
         items: List<CartItemWithProduct>,
         discountFactor: Double = 1.0,
-        paymentMethod: String = ""
+        paymentMethod: String = "",
+        bankReceiptImageUri: String? = null
     ): String? {
         val baseStatus = "جاري التجهيز للتوصيل 📦"
         val finalStatus = if (paymentMethod.isNotBlank()) "$baseStatus ($paymentMethod)" else baseStatus
@@ -1184,7 +1185,8 @@ class MajarahRepository(
                 customerName = customerName,
                 customerPhone = customerPhone,
                 customerAddress = customerAddress,
-                deliveryFee = 0.0 // To be determined
+                deliveryFee = 0.0, // To be determined
+                bankReceiptImageUri = bankReceiptImageUri
             )
         }
         orderDao.insertOrders(orders)

@@ -50,9 +50,13 @@ fun PharmacyPlanetSection(
     val context = LocalContext.current
     val activeProfile by viewModel.activeProfile.collectAsStateWithLifecycle()
     val isPharmacist by viewModel.isPharmacist.collectAsStateWithLifecycle()
+    val isGeneralAdmin by viewModel.isGeneralAdmin.collectAsStateWithLifecycle()
     val allPharmacies by viewModel.allPharmacies.collectAsStateWithLifecycle()
     val allProducts by viewModel.allPharmacyProducts.collectAsStateWithLifecycle()
     val allOrders by viewModel.allPharmacyOrders.collectAsStateWithLifecycle()
+
+    var showAddPharmacyAdminDialog by remember { mutableStateOf(false) }
+    var showAddProductAdminDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -104,6 +108,65 @@ fun PharmacyPlanetSection(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        if (isGeneralAdmin) {
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                colors = CardDefaults.cardColors(containerColor = CosmicSurface),
+                border = BorderStroke(1.2.dp, CosmicSecondary.copy(alpha = 0.5f)),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Text(
+                        "قسم إدارة وصيدليات المدير العام 👑",
+                        color = CosmicSecondary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Right,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "بصفتك مديراً عاماً، يمكنك إضافة الصيدليات والأدوية والمنتجات مباشرة لجميع الفروع وتفعيلها فوراً.",
+                        color = MediumContrastTextDark,
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Right,
+                        lineHeight = 15.sp,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { showAddProductAdminDialog = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant),
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp), tint = Color.White)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("إضافة دواء/منتج ➕💊", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+
+                        Button(
+                            onClick = { showAddPharmacyAdminDialog = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary),
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp), tint = Color.Black)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("إضافة صيدلية ➕🏥", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                        }
+                    }
+                }
+            }
+        }
 
         if (isPharmacist) {
             // Pharmacist View Panel
@@ -477,6 +540,20 @@ fun PharmacyPlanetSection(
                 )
             }
         }
+
+        if (showAddPharmacyAdminDialog) {
+            AddPharmacyAdminDialog(
+                viewModel = viewModel,
+                onDismiss = { showAddPharmacyAdminDialog = false }
+            )
+        }
+
+        if (showAddProductAdminDialog) {
+            AddPharmacyProductAdminDialog(
+                viewModel = viewModel,
+                onDismiss = { showAddProductAdminDialog = false }
+            )
+        }
     }
 }
 
@@ -649,26 +726,28 @@ fun PharmacistAddPharmacyForm(
             )
             Spacer(modifier = Modifier.height(6.dp))
 
-            if (selectedImageBase64 != null) {
-                val bytes = try {
-                    android.util.Base64.decode(selectedImageBase64, android.util.Base64.DEFAULT)
-                } catch (e: Exception) {
-                    null
-                }
-                if (bytes != null) {
-                    val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                    if (bitmap != null) {
-                        Image(
-                            bitmap = bitmap.asImageBitmap(),
-                            contentDescription = "صورة الصيدلية المحددة",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(120.dp)
-                                .clip(RoundedCornerShape(10.dp)),
-                            contentScale = ContentScale.Crop
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
+            val base64Str = selectedImageBase64
+            if (base64Str != null) {
+                val bitmap = remember(base64Str) {
+                    try {
+                        val clean = if (base64Str.contains(",")) base64Str.substringAfter(",") else base64Str
+                        val bytes = android.util.Base64.decode(clean, android.util.Base64.DEFAULT)
+                        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    } catch (e: Exception) {
+                        null
                     }
+                }
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = "صورة الصيدلية المحددة",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(120.dp)
+                            .clip(RoundedCornerShape(10.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
                 }
             }
 
@@ -2154,7 +2233,24 @@ fun CustomerPharmacyView(
         var deliveryLoc by remember { mutableStateOf("") }
         var prescriptionImageBase64 by remember { mutableStateOf("") }
 
-        val imagePicker = rememberLauncherForActivityResult(
+        val cameraLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.TakePicturePreview()
+        ) { bitmap ->
+            if (bitmap != null) {
+                try {
+                    val outputStream = java.io.ByteArrayOutputStream()
+                    bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, outputStream)
+                    val bytes = outputStream.toByteArray()
+                    prescriptionImageBase64 = android.util.Base64.encodeToString(bytes, android.util.Base64.DEFAULT)
+                    Toast.makeText(context, "📸 تم التقاط صورة الروشتة بنجاح!", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    Toast.makeText(context, "فشل التقاط الصورة ❌", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        val galleryLauncher = rememberLauncherForActivityResult(
             contract = ActivityResultContracts.GetContent()
         ) { uri ->
             uri?.let {
@@ -2163,10 +2259,11 @@ fun CustomerPharmacyView(
                     val bytes = stream?.readBytes()
                     if (bytes != null) {
                         prescriptionImageBase64 = android.util.Base64.encodeToString(bytes, android.util.Base64.DEFAULT)
-                        Toast.makeText(context, "📸 تم تصوير وإرفاق الروشتة بنجاح!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "📸 تم إرفاق الروشتة بنجاح!", Toast.LENGTH_SHORT).show()
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
+                    Toast.makeText(context, "فشل قراءة الصورة ❌", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -2231,18 +2328,48 @@ fun CustomerPharmacyView(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    OutlinedButton(
-                        onClick = { imagePicker.launch("image/*") },
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp),
-                        border = BorderStroke(1.dp, CosmicSecondary),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = CosmicSecondary)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.CameraAlt, null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(if (prescriptionImageBase64.isNotBlank()) "تم تصوير الروشتة بنجاح ✅" else "تصوير أو إرفاق الروشتة 📸", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        // Camera Button
+                        Button(
+                            onClick = { cameraLauncher.launch(null) },
+                            colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant, contentColor = Color.White),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(vertical = 8.dp)
+                        ) {
+                            Icon(Icons.Default.CameraAlt, null, modifier = Modifier.size(14.dp), tint = CosmicSecondary)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("التقاط بالكاميرا 📸", fontSize = 9.sp, fontWeight = FontWeight.Bold)
                         }
+
+                        // Gallery Button
+                        Button(
+                            onClick = { galleryLauncher.launch("image/*") },
+                            colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant, contentColor = Color.White),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(vertical = 8.dp)
+                        ) {
+                            Icon(Icons.Default.Image, null, modifier = Modifier.size(14.dp), tint = CosmicSecondary)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("إرفاق من الاستوديو 🖼️", fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    if (prescriptionImageBase64.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "تم إرفاق الروشتة بنجاح ✅",
+                            color = Color.Green,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center
+                        )
                     }
                 }
             },
@@ -3349,5 +3476,477 @@ fun EnlargeImageDialog(imageBase64: String, onDismiss: () -> Unit) {
             }
         }
     }
+}
+
+@Composable
+fun AddPharmacyAdminDialog(
+    viewModel: MajarahViewModel,
+    onDismiss: () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    var name by remember { mutableStateOf("") }
+    var doctorName by remember { mutableStateOf("") }
+    var phone by remember { mutableStateOf("") }
+    var location by remember { mutableStateOf("") }
+    var pharmacistEmail by remember { mutableStateOf("") }
+    var hasCosmetics by remember { mutableStateOf(false) }
+    var imageBase64 by remember { mutableStateOf("") }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (bitmap != null) {
+            try {
+                val outputStream = java.io.ByteArrayOutputStream()
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, outputStream)
+                val bytes = outputStream.toByteArray()
+                imageBase64 = android.util.Base64.encodeToString(bytes, android.util.Base64.DEFAULT)
+                Toast.makeText(context, "تم التقاط صورة اللوقو! 📸", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, "حدث خطأ أثناء معالجة الصورة", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                val bitmap = if (android.os.Build.VERSION.SDK_INT >= 29) {
+                    val source = android.graphics.ImageDecoder.createSource(context.contentResolver, uri)
+                    android.graphics.ImageDecoder.decodeBitmap(source)
+                } else {
+                    @Suppress("DEPRECATION")
+                    android.provider.MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+                }
+                val outputStream = java.io.ByteArrayOutputStream()
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, outputStream)
+                val bytes = outputStream.toByteArray()
+                imageBase64 = android.util.Base64.encodeToString(bytes, android.util.Base64.DEFAULT)
+                Toast.makeText(context, "تم اختيار صورة اللوقو! 🖼️", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, "حدث خطأ أثناء معالجة الصورة", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                "إضافة صيدلية جديدة فوراً 🏥",
+                color = CosmicSecondary,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+        },
+        text = {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                item {
+                    Text("اسم الصيدلية:", color = Color.White.copy(0.8f), fontSize = 11.sp)
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                            focusedBorderColor = CosmicSecondary, unfocusedBorderColor = CosmicSurfaceVariant
+                        )
+                    )
+                }
+
+                item {
+                    Text("اسم الدكتور الصيدلي المسؤول:", color = Color.White.copy(0.8f), fontSize = 11.sp)
+                    OutlinedTextField(
+                        value = doctorName,
+                        onValueChange = { doctorName = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                            focusedBorderColor = CosmicSecondary, unfocusedBorderColor = CosmicSurfaceVariant
+                        )
+                    )
+                }
+
+                item {
+                    Text("رقم التواصل (واتساب):", color = Color.White.copy(0.8f), fontSize = 11.sp)
+                    OutlinedTextField(
+                        value = phone,
+                        onValueChange = { phone = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                            focusedBorderColor = CosmicSecondary, unfocusedBorderColor = CosmicSurfaceVariant
+                        )
+                    )
+                }
+
+                item {
+                    Text("بريد الصيدلي (لتفويض الحساب):", color = Color.White.copy(0.8f), fontSize = 11.sp)
+                    OutlinedTextField(
+                        value = pharmacistEmail,
+                        onValueChange = { pharmacistEmail = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                            focusedBorderColor = CosmicSecondary, unfocusedBorderColor = CosmicSurfaceVariant
+                        )
+                    )
+                }
+
+                item {
+                    Text("العنوان والموقع بالتفصيل:", color = Color.White.copy(0.8f), fontSize = 11.sp)
+                    OutlinedTextField(
+                        value = location,
+                        onValueChange = { location = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                            focusedBorderColor = CosmicSecondary, unfocusedBorderColor = CosmicSurfaceVariant
+                        )
+                    )
+                }
+
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { hasCosmetics = !hasCosmetics },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        Text("توفر مستحضرات تجميل 🧴", color = Color.White, fontSize = 11.sp)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Checkbox(
+                            checked = hasCosmetics,
+                            onCheckedChange = { hasCosmetics = it },
+                            colors = CheckboxDefaults.colors(checkedColor = CosmicSecondary)
+                        )
+                    }
+                }
+
+                item {
+                    Text("شعار / لوقو الصيدلية:", color = Color.White.copy(0.8f), fontSize = 11.sp)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Box(
+                        modifier = Modifier.fillMaxWidth().height(80.dp).clip(RoundedCornerShape(8.dp)).background(CosmicDeepSpace),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (imageBase64.isNotBlank()) {
+                            val bitmap = remember(imageBase64) {
+                                try {
+                                    val clean = if (imageBase64.contains(",")) imageBase64.substringAfter(",") else imageBase64
+                                    val bytes = android.util.Base64.decode(clean, android.util.Base64.DEFAULT)
+                                    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                } catch (e: Exception) {
+                                    null
+                                }
+                            }
+                            if (bitmap != null) {
+                                Image(bitmap = bitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                            } else {
+                                Text("صورة غير صالحة ❌", color = Color.Gray, fontSize = 11.sp)
+                            }
+                        } else {
+                            Text("لا توجد صورة محددة 🏪", color = Color.Gray, fontSize = 11.sp)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Button(onClick = { cameraLauncher.launch(null) }, colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant), modifier = Modifier.weight(1f)) {
+                            Text("كاميرا 📸", fontSize = 10.sp)
+                        }
+                        Button(onClick = { galleryLauncher.launch("image/*") }, colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant), modifier = Modifier.weight(1f)) {
+                            Text("المعرض 🖼️", fontSize = 10.sp)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (name.isBlank() || phone.isBlank() || pharmacistEmail.isBlank()) {
+                        Toast.makeText(context, "الرجاء ملء الاسم والهاتف والبريد ⚠️", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+                    viewModel.addPharmacy(name, doctorName, phone, location, pharmacistEmail, imageBase64, hasCosmetics) { err ->
+                        if (err == null) {
+                            coroutineScope.launch {
+                                kotlinx.coroutines.delay(1000)
+                                viewModel.allPharmacies.value.find { it.pharmacistEmail.trim().lowercase() == pharmacistEmail.trim().lowercase() }?.let { pharm ->
+                                    viewModel.approvePharmacy(pharm.id) { }
+                                }
+                            }
+                            Toast.makeText(context, "تمت إضافة الصيدلية واعتمادها فوراً! ✅🏥", Toast.LENGTH_LONG).show()
+                            onDismiss()
+                        } else {
+                            Toast.makeText(context, "فشل الإضافة: $err", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black)
+            ) {
+                Text("إضافة واعتماد ➕", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("إلغاء", color = Color.Gray)
+            }
+        },
+        containerColor = CosmicSurface,
+        titleContentColor = Color.White,
+        textContentColor = Color.White
+    )
+}
+
+@Composable
+fun AddPharmacyProductAdminDialog(
+    viewModel: MajarahViewModel,
+    onDismiss: () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val pharmacies by viewModel.allPharmacies.collectAsStateWithLifecycle()
+    val approvedPharmacies = remember(pharmacies) { pharmacies.filter { it.isApproved } }
+
+    var selectedPharmacyId by remember { mutableStateOf<Int?>(null) }
+    var selectedPharmacyName by remember { mutableStateOf("اختر صيدلية") }
+    var dropdownExpanded by remember { mutableStateOf(false) }
+
+    var pType by remember { mutableStateOf("دواء") } // دواء or مستحضر تجميل
+    var pName by remember { mutableStateOf("") }
+    var pCompany by remember { mutableStateOf("") }
+    var pPrice by remember { mutableStateOf("") }
+    var pImageBase64 by remember { mutableStateOf("") }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (bitmap != null) {
+            try {
+                val outputStream = java.io.ByteArrayOutputStream()
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, outputStream)
+                val bytes = outputStream.toByteArray()
+                pImageBase64 = android.util.Base64.encodeToString(bytes, android.util.Base64.DEFAULT)
+                Toast.makeText(context, "تم التقاط صورة المنتج! 📸", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, "حدث خطأ أثناء معالجة الصورة", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                val bitmap = if (android.os.Build.VERSION.SDK_INT >= 29) {
+                    val source = android.graphics.ImageDecoder.createSource(context.contentResolver, uri)
+                    android.graphics.ImageDecoder.decodeBitmap(source)
+                } else {
+                    @Suppress("DEPRECATION")
+                    android.provider.MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+                }
+                val outputStream = java.io.ByteArrayOutputStream()
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, outputStream)
+                val bytes = outputStream.toByteArray()
+                pImageBase64 = android.util.Base64.encodeToString(bytes, android.util.Base64.DEFAULT)
+                Toast.makeText(context, "تم اختيار صورة المنتج! 🖼️", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, "حدث خطأ أثناء معالجة الصورة", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                "إضافة دواء / منتج طبي فوراً 💊",
+                color = CosmicSecondary,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+        },
+        text = {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                item {
+                    Text("الصيدلية المستهدفة:", color = Color.White.copy(0.8f), fontSize = 11.sp)
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = { dropdownExpanded = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant)
+                        ) {
+                            Text(selectedPharmacyName, color = Color.White, fontSize = 11.sp)
+                        }
+                        androidx.compose.material3.DropdownMenu(
+                            expanded = dropdownExpanded,
+                            onDismissRequest = { dropdownExpanded = false },
+                            modifier = Modifier.fillMaxWidth(0.8f).background(CosmicSurface)
+                        ) {
+                            approvedPharmacies.forEach { pharm ->
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text(pharm.name, color = Color.White) },
+                                    onClick = {
+                                        selectedPharmacyId = pharm.id
+                                        selectedPharmacyName = pharm.name
+                                        dropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    Text("نوع المنتج:", color = Color.White.copy(0.8f), fontSize = 11.sp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf("دواء", "مستحضر تجميل").forEach { type ->
+                            val isSelected = pType == type
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isSelected) CosmicSecondary else CosmicSurfaceVariant)
+                                    .clickable { pType = type }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(type, color = if (isSelected) Color.Black else Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    Text("اسم الدواء / المنتج:", color = Color.White.copy(0.8f), fontSize = 11.sp)
+                    OutlinedTextField(
+                        value = pName,
+                        onValueChange = { pName = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                            focusedBorderColor = CosmicSecondary, unfocusedBorderColor = CosmicSurfaceVariant
+                        )
+                    )
+                }
+
+                item {
+                    Text("الشركة المصنعة / الموردة:", color = Color.White.copy(0.8f), fontSize = 11.sp)
+                    OutlinedTextField(
+                        value = pCompany,
+                        onValueChange = { pCompany = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                            focusedBorderColor = CosmicSecondary, unfocusedBorderColor = CosmicSurfaceVariant
+                        )
+                    )
+                }
+
+                item {
+                    Text("السعر بـ SDG:", color = Color.White.copy(0.8f), fontSize = 11.sp)
+                    OutlinedTextField(
+                        value = pPrice,
+                        onValueChange = { pPrice = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                            focusedBorderColor = CosmicSecondary, unfocusedBorderColor = CosmicSurfaceVariant
+                        )
+                    )
+                }
+
+                item {
+                    Text("صورة المنتج / الدواء:", color = Color.White.copy(0.8f), fontSize = 11.sp)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Box(
+                        modifier = Modifier.fillMaxWidth().height(80.dp).clip(RoundedCornerShape(8.dp)).background(CosmicDeepSpace),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (pImageBase64.isNotBlank()) {
+                            val bitmap = remember(pImageBase64) {
+                                try {
+                                    val clean = if (pImageBase64.contains(",")) pImageBase64.substringAfter(",") else pImageBase64
+                                    val bytes = android.util.Base64.decode(clean, android.util.Base64.DEFAULT)
+                                    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                } catch (e: Exception) {
+                                    null
+                                }
+                            }
+                            if (bitmap != null) {
+                                Image(bitmap = bitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                            } else {
+                                Text("صورة غير صالحة ❌", color = Color.Gray, fontSize = 11.sp)
+                            }
+                        } else {
+                            Text("لا توجد صورة محددة 🏪", color = Color.Gray, fontSize = 11.sp)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Button(onClick = { cameraLauncher.launch(null) }, colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant), modifier = Modifier.weight(1f)) {
+                            Text("كاميرا 📸", fontSize = 10.sp)
+                        }
+                        Button(onClick = { galleryLauncher.launch("image/*") }, colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant), modifier = Modifier.weight(1f)) {
+                            Text("المعرض 🖼️", fontSize = 10.sp)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val pharmacyId = selectedPharmacyId
+                    val price = pPrice.toDoubleOrNull()
+                    if (pharmacyId == null || pName.isBlank() || price == null) {
+                        Toast.makeText(context, "الرجاء اختيار صيدلية وإدخال اسم دواء وسعر صحيح ⚠️", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+                    viewModel.addPharmacyProduct(pharmacyId, pType, pName, pCompany, price, pImageBase64) { err ->
+                        if (err == null) {
+                            coroutineScope.launch {
+                                kotlinx.coroutines.delay(1000)
+                                viewModel.allPharmacyProducts.value.find { it.pharmacyId == pharmacyId && it.name.trim() == pName.trim() }?.let { prod ->
+                                    viewModel.approvePharmacyProduct(prod.id) { }
+                                }
+                            }
+                            Toast.makeText(context, "تمت إضافة المنتج واعتماده فوراً بالصيدلية! ✅💊", Toast.LENGTH_LONG).show()
+                            onDismiss()
+                        } else {
+                            Toast.makeText(context, "فشل الإضافة: $err", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black)
+            ) {
+                Text("إضافة واعتماد ➕", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("إلغاء", color = Color.Gray)
+            }
+        },
+        containerColor = CosmicSurface,
+        titleContentColor = Color.White,
+        textContentColor = Color.White
+    )
 }
 
