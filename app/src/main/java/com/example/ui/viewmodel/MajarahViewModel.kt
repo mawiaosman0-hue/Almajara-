@@ -30,6 +30,7 @@ sealed class Screen {
     object Courier : Screen()
     object Seller : Screen()
     object Pharmacist : Screen()
+    object Restaurant : Screen()
     data class ProductDetail(val productId: Int) : Screen()
 }
 
@@ -379,7 +380,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                         _currentScreen.value = Screen.Pharmacist
                     } else if (isRestaurantUser) {
                         _selectedCategory.value = "restaurant"
-                        _currentScreen.value = Screen.Home
+                        _currentScreen.value = Screen.Restaurant
                     } else {
                         _selectedCategory.value = ""
                         _currentScreen.value = Screen.Home
@@ -491,7 +492,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                                 _currentScreen.value = Screen.Pharmacist
                             } else if (isRestaurantUser) {
                                 _selectedCategory.value = "restaurant"
-                                _currentScreen.value = Screen.Home
+                                _currentScreen.value = Screen.Restaurant
                             } else {
                                 _selectedCategory.value = ""
                                 _currentScreen.value = Screen.Home
@@ -536,7 +537,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                                 _currentScreen.value = Screen.Pharmacist
                             } else if (isRestaurantUser) {
                                 _selectedCategory.value = "restaurant"
-                                _currentScreen.value = Screen.Home
+                                _currentScreen.value = Screen.Restaurant
                             } else {
                                 _selectedCategory.value = ""
                                 _currentScreen.value = Screen.Home
@@ -587,7 +588,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                             _currentScreen.value = Screen.Pharmacist
                         } else if (isRestaurantUser) {
                             _selectedCategory.value = "restaurant"
-                            _currentScreen.value = Screen.Home
+                            _currentScreen.value = Screen.Restaurant
                         } else {
                             _selectedCategory.value = ""
                             _currentScreen.value = Screen.Home
@@ -679,10 +680,10 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                     _currentScreen.value = Screen.Seller
                 } else if (role == "pharmacist") {
                     _selectedCategory.value = "pharmacy"
-                    _currentScreen.value = Screen.Home
+                    _currentScreen.value = Screen.Pharmacist
                 } else if (role == "restaurant") {
                     _selectedCategory.value = "restaurant"
-                    _currentScreen.value = Screen.Home
+                    _currentScreen.value = Screen.Restaurant
                 } else {
                     _currentScreen.value = Screen.Home
                 }
@@ -914,7 +915,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                     _currentScreen.value = Screen.Pharmacist
                 } else if (isRestaurantUser) {
                     _selectedCategory.value = "restaurant"
-                    _currentScreen.value = Screen.Home
+                    _currentScreen.value = Screen.Restaurant
                 } else {
                     _selectedCategory.value = ""
                     _currentScreen.value = Screen.Home
@@ -1889,12 +1890,12 @@ $couponMessage---------------------------
         }
     }
 
-    fun updateRestaurantOrderPriceAndStatus(id: Int, status: String, foodPrice: Double, onComplete: (String?) -> Unit) {
+    fun updateRestaurantOrderPriceAndStatus(id: Int, status: String, foodPrice: Double, detailedPrice: String, onComplete: (String?) -> Unit) {
         isGlobalLoading.value = true
         viewModelScope.launch {
             var error: String? = null
             try {
-                repository.updateRestaurantOrderPriceAndStatus(id, status, foodPrice)
+                repository.updateRestaurantOrderPriceAndStatus(id, status, foodPrice, detailedPrice)
             } catch (e: Exception) {
                 error = e.localizedMessage
             } finally {

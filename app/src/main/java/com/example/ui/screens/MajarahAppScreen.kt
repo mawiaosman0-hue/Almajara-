@@ -310,6 +310,7 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
     val allRestaurantOrders by viewModel.allRestaurantOrders.collectAsStateWithLifecycle()
     var showAppRatingDialog by remember { mutableStateOf(false) }
     var ratingOrderIdToSubmit by remember { mutableStateOf<String?>(null) }
+    var activeWellWishesOrderIdStd by remember { mutableStateOf<String?>(null) }
 
     val ratedPrefs = remember { context.getSharedPreferences("majarah_completed_ratings", android.content.Context.MODE_PRIVATE) }
     var ratedOrderIds by remember {
@@ -332,19 +333,19 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
 
         val newlyDeliveredStd = allOrders.filter { o ->
             (o.customerPhone.trim() == phone || o.customerName.trim() == name) &&
-            (o.statusArabic.contains("تم توصيل") || o.statusArabic.contains("تم التوصيل")) &&
+            (o.statusArabic.contains("تم توصيل") || o.statusArabic.contains("تم التوصيل") || o.statusArabic.contains("تم التسليم")) &&
             "std_${o.orderId}" !in promptedRatings
         }
 
         val newlyDeliveredPharm = allPharmacyOrders.filter { po ->
             (po.customerPhone?.trim() == phone || po.customerName?.trim() == name) &&
-            (po.status.contains("تم توصيل") || po.status.contains("تم التوصيل")) &&
+            (po.status.contains("تم توصيل") || po.status.contains("تم التوصيل") || po.status.contains("تم التسليم")) &&
             "pharm_${po.id}" !in promptedRatings
         }
 
         val newlyDeliveredRest = allRestaurantOrders.filter { ro ->
             (ro.customerPhone.trim() == phone || ro.customerName.trim() == name) &&
-            (ro.status.contains("تم توصيل") || ro.status.contains("تم التوصيل")) &&
+            (ro.status.contains("تم توصيل") || ro.status.contains("تم التوصيل") || ro.status.contains("تم التسليم")) &&
             "rest_${ro.id}" !in promptedRatings
         }
 
@@ -358,6 +359,13 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
             ratingPrefs.edit().putStringSet("prompted_order_ids", updated).apply()
             ratingOrderIdToSubmit = allNewlyDelivered.first()
             showAppRatingDialog = true
+        }
+    }
+
+    LaunchedEffect(activeWellWishesOrderIdStd) {
+        if (activeWellWishesOrderIdStd != null) {
+            kotlinx.coroutines.delay(5000) // 5 seconds
+            activeWellWishesOrderIdStd = null
         }
     }
 
@@ -404,19 +412,76 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
         if (showAppRatingDialog) {
             AppRatingDialog(
                 onDismiss = { 
+                    val currentId = ratingOrderIdToSubmit
+                    if (currentId != null && currentId.startsWith("std_")) {
+                        activeWellWishesOrderIdStd = currentId.substringAfter("std_")
+                    }
                     showAppRatingDialog = false
                     ratingOrderIdToSubmit = null
                 },
                 onSubmit = { stars, comment ->
                     viewModel.submitAppRating(stars, comment)
-                    ratingOrderIdToSubmit?.let { oId ->
-                        val updated = ratedOrderIds + oId
+                    val currentId = ratingOrderIdToSubmit
+                    if (currentId != null) {
+                        val updated = ratedOrderIds + currentId
                         ratedOrderIds = updated
                         ratedPrefs.edit().putStringSet("rated_order_ids", updated).apply()
+                        if (currentId.startsWith("std_")) {
+                            activeWellWishesOrderIdStd = currentId.substringAfter("std_")
+                        }
                     }
                     showAppRatingDialog = false
                     ratingOrderIdToSubmit = null
                 }
+            )
+        }
+
+        if (activeWellWishesOrderIdStd != null) {
+            AlertDialog(
+                onDismissRequest = { activeWellWishesOrderIdStd = null },
+                containerColor = CosmicDeepSpace,
+                shape = RoundedCornerShape(20.dp),
+                tonalElevation = 10.dp,
+                title = null,
+                text = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(80.dp)
+                                .clip(CircleShape)
+                                .background(CosmicSecondary.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("❤️", fontSize = 42.sp)
+                        }
+                        
+                        Spacer(modifier = Modifier.height(20.dp))
+                        
+                        Text(
+                            text = "بالشفاء العاجل 🪐❤️",
+                            color = CosmicSecondary,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        Text(
+                            text = "تم تسليم طلبيتك بنجاح.\nنسأل الله لك الصحة والعافية والشفاء العاجل! 🤲✨\n(ستختفي هذه الرسالة تلقائياً بعد 5 ثوانٍ)",
+                            color = Color.White.copy(alpha = 0.8f),
+                            fontSize = 13.sp,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 20.sp
+                        )
+                    }
+                },
+                confirmButton = {}
             )
         }
         Scaffold(
@@ -478,6 +543,17 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                                     Icon(Icons.Default.HealthAndSafety, "الرجوع للصيدلية", tint = CosmicSecondary)
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text("لوحة الصيدلي 💊", color = CosmicSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        } else if (isRestaurant && !isAdmin && currentScreen !is Screen.Restaurant) {
+                            IconButton(onClick = { viewModel.navigateTo(Screen.Restaurant) }) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(start = 4.dp)
+                                ) {
+                                    Icon(Icons.Default.Restaurant, "الرجوع للمطعم", tint = CosmicSecondary)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("لوحة المطعم 🍔", color = CosmicSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         } else if (currentScreen is Screen.ProductDetail) {
@@ -940,6 +1016,11 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                 is Screen.Pharmacist -> {
                     Box(modifier = Modifier.fillMaxSize()) {
                         com.example.ui.screens.PharmacyPlanetSection(viewModel = viewModel)
+                    }
+                }
+                is Screen.Restaurant -> {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        com.example.ui.screens.RestaurantsPlanetSection(viewModel = viewModel)
                     }
                 }
                 is Screen.ProductDetail -> {
@@ -3352,220 +3433,29 @@ fun CartScreenBody(
 
                             val formValid = nameValue.isNotBlank() && phoneValue.isNotBlank() && addressValue.isNotBlank()
 
-                            Text(
-                                "💳 طريقة الدفع لطلبك:",
-                                color = CosmicSecondary,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(top = 12.dp, bottom = 6.dp)
-                            )
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            Card(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                colors = CardDefaults.cardColors(containerColor = CosmicSurfaceVariant.copy(0.15f)),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, CosmicSecondary.copy(0.3f)),
+                                shape = RoundedCornerShape(10.dp)
                             ) {
-                                // Cash Option
-                                Card(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clickable { selectedCheckoutPaymentMethod = "cash" },
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = if (selectedCheckoutPaymentMethod == "cash") CosmicSecondary.copy(alpha = 0.15f) else CosmicSurfaceVariant.copy(alpha = 0.2f)
-                                    ),
-                                    border = androidx.compose.foundation.BorderStroke(
-                                        width = if (selectedCheckoutPaymentMethod == "cash") 1.5.dp else 1.dp,
-                                        color = if (selectedCheckoutPaymentMethod == "cash") CosmicSecondary else CosmicSurfaceVariant
-                                    ),
-                                    shape = RoundedCornerShape(8.dp)
+                                Column(
+                                    modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                                    horizontalAlignment = Alignment.End
                                 ) {
-                                    Column(
-                                        modifier = Modifier.padding(8.dp).fillMaxWidth(),
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        Icon(Icons.Default.Payments, null, tint = if (selectedCheckoutPaymentMethod == "cash") CosmicSecondary else Color.White, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Text("كاش عند الاستلام 💵", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-
-                                // Bank Option
-                                Card(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clickable { selectedCheckoutPaymentMethod = "bank" },
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = if (selectedCheckoutPaymentMethod == "bank") CosmicSecondary.copy(alpha = 0.15f) else CosmicSurfaceVariant.copy(alpha = 0.2f)
-                                    ),
-                                    border = androidx.compose.foundation.BorderStroke(
-                                        width = if (selectedCheckoutPaymentMethod == "bank") 1.5.dp else 1.dp,
-                                        color = if (selectedCheckoutPaymentMethod == "bank") CosmicSecondary else CosmicSurfaceVariant
-                                    ),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(8.dp).fillMaxWidth(),
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        Icon(Icons.Default.AccountBalance, null, tint = if (selectedCheckoutPaymentMethod == "bank") CosmicSecondary else Color.White, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Text("تحويل بنكي 💳", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            }
-
-                            if (selectedCheckoutPaymentMethod == "bank") {
-                                Spacer(modifier = Modifier.height(10.dp))
-                                
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = CardDefaults.cardColors(containerColor = CosmicSurfaceVariant.copy(0.3f)),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, CosmicSecondary.copy(0.2f)),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(10.dp).fillMaxWidth(),
-                                        horizontalAlignment = Alignment.End
-                                    ) {
-                                        Text(
-                                            text = "🏦 بيانات الحساب للتحويل البنكي:",
-                                            color = CosmicSecondary,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 11.sp,
-                                            modifier = Modifier.padding(bottom = 6.dp)
-                                        )
-                                        
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text("بنك الخرطوم 🇸🇩", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                            Text("اسم البنك:", color = Color.Gray, fontSize = 10.sp)
-                                        }
-                                        
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                TextButton(
-                                                    onClick = {
-                                                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString("معاوية عثمان احمد ياسين"))
-                                                        android.widget.Toast.makeText(context, "تم نسخ الاسم بنجاح! 📋", android.widget.Toast.LENGTH_SHORT).show()
-                                                    },
-                                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
-                                                    modifier = Modifier.height(24.dp)
-                                                ) {
-                                                    Text("نسخ 📋", fontSize = 9.sp, color = CosmicSecondary, fontWeight = FontWeight.Bold)
-                                                }
-                                                Text("معاوية عثمان احمد ياسين", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                            }
-                                            Text("الاسم كامل:", color = Color.Gray, fontSize = 10.sp)
-                                        }
-                                        
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                TextButton(
-                                                    onClick = {
-                                                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString("3414879"))
-                                                        android.widget.Toast.makeText(context, "تم نسخ رقم الحساب! 📋", android.widget.Toast.LENGTH_SHORT).show()
-                                                    },
-                                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
-                                                    modifier = Modifier.height(24.dp)
-                                                ) {
-                                                    Text("نسخ 📋", fontSize = 9.sp, color = CosmicSecondary, fontWeight = FontWeight.Bold)
-                                                }
-                                                Text("3414879", color = CosmicSecondary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                                            }
-                                            Text("رقم الحساب:", color = Color.Gray, fontSize = 10.sp)
-                                        }
-                                    }
-                                }
-                                
-                                Spacer(modifier = Modifier.height(10.dp))
-                                
-                                Text(
-                                    text = "رقم المعاملة أو العملية البنكية:",
-                                    color = Color.White.copy(0.8f),
-                                    fontSize = 10.sp,
-                                    modifier = Modifier.padding(bottom = 4.dp).fillMaxWidth(),
-                                    textAlign = TextAlign.Right
-                                )
-                                OutlinedTextField(
-                                    value = bankTransactionId,
-                                    onValueChange = { bankTransactionId = it },
-                                    placeholder = { Text("أدخل رقم العملية البنكية هنا للتأكيد", fontSize = 10.sp, color = Color.White.copy(0.4f)) },
-                                    singleLine = true,
-                                    textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 11.sp, textAlign = TextAlign.Right),
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedBorderColor = CosmicSecondary,
-                                        unfocusedBorderColor = Color.White.copy(0.3f)
-                                    )
-                                )
-                                
-                                Spacer(modifier = Modifier.height(8.dp))
-                                
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    // Camera
-                                    Button(
-                                        onClick = { cameraLauncher.launch(null) },
-                                        colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant, contentColor = Color.White),
-                                        shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier.weight(1f),
-                                        contentPadding = PaddingValues(vertical = 8.dp)
-                                    ) {
-                                        Icon(Icons.Default.CameraAlt, null, modifier = Modifier.size(14.dp), tint = CosmicSecondary)
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("التقاط بالكاميرا 📸", fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                    }
-
-                                    // Gallery
-                                    Button(
-                                        onClick = { galleryLauncher.launch("image/*") },
-                                        colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant, contentColor = Color.White),
-                                        shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier.weight(1f),
-                                        contentPadding = PaddingValues(vertical = 8.dp)
-                                    ) {
-                                        Icon(Icons.Default.Image, null, modifier = Modifier.size(14.dp), tint = CosmicSecondary)
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("إرفاق من الاستوديو 🖼️", fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                                
-                                Spacer(modifier = Modifier.height(6.dp))
-                                
-                                if (checkoutReceiptBase64 != null) {
                                     Text(
-                                        text = "تم إرفاق إشعار الدفع بنجاح ✅",
-                                        color = Color.Green,
-                                        fontSize = 11.sp,
+                                        text = "💳 طريقة الدفع للفاتورة:",
+                                        color = CosmicSecondary,
                                         fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.fillMaxWidth(),
-                                        textAlign = TextAlign.Center
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.padding(bottom = 4.dp)
                                     )
-                                } else {
                                     Text(
-                                        text = "يرجى كتابة رقم العملية أو إرفاق صورة الإشعار للتأكيد ⚠️",
-                                        color = Color.Yellow,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.fillMaxWidth(),
-                                        textAlign = TextAlign.Center
+                                        text = "سيتم تحديد خيار الدفع (كاش أو تحويل بنكي) بعد استلام المندوب للطلب بنجاح ووصول خط التتبع إلى حالة 'تم تسليم المندوب'. ستظهر لك تفاصيل الفاتورة كاملة مع إمكانية الدفع والتأكيد حينها 🚴✨",
+                                        color = Color.LightGray,
+                                        fontSize = 10.5.sp,
+                                        textAlign = TextAlign.Right,
+                                        modifier = Modifier.fillMaxWidth()
                                     )
                                 }
                             }
@@ -3574,17 +3464,9 @@ fun CartScreenBody(
 
                             Button(
                                 onClick = {
-                                    if (selectedCheckoutPaymentMethod == "bank") {
-                                        if (bankTransactionId.trim().isEmpty() && checkoutReceiptBase64 == null) {
-                                            android.widget.Toast.makeText(context, "الرجاء إدخال رقم العملية أو إرفاق صورة الإشعار للتحويل البنكي", android.widget.Toast.LENGTH_LONG).show()
-                                        } else {
-                                            onSubmit("bank", bankTransactionId.trim(), checkoutReceiptBase64)
-                                        }
-                                    } else {
-                                        onSubmit("pending_delivery", "", null)
-                                    }
+                                    onSubmit("", "", null)
                                 },
-                                enabled = formValid && (selectedCheckoutPaymentMethod == "cash" || bankTransactionId.isNotBlank() || checkoutReceiptBase64 != null),
+                                enabled = formValid,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("checkout_submit_btn"),
@@ -4402,7 +4284,7 @@ fun HistoryScreenBody(
                                     }
                                 }
                             }
-                        } else if (isCourierAssigned) {
+                        } else if (isCourierAssigned && (orderStatus.contains("تم تسليم المندوب") || orderStatus.contains("تم التسليم") || orderStatus.contains("تم التوصيل") || isDelivered)) {
                             val savedPaymentMethod = firstItem?.paymentMethod ?: ""
                             val savedReceiptBase64 = firstItem?.bankReceiptImageUri
 

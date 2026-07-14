@@ -43,6 +43,11 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.db.RestaurantEntity
 import com.example.data.db.RestaurantOrderEntity
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.clipToBounds
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.MajarahViewModel
 import java.io.ByteArrayOutputStream
@@ -184,7 +189,7 @@ fun RestaurantsPlanetSection(
     LaunchedEffect(activeDeliveredOverlayOrderId) {
         if (activeDeliveredOverlayOrderId != null) {
             val orderId = activeDeliveredOverlayOrderId!!
-            kotlinx.coroutines.delay(5000)
+            kotlinx.coroutines.delay(5000) // 5 seconds as requested
             viewModel.updateRestaurantOrderStatus(orderId, "تم تسليم العميل وإغلاق الفاتورة ✅") { err ->
                 activeDeliveredOverlayOrderId = null
             }
@@ -211,6 +216,45 @@ fun RestaurantsPlanetSection(
                         isSelected = activeSubTab == index,
                         onClick = { activeSubTab = index }
                     )
+                }
+            }
+        }
+
+        if (isRestaurant && myRestaurant != null && !myRestaurant.isApproved) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFF9800).copy(alpha = 0.15f)),
+                border = BorderStroke(1.dp, Color(0xFFFF9800).copy(alpha = 0.5f)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = Color(0xFFFF9800),
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Column {
+                        Text(
+                            text = "المطعم قيد الانتظار لموافقة الإدارة العامة لتوثيقه وتفعيله بالمنظومة ⏳🪐",
+                            color = Color(0xFFFFD54F),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "تم إنشاء مطعمك الكوني بنجاح! مطعمك الآن بانتظار موافقة المدير العام ونشره ليظهر للزبائن وتتمكن من استقبال الطلبات.",
+                            color = Color.White.copy(alpha = 0.8f),
+                            fontSize = 10.sp,
+                            lineHeight = 14.sp
+                        )
+                    }
                 }
             }
         }
@@ -1214,7 +1258,7 @@ fun RestaurantsPlanetSection(
         )
     }
 
-    // 1. "بالهناء والشفاء" 5-second full-screen overlay dialog
+    // 1. "بالهناء والشفاء" 5-minute full-screen overlay dialog
     if (activeDeliveredOverlayOrderId != null) {
         AlertDialog(
             onDismissRequest = {},
@@ -1242,7 +1286,7 @@ fun RestaurantsPlanetSection(
                     Spacer(modifier = Modifier.height(20.dp))
                     
                     Text(
-                        text = "بالهناء والشفاء 🪐❤️",
+                        text = "بالشفاء العاجل 🪐❤️",
                         color = CosmicSecondary,
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
@@ -1252,7 +1296,7 @@ fun RestaurantsPlanetSection(
                     Spacer(modifier = Modifier.height(8.dp))
                     
                     Text(
-                        text = "تم تسليم وجبتك اللذيذة بنجاح.\nنتمنى لك وجبة شهية وممتعة في كوكبنا! 🍕🍔",
+                        text = "تم تسليم وجبتك اللذيذة بنجاح.\nنتمنى لك وجبة شهية وممتعة في كوكبنا! 🍕🍔\n(ستختفي هذه الرسالة تلقائياً بعد 5 ثوانٍ)",
                         color = Color.White.copy(alpha = 0.8f),
                         fontSize = 13.sp,
                         textAlign = TextAlign.Center,
@@ -1260,7 +1304,20 @@ fun RestaurantsPlanetSection(
                     )
                 }
             },
-            confirmButton = {}
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val orderId = activeDeliveredOverlayOrderId
+                        if (orderId != null) {
+                            viewModel.updateRestaurantOrderStatus(orderId, "تم تسليم العميل وإغلاق الفاتورة ✅") { err ->
+                                activeDeliveredOverlayOrderId = null
+                            }
+                        }
+                    }
+                ) {
+                    Text("إغلاق والعودة للكوكب 🪐", color = CosmicSecondary, fontWeight = FontWeight.Bold)
+                }
+            }
         )
     }
 
@@ -1362,6 +1419,7 @@ fun RestaurantsPlanetSection(
     if (pricingOrderTarget != null) {
         val ord = pricingOrderTarget!!
         var priceInput by remember { mutableStateOf("") }
+        var detailedPriceInput by remember { mutableStateOf("") }
         
         AlertDialog(
             onDismissRequest = { pricingOrderTarget = null },
@@ -1380,7 +1438,7 @@ fun RestaurantsPlanetSection(
             text = {
                 Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
                     Text(
-                        text = "الرجاء تحديد السعر الإجمالي لقائمة الطعام والطلبات لتسليم الفاتورة للمدير:",
+                        text = "الرجاء تحديد السعر الكلي والمفصل للوجبات لإرسال الفاتورة لإدارة المجرة لتعيين مندوب التوصيل:",
                         color = Color.White.copy(0.8f),
                         fontSize = 11.sp,
                         textAlign = TextAlign.Right,
@@ -1401,6 +1459,22 @@ fun RestaurantsPlanetSection(
                             unfocusedBorderColor = CosmicSurfaceVariant
                         )
                     )
+                    
+                    Spacer(modifier = Modifier.height(10.dp))
+                    
+                    OutlinedTextField(
+                        value = detailedPriceInput,
+                        onValueChange = { detailedPriceInput = it },
+                        modifier = Modifier.fillMaxWidth().height(100.dp),
+                        label = { Text("السعر المفصل للوجبات (مثال: بيتزا 5000 + بيبسي 1000) 📝", color = CosmicSecondary, fontSize = 11.sp) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = CosmicSecondary,
+                            unfocusedBorderColor = CosmicSurfaceVariant
+                        ),
+                        maxLines = 4
+                    )
                 }
             },
             confirmButton = {
@@ -1409,10 +1483,12 @@ fun RestaurantsPlanetSection(
                         val price = priceInput.toDoubleOrNull() ?: 0.0
                         if (price <= 0.0) {
                             Toast.makeText(context, "الرجاء تحديد سعر صحيح للمأكولات ⚠️", Toast.LENGTH_SHORT).show()
+                        } else if (detailedPriceInput.trim().isEmpty()) {
+                            Toast.makeText(context, "الرجاء كتابة السعر المفصل للوجبات ⚠️", Toast.LENGTH_SHORT).show()
                         } else {
-                            viewModel.updateRestaurantOrderPriceAndStatus(ord.id, "جاهز للتوصيل (بانتظار المدير) 🛵", price) { err ->
+                            viewModel.updateRestaurantOrderPriceAndStatus(ord.id, "جاهز للتوصيل (بانتظار المدير) 🛵", price, detailedPriceInput.trim()) { err ->
                                 if (err == null) {
-                                    Toast.makeText(context, "تم تحديد السعر الكلي للوجبات وإرسال الطلب للمدير! 🛵🚀", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "تم تحديد السعر الكلي والمنفصل للوجبات بنجاح وإرسال الطلب للإدارة لتعيين مندوب! 🛵🚀", Toast.LENGTH_SHORT).show()
                                     pricingOrderTarget = null
                                 } else {
                                     Toast.makeText(context, "فشل الحفظ: $err", Toast.LENGTH_SHORT).show()
@@ -1423,7 +1499,7 @@ fun RestaurantsPlanetSection(
                     colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text("إرسال للمدير الكوني 🚀", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("إرسال للإدارة لتعيين مندوب 🚀", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -1622,8 +1698,11 @@ fun RestaurantCard(
         }
     }
 
-    // Full Menu Image Viewer Dialog
+    // Zoomable Full Menu Image Viewer Dialog (Cleanly outside layout structure)
     if (showFullMenuDialog) {
+        var scale by remember { mutableStateOf(1f) }
+        var offset by remember { mutableStateOf(Offset.Zero) }
+
         AlertDialog(
             onDismissRequest = { showFullMenuDialog = false },
             containerColor = CosmicDeepSpace,
@@ -1646,33 +1725,108 @@ fun RestaurantCard(
                 }
             },
             text = {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(450.dp)
-                        .background(Color.Black, RoundedCornerShape(12.dp))
-                        .padding(8.dp),
-                    contentAlignment = Alignment.Center
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    if (restaurant.menuImageUri != null) {
-                        val bitmap = remember(restaurant.menuImageUri) {
-                            try {
-                                val decodedBytes = Base64.decode(restaurant.menuImageUri, Base64.DEFAULT)
-                                BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
-                            } catch (e: Exception) { null }
-                        }
-                        if (bitmap != null) {
-                            Image(
-                                bitmap = bitmap.asImageBitmap(),
-                                contentDescription = "منيو كامل",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Fit // Fit is crucial to see the entire menu without crop
-                            )
+                    Text(
+                        text = "💡 يمكنك استخدام إصبعين للتكبير والتصغير أو الأزرار بالأسفل 🔍",
+                        color = CosmicSecondary,
+                        fontSize = 10.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(380.dp)
+                            .background(Color.Black, RoundedCornerShape(12.dp))
+                            .clipToBounds()
+                            .pointerInput(Unit) {
+                                detectTransformGestures { _, pan, zoom, _ ->
+                                    scale = (scale * zoom).coerceIn(1f, 8f)
+                                    val maxOffsetX = (size.width * (scale - 1)) / 2
+                                    val maxOffsetY = (size.height * (scale - 1)) / 2
+                                    offset = Offset(
+                                        x = if (scale > 1f) (offset.x + pan.x * scale).coerceIn(-maxOffsetX, maxOffsetX) else 0f,
+                                        y = if (scale > 1f) (offset.y + pan.y * scale).coerceIn(-maxOffsetY, maxOffsetY) else 0f
+                                    )
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (restaurant.menuImageUri != null) {
+                            val bitmap = remember(restaurant.menuImageUri) {
+                                try {
+                                    val decodedBytes = Base64.decode(restaurant.menuImageUri, Base64.DEFAULT)
+                                    BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
+                                } catch (e: Exception) { null }
+                            }
+                            if (bitmap != null) {
+                                Image(
+                                    bitmap = bitmap.asImageBitmap(),
+                                    contentDescription = "منيو كامل زووم",
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .graphicsLayer(
+                                            scaleX = scale,
+                                            scaleY = scale,
+                                            translationX = offset.x,
+                                            translationY = offset.y
+                                        ),
+                                    contentScale = ContentScale.Fit
+                                )
+                            } else {
+                                Text("حدث خطأ في تحميل صورة المنيو ❌", color = Color.White)
+                            }
                         } else {
-                            Text("حدث خطأ في تحميل صورة المنيو ❌", color = Color.White)
+                            Text("لا تتوفر صورة منيو لهذا المطعم 📭", color = Color.White)
                         }
-                    } else {
-                        Text("لا تتوفر صورة منيو لهذا المطعم 📭", color = Color.White)
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Manual Zoom Control buttons
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = {
+                                scale = (scale - 0.5f).coerceIn(1f, 8f)
+                                if (scale == 1f) offset = Offset.Zero
+                            },
+                            colors = IconButtonDefaults.iconButtonColors(containerColor = CosmicSurfaceVariant)
+                        ) {
+                            Icon(Icons.Default.Remove, contentDescription = "تصغير", tint = Color.White)
+                        }
+
+                        Text(
+                            text = "مستوى التكبير: ${String.format("%.1f", scale)}x",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        IconButton(
+                            onClick = {
+                                scale = 1f
+                                offset = Offset.Zero
+                            },
+                            colors = IconButtonDefaults.iconButtonColors(containerColor = CosmicSurfaceVariant)
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = "إعادة تعيين", tint = CosmicSecondary)
+                        }
+
+                        IconButton(
+                            onClick = {
+                                scale = (scale + 0.5f).coerceIn(1f, 8f)
+                            },
+                            colors = IconButtonDefaults.iconButtonColors(containerColor = CosmicSurfaceVariant)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "تكبير", tint = Color.White)
+                        }
                     }
                 }
             },
@@ -1681,7 +1835,7 @@ fun RestaurantCard(
                     onClick = { showFullMenuDialog = false },
                     colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary)
                 ) {
-                    Text("حسناً", color = Color.Black, fontWeight = FontWeight.Bold)
+                    Text("إغلاق", color = Color.Black, fontWeight = FontWeight.Bold)
                 }
             }
         )
@@ -1849,6 +2003,59 @@ fun RestaurantOrderCard(
                             }
                         }
                     }
+                }
+            }
+
+            if (!isAdmin && order.courierName.isNotBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = {
+                        val fullInvoiceMsg = """
+🌌 *فاتورة وجبة مطعم كوكب المطاعم - تطبيق المجرة* 🌌
+---------------------------
+📌 *رقم الفاتورة:* #${order.id}
+🏪 *المطعم:* ${order.restaurantName}
+👤 *العميل:* ${order.customerName}
+📞 *هاتف العميل:* ${order.customerPhone}
+---------------------------
+🍟 *الوجبات والطلبات:*
+${order.itemsAndNotes}
+---------------------------
+💵 *سعر الوجبات:* ${order.foodPrice} SDG
+🚚 *رسوم التوصيل الكونية:* ${order.deliveryFee} SDG
+💰 *الإجمالي الكلي للتحصيل:* ${order.foodPrice + order.deliveryFee} SDG
+💳 *طريقة الدفع:* ${if (order.paymentMethod.isNotBlank()) order.paymentMethod else "لم تحدد بعد"}
+⏱️ *حالة الطلب:* ${order.status}
+🚴 *المندوب المعين:* ${order.courierName} (${order.courierPhone})
+---------------------------
+شكراً لتعاملكم مع تطبيق المجرة للتسوق 🪐✨
+                        """.trimIndent()
+                        
+                        try {
+                            var targetPhone = order.courierPhone.trim().replace("+", "").replace(" ", "")
+                            if (targetPhone.startsWith("0")) targetPhone = "249" + targetPhone.substring(1)
+                            else if (!targetPhone.startsWith("249")) targetPhone = "249" + targetPhone
+                            
+                            val urlEncoded = java.net.URLEncoder.encode(fullInvoiceMsg, "UTF-8")
+                            val intent = Intent(Intent.ACTION_VIEW).apply {
+                                data = Uri.parse("https://api.whatsapp.com/send?phone=$targetPhone&text=$urlEncoded")
+                            }
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, fullInvoiceMsg)
+                            }
+                            context.startActivity(Intent.createChooser(shareIntent, "مشاركة الفاتورة مع المندوب"))
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Share, null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("مشاركة الفاتورة كاملة مع المندوب 🚴💬", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             } else if (isAdmin && !order.bankReceiptImageUri.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(8.dp))
@@ -2069,6 +2276,11 @@ fun InvoiceDialog(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     
+    val isPaid = order.paymentMethod.isNotBlank()
+    val detailedText = if (isPaid && order.detailedPrice.isNotBlank()) "\n📋 *السعر بالتفصيل:* \n${order.detailedPrice}\n" else ""
+    val foodPriceLabel = if (isPaid) "سعر الوجبات (جملة):" else "سعر الوجبات المقدر:"
+    val totalLabel = if (isPaid) "الإجمالي للتحصيل (جملة):" else "المجموع التقريبي للتحصيل:"
+
     val fullInvoiceMsg = """
 🌌 *فاتورة وجبة مطعم كوكب المطاعم - تطبيق المجرة* 🌌
 ---------------------------
@@ -2082,9 +2294,10 @@ fun InvoiceDialog(
 🍟 *الوجبات والطلبات:*
 ${order.itemsAndNotes}
 ---------------------------
-💵 *سعر الوجبات:* ${order.foodPrice} SDG
+💵 $foodPriceLabel ${order.foodPrice} SDG
 🚚 *رسوم التوصيل الكونية:* ${order.deliveryFee} SDG
-💰 *الإجمالي الكلي للتحصيل:* ${order.foodPrice + order.deliveryFee} SDG
+💰 $totalLabel ${order.foodPrice + order.deliveryFee} SDG
+$detailedText---------------------------
 💳 *طريقة الدفع:* ${if (order.paymentMethod.isNotBlank()) order.paymentMethod else "لم تحدد بعد"}
 ⏱️ *حالة الطلب:* ${order.status}
 🚴 *المندوب المعين:* ${if (order.courierName.isNotBlank()) "${order.courierName} (${order.courierPhone})" else "بانتظار تعيين مندوب"}
@@ -2158,9 +2371,29 @@ ${order.itemsAndNotes}
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            InvoiceRow(label = "سعر الوجبات", value = "${order.foodPrice} SDG")
-                            InvoiceRow(label = "رسوم التوصيل الكوني", value = "${order.deliveryFee} SDG")
-                            InvoiceRow(label = "المجموع الإجمالي", value = "${order.foodPrice + order.deliveryFee} SDG")
+                            if (isPaid) {
+                                InvoiceRow(label = "سعر الوجبات (جملة)", value = "${order.foodPrice} SDG")
+                                InvoiceRow(label = "رسوم التوصيل الكوني", value = "${order.deliveryFee} SDG")
+                                InvoiceRow(label = "المجموع الإجمالي (جملة)", value = "${order.foodPrice + order.deliveryFee} SDG")
+                                if (order.detailedPrice.isNotBlank()) {
+                                    Divider(color = CosmicSurfaceVariant)
+                                    InvoiceRow(label = "السعر بالتفصيل", value = order.detailedPrice)
+                                }
+                            } else {
+                                InvoiceRow(label = "سعر الوجبات المقدر", value = "${order.foodPrice} SDG")
+                                InvoiceRow(label = "رسوم التوصيل المقدرة", value = "${order.deliveryFee} SDG")
+                                InvoiceRow(label = "المجموع التقريبي للتحصيل", value = "${order.foodPrice + order.deliveryFee} SDG")
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "💡 سيتم إظهار تفاصيل الأسعار وجدول الوجبات بالتفصيل والجملة بعد تأكيد عملية الدفع.",
+                                    color = CosmicTertiary,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                            Divider(color = CosmicSurfaceVariant)
                             InvoiceRow(label = "طريقة الدفع", value = if (order.paymentMethod.isNotBlank()) order.paymentMethod else "لم تحدد بعد")
                             InvoiceRow(label = "الحالة الحالية", value = order.status)
                         }

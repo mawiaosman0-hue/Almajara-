@@ -139,10 +139,14 @@ class MajarahRepository(
         }
     }
 
-    suspend fun updateRestaurantOrderPriceAndStatus(id: Int, status: String, foodPrice: Double) {
-        restaurantOrderDao.updateRestaurantOrderPriceAndStatus(id, status, foodPrice)
+    suspend fun updateRestaurantOrderPriceAndStatus(id: Int, status: String, foodPrice: Double, detailedPrice: String) {
+        restaurantOrderDao.updateRestaurantOrderPriceAndStatus(id, status, foodPrice, detailedPrice)
         try {
-            val fields = mapOf("status" to status, "items_and_notes" to "السعر المعدل للطعام: $foodPrice")
+            val fields = mapOf(
+                "status" to status,
+                "items_and_notes" to "السعر المعدل للطعام: $foodPrice",
+                "detailed_price" to detailedPrice
+            )
             com.example.data.network.SupabaseClient.api.updateRestaurantOrder("eq.$id", fields)
         } catch (e: Exception) {
             e.printStackTrace()
@@ -923,7 +927,26 @@ class MajarahRepository(
                 }
             } else {
                 _dbStatus.value = "متصل بقاعدة Supabase الحقيقية (تم المزامنة)"
+                val remoteIds = apiProducts.mapNotNull { it.id }
+                
+                // Fetch local products to preserve favorite status and identify duplicates to delete
+                val localProducts = try {
+                    productDao.getAllProductsList()
+                } catch (e: Exception) {
+                    emptyList()
+                }
+                
+                val localFavoritesMap = localProducts.associate { it.id to it.isFavorite }
+                
+                // Delete products from local Room that do not exist on Supabase (e.g. temporary unapproved local duplicates)
+                localProducts.forEach { localProd ->
+                    if (localProd.id !in remoteIds) {
+                        productDao.deleteProduct(localProd.id)
+                    }
+                }
+                
                 val roomProducts = apiProducts.map {
+                    val isFav = localFavoritesMap[it.id ?: 0] ?: it.isFavorite ?: false
                     ProductEntity(
                         id = it.id ?: 0,
                         name = it.name ?: "منتج افتراضي",
@@ -933,7 +956,7 @@ class MajarahRepository(
                         categoryArabic = it.categoryArabic ?: "العروض الكونية",
                         rating = it.rating ?: 4.5f,
                         imageResName = it.imageResName ?: "mat",
-                        isFavorite = it.isFavorite ?: false,
+                        isFavorite = isFav,
                         stock = it.stock ?: 10,
                         sellerEmail = it.sellerEmail ?: "",
                         isApproved = it.isApproved ?: true

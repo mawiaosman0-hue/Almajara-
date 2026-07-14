@@ -32,5 +32,6 @@ data class RestaurantOrderEntity(
     val courierName: String = "",
     val courierPhone: String = "",
     val createdAt: Long = System.currentTimeMillis(),
-    val deliveryLocation: String = ""
+    val deliveryLocation: String = "",
+    val detailedPrice: String = ""
 )

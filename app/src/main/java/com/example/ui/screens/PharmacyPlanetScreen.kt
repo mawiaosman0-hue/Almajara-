@@ -41,6 +41,11 @@ import com.example.data.db.PharmacyProductEntity
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.MajarahViewModel
 import kotlinx.coroutines.launch
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.clipToBounds
 
 @Composable
 fun PharmacyPlanetSection(
@@ -3420,6 +3425,9 @@ fun PharmacyAppRatingDialog(
 
 @Composable
 fun EnlargeImageDialog(imageBase64: String, onDismiss: () -> Unit) {
+    var scale by remember { mutableStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         Card(
             modifier = Modifier
@@ -3440,8 +3448,17 @@ fun EnlargeImageDialog(imageBase64: String, onDismiss: () -> Unit) {
                     color = Color.White,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
+
+                Text(
+                    text = "💡 استخدم إصبعين للتكبير والتصغير أو الأزرار بالأسفل 🔍",
+                    color = CosmicSecondary,
+                    fontSize = 10.sp,
+                    textAlign = TextAlign.Center,
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
+
                 val bitmap = remember(imageBase64) {
                     try {
                         val clean = if (imageBase64.contains(",")) imageBase64.substringAfter(",") else imageBase64
@@ -3451,20 +3468,91 @@ fun EnlargeImageDialog(imageBase64: String, onDismiss: () -> Unit) {
                         null
                     }
                 }
+
                 if (bitmap != null) {
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = "الروشتة الطبية مكبرة",
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 420.dp)
-                            .clip(RoundedCornerShape(8.dp)),
-                        contentScale = ContentScale.Fit
-                    )
+                            .height(350.dp)
+                            .background(Color.Black, RoundedCornerShape(8.dp))
+                            .clipToBounds()
+                            .pointerInput(Unit) {
+                                detectTransformGestures { _, pan, zoom, _ ->
+                                    scale = (scale * zoom).coerceIn(1f, 8f)
+                                    val maxOffsetX = (size.width * (scale - 1)) / 2
+                                    val maxOffsetY = (size.height * (scale - 1)) / 2
+                                    offset = Offset(
+                                        x = if (scale > 1f) (offset.x + pan.x * scale).coerceIn(-maxOffsetX, maxOffsetX) else 0f,
+                                        y = if (scale > 1f) (offset.y + pan.y * scale).coerceIn(-maxOffsetY, maxOffsetY) else 0f
+                                    )
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = "الروشتة الطبية مكبرة",
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer(
+                                    scaleX = scale,
+                                    scaleY = scale,
+                                    translationX = offset.x,
+                                    translationY = offset.y
+                                ),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
                 } else {
                     Text("تعذر تحميل الصورة ❌", color = Color.Red, fontSize = 12.sp)
                 }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Zoom Controls
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = {
+                            scale = (scale - 0.5f).coerceIn(1f, 8f)
+                            if (scale == 1f) offset = Offset.Zero
+                        },
+                        colors = IconButtonDefaults.iconButtonColors(containerColor = CosmicSurfaceVariant)
+                    ) {
+                        Icon(Icons.Default.Remove, contentDescription = "تصغير", tint = Color.White)
+                    }
+
+                    Text(
+                        text = "مستوى التكبير: ${String.format("%.1f", scale)}x",
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    IconButton(
+                        onClick = {
+                            scale = 1f
+                            offset = Offset.Zero
+                        },
+                        colors = IconButtonDefaults.iconButtonColors(containerColor = CosmicSurfaceVariant)
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = "إعادة تعيين", tint = CosmicSecondary)
+                    }
+
+                    IconButton(
+                        onClick = {
+                            scale = (scale + 0.5f).coerceIn(1f, 8f)
+                        },
+                        colors = IconButtonDefaults.iconButtonColors(containerColor = CosmicSurfaceVariant)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "تكبير", tint = Color.White)
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
+
                 Button(
                     onClick = onDismiss,
                     colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
