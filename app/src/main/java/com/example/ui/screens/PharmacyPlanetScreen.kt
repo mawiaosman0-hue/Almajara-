@@ -2832,6 +2832,28 @@ fun AdminPharmacyPortal(
                                                     )
                                                 }
                                             }
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Button(
+                                                onClick = { showEnlargeForImage = order.prescriptionImageBase64 },
+                                                colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary),
+                                                shape = RoundedCornerShape(8.dp),
+                                                modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                                                contentPadding = PaddingValues(vertical = 4.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.ZoomIn,
+                                                    contentDescription = "تكبير الروشتة",
+                                                    tint = Color.Black,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = "تكبير وقراءة الروشتة بوضوح 🔍🔬",
+                                                    color = Color.Black,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 11.sp
+                                                )
+                                            }
                                         }
                                     }
 

@@ -189,7 +189,7 @@ fun RestaurantsPlanetSection(
     LaunchedEffect(activeDeliveredOverlayOrderId) {
         if (activeDeliveredOverlayOrderId != null) {
             val orderId = activeDeliveredOverlayOrderId!!
-            kotlinx.coroutines.delay(5000) // 5 seconds as requested
+            kotlinx.coroutines.delay(300000) // 5 minutes as requested
             viewModel.updateRestaurantOrderStatus(orderId, "تم تسليم العميل وإغلاق الفاتورة ✅") { err ->
                 activeDeliveredOverlayOrderId = null
             }
@@ -598,7 +598,7 @@ fun RestaurantsPlanetSection(
                                         onUpdatePayment = { method, base64 ->
                                             viewModel.updateRestaurantOrderPayment(ord.id, method, base64) { err ->
                                                 if (err == null) {
-                                                    viewModel.updateRestaurantOrderStatus(ord.id, "تم تسليم العميل وإغلاق الفاتورة ✅") { errStatus ->
+                                                    viewModel.updateRestaurantOrderStatus(ord.id, "تم السداد وبانتظار التوصيل 🚴‍💳") { errStatus ->
                                                         if (errStatus == null) {
                                                             Toast.makeText(context, "تم سداد الفاتورة وإغلاقها بنجاح! 🎉🛰️", Toast.LENGTH_LONG).show()
                                                         } else {
@@ -1286,7 +1286,7 @@ fun RestaurantsPlanetSection(
                     Spacer(modifier = Modifier.height(20.dp))
                     
                     Text(
-                        text = "بالشفاء العاجل 🪐❤️",
+                        text = "بالهناء والشفاء 🪐❤️",
                         color = CosmicSecondary,
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
@@ -1296,7 +1296,7 @@ fun RestaurantsPlanetSection(
                     Spacer(modifier = Modifier.height(8.dp))
                     
                     Text(
-                        text = "تم تسليم وجبتك اللذيذة بنجاح.\nنتمنى لك وجبة شهية وممتعة في كوكبنا! 🍕🍔\n(ستختفي هذه الرسالة تلقائياً بعد 5 ثوانٍ)",
+                        text = "تم تسليم وجبتك اللذيذة بنجاح.\nنتمنى لك وجبة شهية وممتعة في كوكبنا! 🍕🍔\n(ستختفي هذه الرسالة تلقائياً بعد 5 دقائق)",
                         color = Color.White.copy(alpha = 0.8f),
                         fontSize = 13.sp,
                         textAlign = TextAlign.Center,
@@ -1926,11 +1926,39 @@ fun RestaurantOrderCard(
 
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = order.itemsAndNotes,
+                text = "الطلبات: ${order.itemsAndNotes}",
                 color = Color.White.copy(0.8f),
-                fontSize = 12.sp,
-                maxLines = 2
+                fontSize = 12.sp
             )
+            
+            if (order.foodPrice > 0) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = CosmicSurfaceVariant.copy(0.3f)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Column(modifier = Modifier.padding(8.dp).fillMaxWidth()) {
+                        Text(
+                            text = "💰 السعر الإجمالي للوجبات: ${order.foodPrice} SDG",
+                            color = CosmicSecondary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Right
+                        )
+                        if (order.detailedPrice.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "📋 السعر المفصل:\n${order.detailedPrice}",
+                                color = Color.White.copy(0.9f),
+                                fontSize = 11.sp,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Right
+                            )
+                        }
+                    }
+                }
+            }
 
             if (!isAdmin) {
                 Spacer(modifier = Modifier.height(12.dp))
