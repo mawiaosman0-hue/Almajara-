@@ -430,7 +430,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                                     email = email,
                                     phone = phone,
                                     classification = "تاجر المجرة",
-                                    commissionRate = 0.10
+                                    commissionRate = 0.05
                                 )
                             )
                         } else if (role == "courier") {
@@ -654,7 +654,7 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                             email = finalProfile.email,
                             phone = finalProfile.phone,
                             classification = "تاجر المجرة ⭐",
-                            commissionRate = 0.10
+                            commissionRate = 0.05
                         )
                     )
                 } else if (role == "courier") {
@@ -841,7 +841,19 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             checkForUpdates()
             repository.checkAndPrepopulateProducts()
-            repository.syncRemoteOrdersToLocal()
+            syncOrders()
+            
+            // Start background polling sync loop to fetch orders in real-time every 12 seconds
+            launch {
+                while (true) {
+                    kotlinx.coroutines.delay(12000)
+                    try {
+                        syncOrders()
+                    } catch (e: Exception) {
+                        android.util.Log.e("MajarahViewModel", "Background polling sync error: ${e.message}")
+                    }
+                }
+            }
             
             // Check for saved local profile session
             var profiles = database.profileDao().getAllProfiles()
@@ -1149,6 +1161,18 @@ $couponMessage---------------------------
     fun syncOrders(onComplete: (String?) -> Unit = {}) {
         viewModelScope.launch {
             val err = repository.syncRemoteOrdersToLocal()
+            
+            try {
+                repository.syncRemoteRestaurantOrdersToLocal()
+            } catch (e: Exception) {
+                android.util.Log.e("MajarahViewModel", "Failed to sync restaurant orders: ${e.message}")
+            }
+            
+            try {
+                repository.syncRemotePharmacyOrdersToLocal()
+            } catch (e: Exception) {
+                android.util.Log.e("MajarahViewModel", "Failed to sync pharmacy orders: ${e.message}")
+            }
             
             // Sync remote ratings to local Room
             try {

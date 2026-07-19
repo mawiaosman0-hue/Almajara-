@@ -56,4 +56,24 @@ interface RestaurantOrderDao {
 
     @Query("DELETE FROM restaurant_orders WHERE id = :id")
     suspend fun deleteOrder(id: Int)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrders(orders: List<RestaurantOrderEntity>)
+
+    @Query("DELETE FROM restaurant_orders WHERE id NOT IN (:remoteIds)")
+    suspend fun deleteOrdersNotIn(remoteIds: List<Int>)
+
+    @Query("DELETE FROM restaurant_orders")
+    suspend fun clearOrders()
+
+    @androidx.room.Transaction
+    suspend fun syncOrdersTransaction(orders: List<RestaurantOrderEntity>) {
+        if (orders.isNotEmpty()) {
+            val remoteIds = orders.map { it.id }.distinct()
+            deleteOrdersNotIn(remoteIds)
+            insertOrders(orders)
+        } else {
+            clearOrders()
+        }
+    }
 }

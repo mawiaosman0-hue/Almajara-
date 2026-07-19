@@ -937,6 +937,8 @@ class MajarahRepository(
                 }
                 
                 val localFavoritesMap = localProducts.associate { it.id to it.isFavorite }
+                val localApprovedMap = localProducts.associate { it.id to it.isApproved }
+                val localPriceMap = localProducts.associate { it.id to it.price }
                 
                 // Delete products from local Room that do not exist on Supabase (e.g. temporary unapproved local duplicates)
                 localProducts.forEach { localProd ->
@@ -947,11 +949,18 @@ class MajarahRepository(
                 
                 val roomProducts = apiProducts.map {
                     val isFav = localFavoritesMap[it.id ?: 0] ?: it.isFavorite ?: false
+                    val isApprLocal = localApprovedMap[it.id ?: 0] ?: false
+                    val finalApproved = isApprLocal || (it.isApproved ?: true)
+                    val finalPrice = if (isApprLocal) {
+                        localPriceMap[it.id ?: 0] ?: it.price ?: 0.0
+                    } else {
+                        it.price ?: 0.0
+                    }
                     ProductEntity(
                         id = it.id ?: 0,
                         name = it.name ?: "منتج افتراضي",
                         description = it.description ?: "لا يوجد وصف لهذه السلعة حالياً.",
-                        price = it.price ?: 0.0,
+                        price = finalPrice,
                         category = it.category ?: "cosmic_deals",
                         categoryArabic = it.categoryArabic ?: "العروض الكونية",
                         rating = it.rating ?: 4.5f,
@@ -959,7 +968,7 @@ class MajarahRepository(
                         isFavorite = isFav,
                         stock = it.stock ?: 10,
                         sellerEmail = it.sellerEmail ?: "",
-                        isApproved = it.isApproved ?: true
+                        isApproved = finalApproved
                     )
                 }
                 productDao.insertProducts(roomProducts)
@@ -1061,8 +1070,8 @@ class MajarahRepository(
             val remoteSellers = com.example.data.network.SupabaseClient.api.getSellers()
             if (remoteSellers.isEmpty()) {
                 val seedSellers = listOf(
-                    com.example.data.db.SellerEntity(name = "عماد الدين للتجارة", email = "emad@example.com", phone = "0912111111", classification = "تاجر المجرة ⭐", commissionRate = 0.10),
-                    com.example.data.db.SellerEntity(name = "سوق أم درمان الرقمي", email = "sudan_seller@example.com", phone = "0922222222", classification = "متميز 🌟", commissionRate = 0.08)
+                    com.example.data.db.SellerEntity(name = "عماد الدين للتجارة", email = "emad@example.com", phone = "0912111111", classification = "تاجر المجرة ⭐", commissionRate = 0.05),
+                    com.example.data.db.SellerEntity(name = "سوق أم درمان الرقمي", email = "sudan_seller@example.com", phone = "0922222222", classification = "متميز 🌟", commissionRate = 0.05)
                 )
                 if (sellerDao.getSellersCount() == 0) {
                     sellerDao.insertSellers(seedSellers)
@@ -1092,7 +1101,7 @@ class MajarahRepository(
                         email = it.email ?: "",
                         phone = it.phone ?: "",
                         classification = it.classification ?: "تاجر المجرة ⭐",
-                        commissionRate = it.commissionRate ?: 0.10,
+                        commissionRate = it.commissionRate ?: 0.05,
                         createdAt = it.createdAt ?: System.currentTimeMillis()
                     )
                 }
@@ -1103,8 +1112,8 @@ class MajarahRepository(
             try {
                 if (sellerDao.getSellersCount() == 0) {
                     sellerDao.insertSellers(listOf(
-                        com.example.data.db.SellerEntity(name = "عماد الدين للتجارة", email = "emad@example.com", phone = "0912111111", classification = "تاجر المجرة ⭐", commissionRate = 0.10),
-                        com.example.data.db.SellerEntity(name = "سوق أم درمان الرقمي", email = "sudan_seller@example.com", phone = "0922222222", classification = "متميز 🌟", commissionRate = 0.08)
+                        com.example.data.db.SellerEntity(name = "عماد الدين للتجارة", email = "emad@example.com", phone = "0912111111", classification = "تاجر المجرة ⭐", commissionRate = 0.05),
+                        com.example.data.db.SellerEntity(name = "سوق أم درمان الرقمي", email = "sudan_seller@example.com", phone = "0922222222", classification = "متميز 🌟", commissionRate = 0.05)
                     ))
                 }
             } catch (dbErr: Exception) {
@@ -1142,6 +1151,74 @@ class MajarahRepository(
             e.printStackTrace()
             val parsedError = com.example.data.network.SupabaseClient.parseError(e)
             Log.e("MajarahRepository", "Failed to sync remote orders: $parsedError")
+            parsedError
+        }
+    }
+
+    suspend fun syncRemoteRestaurantOrdersToLocal(): String? {
+        return try {
+            val remote = com.example.data.network.SupabaseClient.api.getRestaurantOrders()
+            val roomOrders = remote.map { r ->
+                com.example.data.db.RestaurantOrderEntity(
+                    id = r.id ?: 0,
+                    restaurantId = 0,
+                    restaurantName = r.restaurantName ?: "مطعم بالمجرة",
+                    restaurantPhone = r.restaurantPhone ?: "",
+                    customerName = r.customerName ?: "عميل",
+                    customerEmail = "",
+                    customerPhone = r.customerPhone ?: "",
+                    itemsAndNotes = r.itemsAndNotes ?: "[]",
+                    status = r.status ?: "معلق",
+                    paymentMethod = r.paymentMethod ?: "كاش",
+                    foodPrice = 0.0,
+                    deliveryFee = r.deliveryFee ?: 0.0,
+                    bankReceiptImageUri = null,
+                    courierName = r.courierName ?: "",
+                    courierPhone = r.courierPhone ?: "",
+                    createdAt = r.createdAt ?: System.currentTimeMillis(),
+                    deliveryLocation = "",
+                    detailedPrice = ""
+                )
+            }
+            restaurantOrderDao.syncOrdersTransaction(roomOrders)
+            null
+        } catch (e: Exception) {
+            e.printStackTrace()
+            val parsedError = com.example.data.network.SupabaseClient.parseError(e)
+            Log.e("MajarahRepository", "Failed to sync remote restaurant orders: $parsedError")
+            parsedError
+        }
+    }
+
+    suspend fun syncRemotePharmacyOrdersToLocal(): String? {
+        return try {
+            val remote = com.example.data.network.SupabaseClient.api.getPharmacyOrders()
+            val roomOrders = remote.map { r ->
+                com.example.data.db.PharmacyOrderEntity(
+                    id = r.id ?: 0,
+                    pharmacyId = r.pharmacyId ?: 0,
+                    customerName = r.customerName ?: "عميل",
+                    customerPhone = r.customerPhone ?: "",
+                    customerEmail = "",
+                    prescriptionImageBase64 = "",
+                    medicinesJson = "",
+                    medicinePrice = 0.0,
+                    deliveryFee = r.deliveryFee ?: 0.0,
+                    courierName = r.courierName ?: "",
+                    courierPhone = r.courierPhone ?: "",
+                    status = r.status ?: "بانتظار الصيدلي",
+                    paymentMethod = r.paymentMethod ?: "كاش",
+                    bankReceiptImageUri = null,
+                    createdAt = r.createdAt ?: System.currentTimeMillis(),
+                    deliveryLocation = r.itemsAndNotes ?: ""
+                )
+            }
+            pharmacyOrderDao.syncOrdersTransaction(roomOrders)
+            null
+        } catch (e: Exception) {
+            e.printStackTrace()
+            val parsedError = com.example.data.network.SupabaseClient.parseError(e)
+            Log.e("MajarahRepository", "Failed to sync remote pharmacy orders: $parsedError")
             parsedError
         }
     }

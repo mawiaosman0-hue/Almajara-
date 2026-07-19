@@ -1548,7 +1548,7 @@ fun CustomerPharmacyView(
                 if (ord != null) {
                     activeWellWishesOrder = ord
                     coroutineScope.launch {
-                        kotlinx.coroutines.delay(5000)
+                        kotlinx.coroutines.delay(10000)
                         activeWellWishesOrder = null
                         orderForRatingByCustomer = null
                     }
@@ -3266,8 +3266,8 @@ fun EditPharmacyDialog(
 fun PharmacyOrderTracker(status: String) {
     val steps = listOf("تجهيز الدواء 💊", "تم تسليم المندوب 🚴", "تم التسليم ✅")
     val currentStepIndex = when {
-        status.startsWith("تم التسليم") -> 2
-        status == "تم تسليم المندوب" -> 1
+        status.contains("تم التسليم") || status.contains("تم التوصيل") || status.contains("إغلاق") -> 2
+        status.contains("المندوب") || status.contains("توصيل") || status.contains("جاهز") -> 1
         else -> 0
     }
     Row(
@@ -3354,7 +3354,7 @@ fun PharmacyWellWishesOverlay() {
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "تم تسليم أدويتك الطبية بنجاح.",
+                    text = "تم تسليم أدويتك الطبية بنجاح.\n(ستختفي هذه الرسالة تلقائياً بعد 10 ثوانٍ)",
                     color = Color.Gray,
                     fontSize = 12.sp,
                     textAlign = TextAlign.Center

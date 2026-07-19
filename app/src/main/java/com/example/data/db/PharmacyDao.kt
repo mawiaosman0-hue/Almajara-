@@ -92,4 +92,24 @@ interface PharmacyOrderDao {
 
     @Query("DELETE FROM pharmacy_orders WHERE id = :id")
     suspend fun deleteOrder(id: Int)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrders(orders: List<PharmacyOrderEntity>)
+
+    @Query("DELETE FROM pharmacy_orders WHERE id NOT IN (:remoteIds)")
+    suspend fun deleteOrdersNotIn(remoteIds: List<Int>)
+
+    @Query("DELETE FROM pharmacy_orders")
+    suspend fun clearOrders()
+
+    @androidx.room.Transaction
+    suspend fun syncOrdersTransaction(orders: List<PharmacyOrderEntity>) {
+        if (orders.isNotEmpty()) {
+            val remoteIds = orders.map { it.id }.distinct()
+            deleteOrdersNotIn(remoteIds)
+            insertOrders(orders)
+        } else {
+            clearOrders()
+        }
+    }
 }
