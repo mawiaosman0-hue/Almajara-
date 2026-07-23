@@ -155,7 +155,7 @@ fun RestaurantsPlanetSection(
         }
     }
 
-    var activeSubTab by remember { mutableStateOf(if (forceAdminPortal && isAdmin) 2 else 0) }
+    var activeSubTab by remember { mutableStateOf(if (isRestaurant) 1 else if (forceAdminPortal && isAdmin) 2 else 0) }
     var searchQuery by remember { mutableStateOf("") }
 
     // Dialog & UI states
@@ -2221,8 +2221,8 @@ fun RestaurantOrderCard(
                 ViewReceiptDialog(receiptToShow!!) { receiptToShow = null }
             }
 
-            val isDelivered = order.status.contains("تم") || order.status.contains("تسليم") || order.status.contains("المندوب") || order.status.contains("التوصيل")
-            if (!isAdmin && isDelivered) {
+            val hasCourier = order.courierName.isNotBlank() || order.courierPhone.isNotBlank() || order.status.contains("مندوب") || order.status.contains("توصيل") || order.status.contains("تسليم") || order.status.contains("تم")
+            if (!isAdmin && hasCourier) {
                 if (order.paymentMethod.isBlank()) {
                     OrderPostDeliveryPaymentBlock(
                         currentPaymentMethod = "",

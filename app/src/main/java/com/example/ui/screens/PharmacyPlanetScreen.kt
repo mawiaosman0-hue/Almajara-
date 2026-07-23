@@ -1979,7 +1979,8 @@ fun CustomerPharmacyView(
                                     }
 
                                      // Display "بالشفاء العاجل لك إن شاء الله 🤲✨" when order.status == "تم التوصيل"
-                                    if (order.status == "تم تسليم المندوب" || order.status == "تم التوصيل" || order.status.startsWith("تم التسليم")) {
+                                    val hasCourier = !order.courierName.isNullOrBlank() || !order.courierPhone.isNullOrBlank() || order.status.contains("مندوب") || order.status.contains("توصيل") || order.status.startsWith("تم التسليم")
+                                    if (hasCourier) {
                                         if (order.status == "تم التوصيل" || order.status.startsWith("تم التسليم")) {
                                             Spacer(modifier = Modifier.height(12.dp))
                                             Card(
