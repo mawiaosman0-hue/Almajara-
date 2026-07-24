@@ -53,6 +53,16 @@ import com.example.ui.viewmodel.MajarahViewModel
 import java.io.ByteArrayOutputStream
 import java.net.URLEncoder
 
+fun isPhoneMatch(p1: String?, p2: String?): Boolean {
+    val clean1 = p1?.trim()?.replace("+", "")?.replace(" ", "") ?: ""
+    val clean2 = p2?.trim()?.replace("+", "")?.replace(" ", "") ?: ""
+    if (clean1.isEmpty() || clean2.isEmpty()) return false
+    if (clean1 == clean2) return true
+    val last1 = clean1.takeLast(9)
+    val last2 = clean2.takeLast(9)
+    return last1.length == 9 && last1 == last2
+}
+
 
 
 
@@ -76,10 +86,10 @@ fun RestaurantsPlanetSection(
     // Find our restaurant if we are registered as a restaurant owner
     val profile = activeProfile
     val myRestaurant = remember(restaurants, profile, isRestaurant) {
-        if (!isRestaurant || profile == null) null
+        if (profile == null) null
         else {
             restaurants.find { r ->
-                r.phone.trim() == profile.phone.trim() ||
+                isPhoneMatch(r.phone, profile.phone) ||
                 r.name.trim().lowercase() == profile.name.trim().lowercase()
             }
         }
@@ -112,17 +122,28 @@ fun RestaurantsPlanetSection(
 
     // Filter my past orders as a customer
     val myCustomerOrders = remember(orders, profile) {
-        if (profile == null) emptyList()
-        else orders.filter { it.customerPhone == profile.phone }
+        if (profile == null) {
+            orders
+        } else {
+            val pPhone = profile.phone.trim()
+            val pEmail = profile.email.trim().lowercase()
+            val pName = profile.name.trim().lowercase()
+            orders.filter {
+                isPhoneMatch(it.customerPhone, pPhone) ||
+                (pEmail.isNotEmpty() && it.customerEmail.trim().lowercase() == pEmail) ||
+                (pName.isNotEmpty() && it.customerName.trim().lowercase() == pName) ||
+                (it.customerPhone.isBlank() && it.customerName.isBlank())
+            }
+        }
     }
 
     val myCustomerActiveOrders = remember(myCustomerOrders) {
         myCustomerOrders.filter {
             val isClosedForCustomer = it.status == "تم تسليم العميل وإغلاق الفاتورة ✅" ||
                     it.status.contains("مغلقة") ||
-                    it.status == "بانتظار تأكيد التسليم من المندوب" ||
-                    it.status.startsWith("تم التسليم") ||
-                    it.paymentMethod.isNotBlank()
+                    it.status.contains("إغلاق") ||
+                    ((it.status.startsWith("تم التسليم") || it.status.startsWith("تم التوصيل")) &&
+                     !it.status.contains("المندوب") && !it.status.contains("للمندوب") && !it.status.contains("قيد التوصيل"))
             !isClosedForCustomer
         }
     }
@@ -131,9 +152,9 @@ fun RestaurantsPlanetSection(
         myCustomerOrders.filter {
             val isClosedForCustomer = it.status == "تم تسليم العميل وإغلاق الفاتورة ✅" ||
                     it.status.contains("مغلقة") ||
-                    it.status == "بانتظار تأكيد التسليم من المندوب" ||
-                    it.status.startsWith("تم التسليم") ||
-                    it.paymentMethod.isNotBlank()
+                    it.status.contains("إغلاق") ||
+                    ((it.status.startsWith("تم التسليم") || it.status.startsWith("تم التوصيل")) &&
+                     !it.status.contains("المندوب") && !it.status.contains("للمندوب") && !it.status.contains("قيد التوصيل"))
             isClosedForCustomer
         }
     }

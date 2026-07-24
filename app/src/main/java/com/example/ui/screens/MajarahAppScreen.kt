@@ -3729,10 +3729,13 @@ fun HistoryScreenBody(
         } else {
             allRestaurantOrders.filter { ro ->
                 val rEmail = ro.customerEmail.trim().lowercase()
-                val rPhone = ro.customerPhone.trim().replace("+", "").replace(" ", "")
+                val rPhone = ro.customerPhone.trim()
                 val rName = ro.customerName.trim().lowercase()
+                val last9Phone = if (phone.length >= 9) phone.takeLast(9) else phone
+                val cleanRPhone = rPhone.replace("+", "").replace(" ", "")
+                val last9RPhone = if (cleanRPhone.length >= 9) cleanRPhone.takeLast(9) else cleanRPhone
                 (email.isNotEmpty() && rEmail == email) ||
-                (phone.isNotEmpty() && rPhone == phone) ||
+                (phone.isNotEmpty() && (rPhone == phone || (last9Phone.isNotEmpty() && last9Phone == last9RPhone))) ||
                 (name.isNotEmpty() && rName == name) ||
                 (rPhone.isEmpty() && rName.isEmpty())
             }
@@ -3745,10 +3748,13 @@ fun HistoryScreenBody(
         } else {
             allPharmacyOrders.filter { po ->
                 val pEmail = po.customerEmail?.trim()?.lowercase() ?: ""
-                val pPhone = po.customerPhone?.trim()?.replace("+", "")?.replace(" ", "") ?: ""
+                val pPhone = po.customerPhone?.trim() ?: ""
                 val pName = po.customerName?.trim()?.lowercase() ?: ""
+                val last9Phone = if (phone.length >= 9) phone.takeLast(9) else phone
+                val cleanPPhone = pPhone.replace("+", "").replace(" ", "")
+                val last9PPhone = if (cleanPPhone.length >= 9) cleanPPhone.takeLast(9) else cleanPPhone
                 (email.isNotEmpty() && pEmail == email) ||
-                (phone.isNotEmpty() && pPhone == phone) ||
+                (phone.isNotEmpty() && (pPhone == phone || (last9Phone.isNotEmpty() && last9Phone == last9PPhone))) ||
                 (name.isNotEmpty() && pName == name) ||
                 (pPhone.isEmpty() && pName.isEmpty())
             }

@@ -47,6 +47,16 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clipToBounds
 
+fun isPhoneMatchPharm(p1: String?, p2: String?): Boolean {
+    val clean1 = p1?.trim()?.replace("+", "")?.replace(" ", "") ?: ""
+    val clean2 = p2?.trim()?.replace("+", "")?.replace(" ", "") ?: ""
+    if (clean1.isEmpty() || clean2.isEmpty()) return false
+    if (clean1 == clean2) return true
+    val last1 = clean1.takeLast(9)
+    val last2 = clean2.takeLast(9)
+    return last1.length == 9 && last1 == last2
+}
+
 @Composable
 fun PharmacyPlanetSection(
     viewModel: MajarahViewModel,
@@ -176,7 +186,12 @@ fun PharmacyPlanetSection(
         if (isPharmacist) {
             // Pharmacist View Panel
             val userEmail = activeProfile?.email?.trim()?.lowercase() ?: ""
-            val myPharmacy = allPharmacies.find { it.pharmacistEmail.trim().lowercase() == userEmail }
+            val userPhone = activeProfile?.phone?.trim() ?: ""
+            val myPharmacy = allPharmacies.find { p ->
+                (userEmail.isNotBlank() && p.pharmacistEmail.trim().lowercase() == userEmail) ||
+                (userPhone.isNotBlank() && isPhoneMatchPharm(p.phone, userPhone)) ||
+                (activeProfile?.name?.isNotBlank() == true && p.doctorName.trim().lowercase() == activeProfile?.name?.trim()?.lowercase())
+            }
 
             var showEditPharmacyDialog by remember { mutableStateOf(false) }
 
@@ -1013,10 +1028,22 @@ fun PharmacistOrdersTab(
     var subTabState by remember { mutableStateOf(0) } // 0: Active, 1: Previous Prescriptions
     
     val activeOrders = remember(myPharmacyOrders) {
-        myPharmacyOrders.filter { !it.status.contains("تم التسليم") && !it.status.contains("تم تسليم") && !it.status.contains("إغلاق") && !it.status.contains("تم التوصيل") && !it.status.contains("كاش") && !it.status.contains("بنكي") }
+        myPharmacyOrders.filter {
+            val isClosed = it.status.contains("إغلاق") ||
+                    it.status == "تم تسليم العميل وإغلاق الفاتورة ✅" ||
+                    ((it.status.contains("تم التسليم") || it.status.contains("تم التوصيل")) &&
+                     !it.status.contains("المندوب") && !it.status.contains("للمندوب") && !it.status.contains("قيد التوصيل"))
+            !isClosed
+        }
     }
     val previousOrders = remember(myPharmacyOrders) {
-        myPharmacyOrders.filter { it.status.contains("تم التسليم") || it.status.contains("تم تسليم") || it.status.contains("إغلاق") || it.status.contains("تم التوصيل") || it.status.contains("كاش") || it.status.contains("بنكي") }
+        myPharmacyOrders.filter {
+            val isClosed = it.status.contains("إغلاق") ||
+                    it.status == "تم تسليم العميل وإغلاق الفاتورة ✅" ||
+                    ((it.status.contains("تم التسليم") || it.status.contains("تم التوصيل")) &&
+                     !it.status.contains("المندوب") && !it.status.contains("للمندوب") && !it.status.contains("قيد التوصيل"))
+            isClosed
+        }
     }
 
     val displayOrders = if (subTabState == 0) activeOrders else previousOrders
@@ -1503,17 +1530,36 @@ fun CustomerPharmacyView(
     val myPharmacyOrders = remember(allOrders, activeProfile) {
         val email = activeProfile?.email?.trim()?.lowercase() ?: ""
         val phone = activeProfile?.phone?.trim() ?: ""
-        allOrders.filter {
-            (email.isNotBlank() && it.customerEmail.trim().lowercase() == email) ||
-            (phone.isNotBlank() && it.customerPhone.trim() == phone)
+        val name = activeProfile?.name?.trim()?.lowercase() ?: ""
+        if (email.isBlank() && phone.isBlank() && name.isBlank()) {
+            allOrders
+        } else {
+            allOrders.filter {
+                (email.isNotBlank() && it.customerEmail.trim().lowercase() == email) ||
+                (phone.isNotBlank() && isPhoneMatchPharm(it.customerPhone, phone)) ||
+                (name.isNotBlank() && it.customerName.trim().lowercase() == name) ||
+                (it.customerPhone.isBlank() && it.customerName.isBlank())
+            }
         }
     }
 
     val rxActive = remember(myPharmacyOrders) {
-        myPharmacyOrders.filter { it.status != "تم التوصيل" && !it.status.startsWith("تم التسليم") }
+        myPharmacyOrders.filter {
+            val isClosed = it.status.contains("إغلاق") ||
+                    it.status == "تم تسليم العميل وإغلاق الفاتورة ✅" ||
+                    ((it.status.contains("تم التسليم") || it.status.contains("تم التوصيل")) &&
+                     !it.status.contains("المندوب") && !it.status.contains("للمندوب") && !it.status.contains("قيد التوصيل"))
+            !isClosed
+        }
     }
     val rxCompleted = remember(myPharmacyOrders) {
-        myPharmacyOrders.filter { it.status == "تم التوصيل" || it.status.startsWith("تم التسليم") }
+        myPharmacyOrders.filter {
+            val isClosed = it.status.contains("إغلاق") ||
+                    it.status == "تم تسليم العميل وإغلاق الفاتورة ✅" ||
+                    ((it.status.contains("تم التسليم") || it.status.contains("تم التوصيل")) &&
+                     !it.status.contains("المندوب") && !it.status.contains("للمندوب") && !it.status.contains("قيد التوصيل"))
+            isClosed
+        }
     }
 
     var activeWellWishesOrder by remember { mutableStateOf<PharmacyOrderEntity?>(null) }
