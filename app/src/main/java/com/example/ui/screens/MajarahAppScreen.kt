@@ -3633,22 +3633,29 @@ fun HistoryScreenBody(
 
     val phone = activeProfile?.phone?.trim()?.replace("+", "")?.replace(" ", "") ?: ""
     val name = activeProfile?.name?.trim()?.lowercase() ?: ""
+    val email = activeProfile?.email?.trim()?.lowercase() ?: ""
 
     val myRestaurantOrders = remember(allRestaurantOrders, activeProfile) {
-        if (phone.isEmpty() && name.isEmpty()) emptyList()
+        if (phone.isEmpty() && name.isEmpty() && email.isEmpty()) emptyList()
         else allRestaurantOrders.filter { ro ->
+            val rEmail = ro.customerEmail.trim().lowercase()
             val rPhone = ro.customerPhone.trim().replace("+", "").replace(" ", "")
             val rName = ro.customerName.trim().lowercase()
-            (phone.isNotEmpty() && rPhone == phone) || (name.isNotEmpty() && rName == name)
+            (email.isNotEmpty() && rEmail == email) ||
+            (phone.isNotEmpty() && rPhone == phone) ||
+            (name.isNotEmpty() && rName == name)
         }
     }
 
     val myPharmacyOrders = remember(allPharmacyOrders, activeProfile) {
-        if (phone.isEmpty() && name.isEmpty()) emptyList()
+        if (phone.isEmpty() && name.isEmpty() && email.isEmpty()) emptyList()
         else allPharmacyOrders.filter { po ->
+            val pEmail = po.customerEmail?.trim()?.lowercase() ?: ""
             val pPhone = po.customerPhone?.trim()?.replace("+", "")?.replace(" ", "") ?: ""
             val pName = po.customerName?.trim()?.lowercase() ?: ""
-            (phone.isNotEmpty() && pPhone == phone) || (name.isNotEmpty() && pName == name)
+            (email.isNotEmpty() && pEmail == email) ||
+            (phone.isNotEmpty() && pPhone == phone) ||
+            (name.isNotEmpty() && pName == name)
         }
     }
 
@@ -4323,6 +4330,55 @@ fun StandardOrderCardItem(
                             }
                         }
                     }
+                }
+            }
+
+            if (courierPhone.isNotBlank()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Button(
+                    onClick = {
+                        var targetPhone = courierPhone.trim().replace("+", "").replace(" ", "")
+                        if (targetPhone.startsWith("0")) {
+                            targetPhone = "249" + targetPhone.substring(1)
+                        } else if (!targetPhone.startsWith("249")) {
+                            targetPhone = "249" + targetPhone
+                        }
+                        val itemsSummary = orderItems.joinToString("\n") { "• ${it.productName} (العدد: ${it.quantity}) - ${formatPrice(it.priceAtOrder * it.quantity)} ج.س" }
+                        val invoiceMsg = """
+                            🌌 *فاتورة طلب منتجات - تطبيق المجرة الكوني* 🌌
+                            
+                            📌 *كود الفاتورة:* #$orderId
+                            👤 *العميل:* $customerName
+                            📞 *هاتف العميل:* $customerPhone
+                            📍 *عنوان التسليم:* $customerAddress
+                            
+                            🛒 *محتويات الفاتورة والمنتجات:*
+                            $itemsSummary
+                            
+                            📦 *مجموع السلة:* ${formatPrice(totalItemsSum)} ج.س
+                            🚚 *رسوم التوصيل:* ${formatPrice(deliveryPrice)} ج.س
+                            💰 *إجمالي الفاتورة النهائي:* ${formatPrice(grandTotal)} ج.س
+                            💳 *طريقة السداد:* ${if (currentPaymentMethod.isNotBlank()) currentPaymentMethod else "عند الاستلام 💵"}
+                            
+                            🚴 *المندوب المعين:* $courierName
+                            🔒 *حالة الفاتورة:* $orderStatus
+                        """.trimIndent()
+                        
+                        try {
+                            val url = "https://api.whatsapp.com/send?phone=$targetPhone&text=${android.net.Uri.encode(invoiceMsg)}"
+                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            android.widget.Toast.makeText(context, "الرجاء تثبيت واتساب لمشاركة الفاتورة مباشرة مع المندوب 💬", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366), contentColor = Color.White),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("مشاركة الفاتورة مع المندوب ($courierName) واتساب مباشر 💬🚴", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 }
             }
         }

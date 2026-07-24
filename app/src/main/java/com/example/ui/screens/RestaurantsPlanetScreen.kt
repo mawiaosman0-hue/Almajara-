@@ -2440,6 +2440,9 @@ fun OrderFromRestaurantDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier.fillMaxWidth(0.92f),
+        containerColor = CosmicSurface,
         title = {
             Text(
                 "طلب طعام من ${restaurant.name} 🍔",
@@ -2524,8 +2527,7 @@ fun OrderFromRestaurantDialog(
             TextButton(onClick = onDismiss) {
                 Text("إلغاء", color = Color.White)
             }
-        },
-        containerColor = CosmicSurface
+        }
     )
 }
 
@@ -2920,6 +2922,9 @@ fun AddRestaurantDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier.fillMaxWidth(0.92f),
+        containerColor = CosmicSurface,
         title = {
             Text(
                 "بيانات مطعمك في المجرة 🏪🪐",
@@ -3071,8 +3076,7 @@ fun AddRestaurantDialog(
             TextButton(onClick = onDismiss) {
                 Text("إلغاء", color = Color.White)
             }
-        },
-        containerColor = CosmicSurface
+        }
     )
 }
 

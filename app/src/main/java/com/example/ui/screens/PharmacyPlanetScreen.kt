@@ -2262,10 +2262,28 @@ fun CustomerPharmacyView(
             uri?.let {
                 try {
                     val stream = context.contentResolver.openInputStream(it)
-                    val bytes = stream?.readBytes()
-                    if (bytes != null) {
-                        prescriptionImageBase64 = android.util.Base64.encodeToString(bytes, android.util.Base64.DEFAULT)
+                    val originalBitmap = android.graphics.BitmapFactory.decodeStream(stream)
+                    stream?.close()
+                    if (originalBitmap != null) {
+                        val maxDim = 1024
+                        val width = originalBitmap.width
+                        val height = originalBitmap.height
+                        val scale = if (width > maxDim || height > maxDim) {
+                            val maxOriginal = maxOf(width, height)
+                            maxDim.toFloat() / maxOriginal.toFloat()
+                        } else 1.0f
+
+                        val scaledWidth = (width * scale).toInt().coerceAtLeast(1)
+                        val scaledHeight = (height * scale).toInt().coerceAtLeast(1)
+                        val resizedBitmap = android.graphics.Bitmap.createScaledBitmap(originalBitmap, scaledWidth, scaledHeight, true)
+
+                        val outputStream = java.io.ByteArrayOutputStream()
+                        resizedBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, outputStream)
+                        val bytes = outputStream.toByteArray()
+                        prescriptionImageBase64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
                         Toast.makeText(context, "📸 تم إرفاق الروشتة بنجاح!", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "تعذر معالجة صورة الروشتة ❌", Toast.LENGTH_SHORT).show()
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
@@ -2276,6 +2294,8 @@ fun CustomerPharmacyView(
 
         AlertDialog(
             onDismissRequest = { showPrescriptionFormForPharmacy = null },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+            modifier = Modifier.fillMaxWidth(0.92f),
             containerColor = CosmicSurface,
             title = { Text("تقديم روشتة طبية أو طلب دواء 📸💊", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Right, modifier = Modifier.fillMaxWidth()) },
             text = {
