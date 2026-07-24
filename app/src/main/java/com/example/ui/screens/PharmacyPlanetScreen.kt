@@ -2237,6 +2237,7 @@ fun CustomerPharmacyView(
         var custName by remember { mutableStateOf(activeProfile?.name ?: "") }
         var custPhone by remember { mutableStateOf(activeProfile?.phone ?: "") }
         var deliveryLoc by remember { mutableStateOf("") }
+        var medicineNotes by remember { mutableStateOf("") }
         var prescriptionImageBase64 by remember { mutableStateOf("") }
 
         val cameraLauncher = rememberLauncherForActivityResult(
@@ -2352,6 +2353,17 @@ fun CustomerPharmacyView(
                         colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
                     )
 
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedTextField(
+                        value = medicineNotes,
+                        onValueChange = { medicineNotes = it },
+                        modifier = Modifier.fillMaxWidth().height(80.dp),
+                        label = { Text("أسماء الأدوية المطلوبة / ملاحظات للروشتة (اختياري) 💊", color = CosmicSecondary, fontSize = 11.sp) },
+                        placeholder = { Text("مثال: بنادول إكسترا 2 علبة، أوغمنتين 1g", color = Color.White.copy(0.4f), fontSize = 11.sp) },
+                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                    )
+
                     Spacer(modifier = Modifier.height(14.dp))
 
                     Row(
@@ -2389,7 +2401,7 @@ fun CustomerPharmacyView(
                     if (prescriptionImageBase64.isNotBlank()) {
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "تم إرفاق الروشتة بنجاح ✅",
+                            text = "تم إرفاق صورة الروشتة بنجاح ✅",
                             color = Color.Green,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
@@ -2402,22 +2414,29 @@ fun CustomerPharmacyView(
             confirmButton = {
                 Button(
                     onClick = {
-                        if (custName.isBlank() || custPhone.isBlank() || prescriptionImageBase64.isBlank() || deliveryLoc.isBlank()) {
-                            Toast.makeText(context, "الرجاء إدخال اسمك ورقم هاتفك وموقع التوصيل وتصوير الروشتة الطبية ⚠️", Toast.LENGTH_SHORT).show()
+                        if (custName.isBlank()) {
+                            Toast.makeText(context, "الرجاء كتابة اسم المريض ⚠️", Toast.LENGTH_SHORT).show()
+                        } else if (custPhone.isBlank()) {
+                            Toast.makeText(context, "الرجاء كتابة رقم الهاتف للتواصل ⚠️", Toast.LENGTH_SHORT).show()
+                        } else if (deliveryLoc.isBlank()) {
+                            Toast.makeText(context, "الرجاء كتابة موقع التوصيل المحدد ⚠️", Toast.LENGTH_SHORT).show()
+                        } else if (prescriptionImageBase64.isBlank() && medicineNotes.isBlank()) {
+                            Toast.makeText(context, "الرجاء إما كتابة اسم الدواء/الملاحظات أو تصوير الروشتة الطبية ⚠️", Toast.LENGTH_SHORT).show()
                         } else {
+                            val finalLoc = if (medicineNotes.isNotBlank()) "${deliveryLoc.trim()} (الأدوية: ${medicineNotes.trim()})" else deliveryLoc.trim()
                             viewModel.addPharmacyOrder(
                                 pharmacyId = pharm.id,
                                 customerName = custName.trim(),
                                 customerPhone = custPhone.trim(),
                                 customerEmail = activeProfile?.email ?: "",
                                 prescriptionBase64 = prescriptionImageBase64,
-                                deliveryLocation = deliveryLoc.trim()
+                                deliveryLocation = finalLoc
                             ) { err ->
                                 if (err == null) {
-                                    Toast.makeText(context, "تم إرسال روشتتك بنجاح! سيتم إرجاع الفاتورة والتسعيرة إليك للتأكيد الفوري! 🌌💊", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(context, "تم إرسال طلبك بنجاح! سيتم إرجاع الفاتورة والتسعيرة إليك للتأكيد الفوري! 🌌💊", Toast.LENGTH_LONG).show()
                                     showPrescriptionFormForPharmacy = null
                                 } else {
-                                    Toast.makeText(context, "خطأ: $err", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "خطأ: ${err ?: "تعذر تقديم الطلب"}", Toast.LENGTH_SHORT).show()
                                 }
                             }
                         }

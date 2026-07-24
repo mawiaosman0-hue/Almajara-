@@ -321,6 +321,8 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
     var showAppRatingDialog by remember { mutableStateOf(false) }
     var ratingOrderIdToSubmit by remember { mutableStateOf<String?>(null) }
     var activeWellWishesOrderIdStd by remember { mutableStateOf<String?>(null) }
+    var restaurantBlessingMsg by remember { mutableStateOf<String?>(null) }
+    var pharmacyBlessingMsg by remember { mutableStateOf<String?>(null) }
 
     val ratedPrefs = remember { context.getSharedPreferences("majarah_completed_ratings", android.content.Context.MODE_PRIVATE) }
     var ratedOrderIds by remember {
@@ -429,6 +431,11 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                         val updated = promptedRatings + currentId
                         promptedRatings = updated
                         ratingPrefs.edit().putStringSet("prompted_order_ids", updated).apply()
+                        if (currentId.startsWith("rest_")) {
+                            restaurantBlessingMsg = "بالهناء والشفاء! 🍲✨ نتمنى لك وجبة شهية وممتعة من مطاعم المجرة!"
+                        } else if (currentId.startsWith("pharm_")) {
+                            pharmacyBlessingMsg = "بالشفاء العاجل! 💊✨ نسأل الله لك الصحة والعافية والشفاء التام!"
+                        }
                     }
                     showAppRatingDialog = false
                     ratingOrderIdToSubmit = null
@@ -444,9 +451,90 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                         val updatedPrompted = promptedRatings + currentId
                         promptedRatings = updatedPrompted
                         ratingPrefs.edit().putStringSet("prompted_order_ids", updatedPrompted).apply()
+                        if (currentId.startsWith("rest_")) {
+                            restaurantBlessingMsg = "بالهناء والشفاء! 🍲✨ نتمنى لك وجبة شهية وممتعة من مطاعم المجرة!"
+                        } else if (currentId.startsWith("pharm_")) {
+                            pharmacyBlessingMsg = "بالشفاء العاجل! 💊✨ نسأل الله لك الصحة والعافية والشفاء التام!"
+                        }
                     }
                     showAppRatingDialog = false
                     ratingOrderIdToSubmit = null
+                }
+            )
+        }
+
+        if (restaurantBlessingMsg != null) {
+            LaunchedEffect(restaurantBlessingMsg) {
+                kotlinx.coroutines.delay(5000)
+                restaurantBlessingMsg = null
+            }
+
+            AlertDialog(
+                onDismissRequest = { restaurantBlessingMsg = null },
+                properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+                modifier = Modifier.fillMaxWidth(0.92f),
+                containerColor = CosmicSurface,
+                title = {
+                    Text("بالهناء والشفاء! 🍲✨", color = CosmicSecondary, fontSize = 18.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                },
+                text = {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+                        Text("🍕🍔", fontSize = 48.sp)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            restaurantBlessingMsg!!,
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            textAlign = TextAlign.Center,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = { restaurantBlessingMsg = null },
+                        colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black)
+                    ) {
+                        Text("شكراً جزيلاً ❤️", fontWeight = FontWeight.Bold)
+                    }
+                }
+            )
+        }
+
+        if (pharmacyBlessingMsg != null) {
+            LaunchedEffect(pharmacyBlessingMsg) {
+                kotlinx.coroutines.delay(5000)
+                pharmacyBlessingMsg = null
+            }
+
+            AlertDialog(
+                onDismissRequest = { pharmacyBlessingMsg = null },
+                properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+                modifier = Modifier.fillMaxWidth(0.92f),
+                containerColor = CosmicSurface,
+                title = {
+                    Text("بالشفاء العاجل! 💊✨", color = Color(0xFF64B5F6), fontSize = 18.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                },
+                text = {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+                        Text("🩺🤲", fontSize = 48.sp)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            pharmacyBlessingMsg!!,
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            textAlign = TextAlign.Center,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = { pharmacyBlessingMsg = null },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF64B5F6), contentColor = Color.Black)
+                    ) {
+                        Text("آمين يا رب ❤️", fontWeight = FontWeight.Bold)
+                    }
                 }
             )
         }
@@ -3636,26 +3724,34 @@ fun HistoryScreenBody(
     val email = activeProfile?.email?.trim()?.lowercase() ?: ""
 
     val myRestaurantOrders = remember(allRestaurantOrders, activeProfile) {
-        if (phone.isEmpty() && name.isEmpty() && email.isEmpty()) emptyList()
-        else allRestaurantOrders.filter { ro ->
-            val rEmail = ro.customerEmail.trim().lowercase()
-            val rPhone = ro.customerPhone.trim().replace("+", "").replace(" ", "")
-            val rName = ro.customerName.trim().lowercase()
-            (email.isNotEmpty() && rEmail == email) ||
-            (phone.isNotEmpty() && rPhone == phone) ||
-            (name.isNotEmpty() && rName == name)
+        if (phone.isEmpty() && name.isEmpty() && email.isEmpty()) {
+            allRestaurantOrders
+        } else {
+            allRestaurantOrders.filter { ro ->
+                val rEmail = ro.customerEmail.trim().lowercase()
+                val rPhone = ro.customerPhone.trim().replace("+", "").replace(" ", "")
+                val rName = ro.customerName.trim().lowercase()
+                (email.isNotEmpty() && rEmail == email) ||
+                (phone.isNotEmpty() && rPhone == phone) ||
+                (name.isNotEmpty() && rName == name) ||
+                (rPhone.isEmpty() && rName.isEmpty())
+            }
         }
     }
 
     val myPharmacyOrders = remember(allPharmacyOrders, activeProfile) {
-        if (phone.isEmpty() && name.isEmpty() && email.isEmpty()) emptyList()
-        else allPharmacyOrders.filter { po ->
-            val pEmail = po.customerEmail?.trim()?.lowercase() ?: ""
-            val pPhone = po.customerPhone?.trim()?.replace("+", "")?.replace(" ", "") ?: ""
-            val pName = po.customerName?.trim()?.lowercase() ?: ""
-            (email.isNotEmpty() && pEmail == email) ||
-            (phone.isNotEmpty() && pPhone == phone) ||
-            (name.isNotEmpty() && pName == name)
+        if (phone.isEmpty() && name.isEmpty() && email.isEmpty()) {
+            allPharmacyOrders
+        } else {
+            allPharmacyOrders.filter { po ->
+                val pEmail = po.customerEmail?.trim()?.lowercase() ?: ""
+                val pPhone = po.customerPhone?.trim()?.replace("+", "")?.replace(" ", "") ?: ""
+                val pName = po.customerName?.trim()?.lowercase() ?: ""
+                (email.isNotEmpty() && pEmail == email) ||
+                (phone.isNotEmpty() && pPhone == phone) ||
+                (name.isNotEmpty() && pName == name) ||
+                (pPhone.isEmpty() && pName.isEmpty())
+            }
         }
     }
 
@@ -4447,30 +4543,79 @@ fun RestaurantCustomerOrderCard(
                     border = androidx.compose.foundation.BorderStroke(1.dp, CosmicSecondary.copy(alpha = 0.3f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp).fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        androidx.compose.material3.IconButton(
-                            onClick = {
-                                try {
-                                    val dialIntent = android.content.Intent(android.content.Intent.ACTION_DIAL).apply {
-                                        data = android.net.Uri.parse("tel:${order.courierPhone.trim()}")
-                                    }
-                                    context.startActivity(dialIntent)
-                                } catch (e: Exception) {}
-                            },
-                            modifier = Modifier
-                                .size(36.dp)
-                                .background(ActiveGreen.copy(alpha = 0.2f), androidx.compose.foundation.shape.CircleShape)
+                    Column(modifier = Modifier.padding(12.dp).fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.Call, "اتصال", tint = ActiveGreen, modifier = Modifier.size(18.dp))
+                            androidx.compose.material3.IconButton(
+                                onClick = {
+                                    try {
+                                        val dialIntent = android.content.Intent(android.content.Intent.ACTION_DIAL).apply {
+                                            data = android.net.Uri.parse("tel:${order.courierPhone.trim()}")
+                                        }
+                                        context.startActivity(dialIntent)
+                                    } catch (e: Exception) {}
+                                },
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .background(ActiveGreen.copy(alpha = 0.2f), androidx.compose.foundation.shape.CircleShape)
+                            ) {
+                                Icon(Icons.Default.Call, "اتصال", tint = ActiveGreen, modifier = Modifier.size(18.dp))
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("🚴 مندوب توصيل الوجبة:", fontSize = 11.sp, color = CosmicSecondary, fontWeight = FontWeight.Bold)
+                                Text(order.courierName, fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                Text("هاتف: ${order.courierPhone}", fontSize = 11.sp, color = Color.White.copy(0.8f))
+                            }
                         }
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text("🚴 مندوب توصيل الوجبة:", fontSize = 11.sp, color = CosmicSecondary, fontWeight = FontWeight.Bold)
-                            Text(order.courierName, fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                            Text("هاتف: ${order.courierPhone}", fontSize = 11.sp, color = Color.White.copy(0.8f))
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = {
+                                var targetPhone = order.courierPhone.trim().replace("+", "").replace(" ", "")
+                                if (targetPhone.startsWith("0")) {
+                                    targetPhone = "249" + targetPhone.substring(1)
+                                } else if (!targetPhone.startsWith("249")) {
+                                    targetPhone = "249" + targetPhone
+                                }
+                                val grandTotal = order.foodPrice + order.deliveryFee
+                                val invoiceMsg = """
+                                    🌌 *فاتورة طلب وجبة - تطبيق المجرة الكوني* 🌌
+                                    
+                                    📌 *كود الفاتورة:* #${order.id}
+                                    🏪 *المطعم:* ${order.restaurantName}
+                                    👤 *العميل:* ${order.customerName}
+                                    📞 *هاتف العميل:* ${order.customerPhone}
+                                    
+                                    🍔 *الوجبات والملاحظات:*
+                                    ${order.itemsAndNotes}
+                                    
+                                    💵 *سعر الوجبة:* ${formatPrice(order.foodPrice)} ج.س
+                                    🚚 *رسوم التوصيل:* ${formatPrice(order.deliveryFee)} ج.س
+                                    💰 *إجمالي الفاتورة النهائي:* ${formatPrice(grandTotal)} ج.س
+                                    💳 *طريقة السداد:* ${if (order.paymentMethod.isNotBlank()) order.paymentMethod else "عند الاستلام 💵"}
+                                    
+                                    🚴 *المندوب المعين:* ${order.courierName}
+                                    🔒 *حالة الفاتورة:* ${order.status}
+                                """.trimIndent()
+                                
+                                try {
+                                    val url = "https://api.whatsapp.com/send?phone=$targetPhone&text=${android.net.Uri.encode(invoiceMsg)}"
+                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    android.widget.Toast.makeText(context, "الرجاء تثبيت واتساب لمشاركة الفاتورة مباشرة مع المندوب 💬", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366), contentColor = Color.White),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("مشاركة الفاتورة مع المندوب (${order.courierName}) واتساب 💬🚴", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         }
                     }
                 }
@@ -4679,30 +4824,81 @@ fun PharmacyCustomerOrderCard(
                     border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF64B5F6).copy(alpha = 0.3f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp).fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        androidx.compose.material3.IconButton(
-                            onClick = {
-                                try {
-                                    val dialIntent = android.content.Intent(android.content.Intent.ACTION_DIAL).apply {
-                                        data = android.net.Uri.parse("tel:${order.courierPhone?.trim()}")
-                                    }
-                                    context.startActivity(dialIntent)
-                                } catch (e: Exception) {}
-                            },
-                            modifier = Modifier
-                                .size(36.dp)
-                                .background(ActiveGreen.copy(alpha = 0.2f), androidx.compose.foundation.shape.CircleShape)
+                    Column(modifier = Modifier.padding(12.dp).fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.Call, "اتصال", tint = ActiveGreen, modifier = Modifier.size(18.dp))
+                            androidx.compose.material3.IconButton(
+                                onClick = {
+                                    try {
+                                        val dialIntent = android.content.Intent(android.content.Intent.ACTION_DIAL).apply {
+                                            data = android.net.Uri.parse("tel:${order.courierPhone?.trim()}")
+                                        }
+                                        context.startActivity(dialIntent)
+                                    } catch (e: Exception) {}
+                                },
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .background(ActiveGreen.copy(alpha = 0.2f), androidx.compose.foundation.shape.CircleShape)
+                            ) {
+                                Icon(Icons.Default.Call, "اتصال", tint = ActiveGreen, modifier = Modifier.size(18.dp))
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("🚴 مندوب توصيل الدواء:", fontSize = 11.sp, color = Color(0xFF64B5F6), fontWeight = FontWeight.Bold)
+                                Text(order.courierName ?: "", fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                Text("هاتف: ${order.courierPhone ?: ""}", fontSize = 11.sp, color = Color.White.copy(0.8f))
+                            }
                         }
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text("🚴 مندوب توصيل الدواء:", fontSize = 11.sp, color = Color(0xFF64B5F6), fontWeight = FontWeight.Bold)
-                            Text(order.courierName ?: "", fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                            Text("هاتف: ${order.courierPhone ?: ""}", fontSize = 11.sp, color = Color.White.copy(0.8f))
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = {
+                                val courierPhone = order.courierPhone ?: ""
+                                var targetPhone = courierPhone.trim().replace("+", "").replace(" ", "")
+                                if (targetPhone.startsWith("0")) {
+                                    targetPhone = "249" + targetPhone.substring(1)
+                                } else if (!targetPhone.startsWith("249")) {
+                                    targetPhone = "249" + targetPhone
+                                }
+                                val grandTotal = order.medicinePrice + order.deliveryFee
+                                val itemsSummary = if (order.medicinesJson.isNotBlank()) order.medicinesJson else "طلب دواء / روشتة طبية مرفقة 📄"
+                                val invoiceMsg = """
+                                    🌌 *فاتورة طلب دواء/روشتة - صيدلية المجرة الكونية* 🌌
+                                    
+                                    📌 *كود الروشتة:* #${order.id}
+                                    👤 *المريض/العميل:* ${order.customerName}
+                                    📞 *هاتف العميل:* ${order.customerPhone}
+                                    📍 *عنوان التوصيل:* ${order.deliveryLocation}
+                                    
+                                    💊 *الأدوية / الروشتة المطلوبة:*
+                                    $itemsSummary
+                                    
+                                    💵 *سعر الأدوية:* ${formatPrice(order.medicinePrice)} ج.س
+                                    🚚 *رسوم التوصيل:* ${formatPrice(order.deliveryFee)} ج.س
+                                    💰 *إجمالي الفاتورة النهائي:* ${formatPrice(grandTotal)} ج.س
+                                    💳 *طريقة السداد:* ${if (!order.paymentMethod.isNullOrBlank()) order.paymentMethod else "عند الاستلام 💵"}
+                                    
+                                    🚴 *المندوب المعين:* ${order.courierName}
+                                    🔒 *حالة الفاتورة:* ${order.status}
+                                """.trimIndent()
+                                
+                                try {
+                                    val url = "https://api.whatsapp.com/send?phone=$targetPhone&text=${android.net.Uri.encode(invoiceMsg)}"
+                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    android.widget.Toast.makeText(context, "الرجاء تثبيت واتساب لمشاركة الفاتورة مباشرة مع المندوب 💬", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366), contentColor = Color.White),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("مشاركة فاتورة الدواء مع المندوب (${order.courierName}) واتساب 💬🚴", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         }
                     }
                 }

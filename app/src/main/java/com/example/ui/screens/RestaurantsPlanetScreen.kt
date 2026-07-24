@@ -1250,9 +1250,7 @@ fun RestaurantsPlanetSection(
             restaurant = selectedRestaurantForOrder!!,
             activeProfile = activeProfile,
             onDismiss = { selectedRestaurantForOrder = null },
-            onSubmitOrder = { orderText, notesText, deliveryLoc ->
-                val name = activeProfile?.name ?: "عميل المجرة"
-                val phone = activeProfile?.phone ?: ""
+            onSubmitOrder = { custName, custPhone, orderText, notesText, deliveryLoc ->
                 val email = activeProfile?.email ?: ""
                 val deliveryFee = 0.0 // Initially 0, Manager/Admin will specify it!
 
@@ -1260,8 +1258,8 @@ fun RestaurantsPlanetSection(
                     restaurantId = selectedRestaurantForOrder!!.id,
                     restaurantName = selectedRestaurantForOrder!!.name,
                     restaurantPhone = selectedRestaurantForOrder!!.phone,
-                    customerName = name,
-                    customerPhone = phone,
+                    customerName = custName.trim(),
+                    customerPhone = custPhone.trim(),
                     customerEmail = email,
                     itemsAndNotes = "$orderText\nملاحظات: $notesText\nموقع التوصيل: $deliveryLoc",
                     paymentMethod = "", // Initially empty, chosen after delivery
@@ -1269,11 +1267,11 @@ fun RestaurantsPlanetSection(
                     bankReceiptImageUri = null // Initially null, attached after delivery
                 ) { err, savedOrder ->
                     if (err == null && savedOrder != null) {
-                        Toast.makeText(context, "تم تسجيل طلبك بنجاح! 🎉", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, "تم تسجيل طلبك بنجاح! 🎉 يذهب الطلب للمطعم والمدير للتجهيز وتعيين المندوب 🚴", Toast.LENGTH_LONG).show()
                         selectedRestaurantForOrder = null
                         selectedOrderForInvoice = savedOrder
                     } else {
-                        Toast.makeText(context, "خطأ أثناء تسجيل الطلب: $err", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, "خطأ أثناء تسجيل الطلب: ${err ?: "تعذر الحفظ"}", Toast.LENGTH_LONG).show()
                     }
                 }
             }
@@ -2431,9 +2429,11 @@ fun OrderFromRestaurantDialog(
     restaurant: RestaurantEntity,
     activeProfile: com.example.data.db.ProfileEntity?,
     onDismiss: () -> Unit,
-    onSubmitOrder: (order: String, notes: String, deliveryLoc: String) -> Unit
+    onSubmitOrder: (custName: String, custPhone: String, order: String, notes: String, deliveryLoc: String) -> Unit
 ) {
     val context = LocalContext.current
+    var custName by remember { mutableStateOf(activeProfile?.name ?: "") }
+    var custPhone by remember { mutableStateOf(activeProfile?.phone ?: "") }
     var orderText by remember { mutableStateOf("") }
     var notesText by remember { mutableStateOf("") }
     var deliveryLocation by remember { mutableStateOf("") }
@@ -2458,11 +2458,44 @@ fun OrderFromRestaurantDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 item {
-                    Text("اكتب طلباتك ووجباتك التي ترغب بها بالتفصيل:", color = Color.White.copy(0.8f), fontSize = 11.sp)
+                    Text("اسمك بالكامل *", color = Color.White.copy(0.8f), fontSize = 11.sp)
+                    OutlinedTextField(
+                        value = custName,
+                        onValueChange = { custName = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("مثال: محمد أحمد", color = Color.White.copy(0.4f), fontSize = 12.sp) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = CosmicSecondary,
+                            unfocusedBorderColor = CosmicSurfaceVariant
+                        )
+                    )
+                }
+
+                item {
+                    Text("رقم هاتفك للتواصل والتوصيل *", color = Color.White.copy(0.8f), fontSize = 11.sp)
+                    OutlinedTextField(
+                        value = custPhone,
+                        onValueChange = { custPhone = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Phone),
+                        placeholder = { Text("مثال: 0912345678", color = Color.White.copy(0.4f), fontSize = 12.sp) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = CosmicSecondary,
+                            unfocusedBorderColor = CosmicSurfaceVariant
+                        )
+                    )
+                }
+
+                item {
+                    Text("اكتب طلباتك ووجباتك التي ترغب بها بالتفصيل *", color = Color.White.copy(0.8f), fontSize = 11.sp)
                     OutlinedTextField(
                         value = orderText,
                         onValueChange = { orderText = it },
-                        modifier = Modifier.fillMaxWidth().height(100.dp),
+                        modifier = Modifier.fillMaxWidth().height(90.dp),
                         placeholder = { Text("مثال: 1 شاورما دبل لحم، 1 عصير برتقال كبير", color = Color.White.copy(0.4f), fontSize = 12.sp) },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = Color.White,
@@ -2509,12 +2542,16 @@ fun OrderFromRestaurantDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    if (orderText.isBlank()) {
+                    if (custName.isBlank()) {
+                        Toast.makeText(context, "الرجاء كتابة اسمك بالكامل", Toast.LENGTH_SHORT).show()
+                    } else if (custPhone.isBlank()) {
+                        Toast.makeText(context, "الرجاء كتابة رقم هاتفك للتواصل", Toast.LENGTH_SHORT).show()
+                    } else if (orderText.isBlank()) {
                         Toast.makeText(context, "الرجاء كتابة طلبك أولاً", Toast.LENGTH_SHORT).show()
                     } else if (deliveryLocation.isBlank()) {
                         Toast.makeText(context, "الرجاء كتابة عنوان التوصيل بالتفصيل", Toast.LENGTH_SHORT).show()
                     } else {
-                        onSubmitOrder(orderText, notesText, deliveryLocation)
+                        onSubmitOrder(custName, custPhone, orderText, notesText, deliveryLocation)
                     }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
