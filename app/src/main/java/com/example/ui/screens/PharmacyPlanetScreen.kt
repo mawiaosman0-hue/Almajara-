@@ -1524,7 +1524,7 @@ fun CustomerPharmacyView(
     val sharedPref = remember(context) { context.getSharedPreferences("pharmacy_ratings_pref", android.content.Context.MODE_PRIVATE) }
     LaunchedEffect(myPharmacyOrders) {
         val newlyCompletedOrder = myPharmacyOrders.firstOrNull {
-            it.status.startsWith("تم التسليم") && !sharedPref.getBoolean("well_wishes_shown_${it.id}", false)
+            it.status.startsWith("تم التسليم") && !it.status.contains("المندوب") && !it.status.contains("للمندوب") && !it.status.contains("قيد التوصيل") && !sharedPref.getBoolean("well_wishes_shown_${it.id}", false)
         }
         if (newlyCompletedOrder != null) {
             sharedPref.edit().putBoolean("well_wishes_shown_${newlyCompletedOrder.id}", true).apply()
@@ -1548,7 +1548,7 @@ fun CustomerPharmacyView(
                 if (ord != null) {
                     activeWellWishesOrder = ord
                     coroutineScope.launch {
-                        kotlinx.coroutines.delay(10000)
+                        kotlinx.coroutines.delay(5000)
                         activeWellWishesOrder = null
                         orderForRatingByCustomer = null
                     }
@@ -1621,7 +1621,12 @@ fun CustomerPharmacyView(
                     }
                 }
             } else {
-                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     Text(
                         text = "🏥 الصيدليات الطبية المعتمدة في المجرة للتسوق:",
                         color = CosmicSecondary,
@@ -2435,6 +2440,7 @@ fun CustomerPharmacyView(
                                 if (err == null) {
                                     Toast.makeText(context, "تم إرسال طلبك بنجاح! سيتم إرجاع الفاتورة والتسعيرة إليك للتأكيد الفوري! 🌌💊", Toast.LENGTH_LONG).show()
                                     showPrescriptionFormForPharmacy = null
+                                    activeSubTab = 1
                                 } else {
                                     Toast.makeText(context, "خطأ: ${err ?: "تعذر تقديم الطلب"}", Toast.LENGTH_SHORT).show()
                                 }
@@ -3394,7 +3400,7 @@ fun PharmacyWellWishesOverlay() {
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "تم تسليم أدويتك الطبية بنجاح.\n(ستختفي هذه الرسالة تلقائياً بعد 10 ثوانٍ)",
+                    text = "تم تسليم أدويتك الطبية بنجاح.\n(ستختفي هذه الرسالة تلقائياً بعد 5 ثوانٍ)",
                     color = Color.Gray,
                     fontSize = 12.sp,
                     textAlign = TextAlign.Center

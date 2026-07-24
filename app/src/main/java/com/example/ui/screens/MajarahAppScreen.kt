@@ -355,7 +355,7 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
         val newlyDeliveredPharm = allPharmacyOrders.filter { po ->
             val status = po.status
             val isDelivered = (status.contains("تم التوصيل") || status.contains("تم التسليم") || status.contains("إغلاق")) &&
-                    !status.contains("المندوب") && !status.contains("لمندوب")
+                    !status.contains("المندوب") && !status.contains("لمندوب") && !status.contains("قيد التوصيل") && !status.contains("بانتظار")
             (po.customerPhone?.trim() == phone || po.customerName?.trim() == name) &&
             isDelivered &&
             "pharm_${po.id}" !in promptedRatings && "pharm_${po.id}" !in ratedOrderIds
@@ -364,7 +364,7 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
         val newlyDeliveredRest = allRestaurantOrders.filter { ro ->
             val status = ro.status
             val isDelivered = (status.contains("تم تسليم العميل") || status.contains("إغلاق") || status.contains("تم التسليم") || status.contains("تم التوصيل")) &&
-                    !status.contains("المندوب") && !status.contains("لمندوب")
+                    !status.contains("المندوب") && !status.contains("لمندوب") && !status.contains("قيد التوصيل") && !status.contains("بانتظار")
             (ro.customerPhone.trim() == phone || ro.customerName.trim() == name) &&
             isDelivered &&
             "rest_${ro.id}" !in promptedRatings && "rest_${ro.id}" !in ratedOrderIds
@@ -4488,7 +4488,8 @@ fun RestaurantCustomerOrderCard(
     viewModel: MajarahViewModel
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val isDelivered = order.status.contains("تم تسليم العميل") || order.status.contains("إغلاق") || order.status.contains("تم التسليم") || order.status.contains("تم التوصيل")
+    val isDelivered = (order.status.contains("تم تسليم العميل") || order.status.contains("إغلاق") || order.status.contains("تم التسليم") || order.status.contains("تم التوصيل")) &&
+            !order.status.contains("للمندوب") && !order.status.contains("المندوب") && !order.status.contains("قيد التوصيل") && !order.status.contains("بانتظار")
     val hasCourier = order.courierName.isNotBlank() || order.courierPhone.isNotBlank() || order.status.contains("مندوب") || order.status.contains("توصيل")
 
     var receiptToShow by remember { mutableStateOf<String?>(null) }
@@ -4769,7 +4770,8 @@ fun PharmacyCustomerOrderCard(
     viewModel: MajarahViewModel
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val isDelivered = order.status.contains("تم التوصيل") || order.status.contains("تم التسليم") || order.status.contains("إغلاق")
+    val isDelivered = (order.status.contains("تم تسليم العميل") || order.status.contains("إغلاق") || order.status.contains("تم التسليم") || order.status.contains("تم التوصيل")) &&
+            !order.status.contains("للمندوب") && !order.status.contains("المندوب") && !order.status.contains("قيد التوصيل") && !order.status.contains("بانتظار")
     val hasCourier = !order.courierName.isNullOrBlank() || !order.courierPhone.isNullOrBlank() || order.status.contains("مندوب") || order.status.contains("توصيل")
 
     var receiptToShow by remember { mutableStateOf<String?>(null) }

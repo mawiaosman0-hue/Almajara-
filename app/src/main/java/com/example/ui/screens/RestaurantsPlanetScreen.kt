@@ -317,6 +317,7 @@ fun RestaurantsPlanetSection(
             val deliveredCustomerOrder = orders.find { ord ->
                 ord.customerPhone.trim() == customerPhone.trim() &&
                 (ord.status.contains("تم التوصيل") || ord.status.contains("تم التسليم")) &&
+                !ord.status.contains("للمندوب") && !ord.status.contains("المندوب") && !ord.status.contains("قيد التوصيل") && !ord.status.contains("بانتظار") &&
                 ord.status != "تم تسليم العميل وإغلاق الفاتورة ✅" &&
                 ord.id !in shownDeliveredNotifications
             }
@@ -327,61 +328,7 @@ fun RestaurantsPlanetSection(
         }
     }
 
-    var showPendingApprovalDialog by remember(myRestaurant) {
-        mutableStateOf(myRestaurant != null && !myRestaurant.isApproved)
-    }
-
-    if (showPendingApprovalDialog && myRestaurant != null) {
-        AlertDialog(
-            onDismissRequest = { showPendingApprovalDialog = false },
-            title = {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.End,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = "المطعم قيد مراجعة وتوثيق المدير ⏳🏪",
-                        fontWeight = FontWeight.Bold,
-                        color = CosmicSecondary,
-                        fontSize = 15.sp,
-                        textAlign = TextAlign.Right
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Icon(Icons.Default.Store, null, tint = CosmicSecondary)
-                }
-            },
-            text = {
-                Column(horizontalAlignment = Alignment.End, modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = "مطعمك الجديد (${myRestaurant.name}) بانتظار المدير لتوثيقه والموافقة عليه 🌌",
-                        color = Color.White,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Right
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = "تم استلام طلب التسجيل بنجاح! نود إعلامك بأن مطعمك الآن بانتظار مراجعة الإدارة وتوثيقه بالكامل لتتمكن من استقبال وإدارة طلبات الزبائن مباشرة على المنظومة.",
-                        color = Color.White.copy(alpha = 0.7f),
-                        fontSize = 11.sp,
-                        textAlign = TextAlign.Right,
-                        lineHeight = 16.sp
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = { showPendingApprovalDialog = false },
-                    colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black)
-                ) {
-                    Text("حسناً، فهمت 👍", fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                }
-            },
-            containerColor = CosmicSurface,
-            shape = RoundedCornerShape(16.dp)
-        )
-    }
+    var showPendingApprovalDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(activeDeliveredOverlayOrderId) {
         if (activeDeliveredOverlayOrderId != null) {
@@ -1354,7 +1301,7 @@ fun RestaurantsPlanetSection(
                             }
                             Toast.makeText(context, "تمت إضافة المطعم بنجاح واعتماده فوراً للمستخدمين! ✅🍔", Toast.LENGTH_LONG).show()
                         } else {
-                            Toast.makeText(context, "تم تسجيل المطعم بنجاح! المطعم حالياً بانتظار موافقة المدير العام لتأكيد التوثيق ⏳🏪", Toast.LENGTH_LONG).show()
+                            activeSubTab = 2
                         }
                         showAddRestaurantDialog = false
                     } else {
@@ -1468,8 +1415,18 @@ fun RestaurantsPlanetSection(
         )
     }
 
-    // 1. "بالهناء والشفاء" 5-minute full-screen overlay dialog
+    // 1. "بالهناء والشفاء" 5-second full-screen overlay dialog
     if (activeDeliveredOverlayOrderId != null) {
+        LaunchedEffect(activeDeliveredOverlayOrderId) {
+            kotlinx.coroutines.delay(5000)
+            val orderId = activeDeliveredOverlayOrderId
+            if (orderId != null) {
+                viewModel.updateRestaurantOrderStatus(orderId, "تم تسليم العميل وإغلاق الفاتورة ✅") { err ->
+                    activeDeliveredOverlayOrderId = null
+                }
+            }
+        }
+
         AlertDialog(
             onDismissRequest = {},
             containerColor = CosmicDeepSpace,
@@ -1506,7 +1463,7 @@ fun RestaurantsPlanetSection(
                     Spacer(modifier = Modifier.height(8.dp))
                     
                     Text(
-                        text = "تم تسليم وجبتك اللذيذة بنجاح.\nنتمنى لك وجبة شهية وممتعة في كوكبنا! 🍕🍔\n(ستختفي هذه الرسالة تلقائياً بعد 10 ثوانٍ)",
+                        text = "تم تسليم وجبتك اللذيذة بنجاح.\nنتمنى لك وجبة شهية وممتعة في كوكبنا! 🍕🍔\n(ستختفي هذه الرسالة تلقائياً بعد 5 ثوانٍ)",
                         color = Color.White.copy(alpha = 0.8f),
                         fontSize = 13.sp,
                         textAlign = TextAlign.Center,
