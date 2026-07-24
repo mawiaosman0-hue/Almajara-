@@ -512,28 +512,46 @@ class MajarahRepository(
         }
     }
 
+    private fun normalizePhone(p: String): String {
+        val digits = p.replace(Regex("[^0-9]"), "")
+        return if (digits.startsWith("249") && digits.length > 9) {
+            digits.substring(3)
+        } else if (digits.startsWith("0") && digits.length > 9) {
+            digits.substring(1)
+        } else {
+            digits
+        }
+    }
+
     // Login with Supabase Auth credentials or local data
     suspend fun loginUserProfile(emailOrPhone: String, password: String): Pair<ProfileEntity?, String?> {
-        var resolvedEmail = emailOrPhone.trim()
+        val inputTrimmed = emailOrPhone.trim()
+        var resolvedEmail = inputTrimmed
+        val normInputPhone = normalizePhone(inputTrimmed)
 
         // 1. Resolve phone number to email if it looks like a phone number
         if (!resolvedEmail.contains("@")) {
             try {
-                val cleanPhoneNum = resolvedEmail
                 // Check local SQLite first (fast)
                 val localProf = profileDao.getAllProfiles().find { 
-                    it.phone.trim().replace("+", "").replace(" ", "") == cleanPhoneNum.replace("+", "").replace(" ", "") ||
-                    it.phone.trim() == cleanPhoneNum
+                    it.phone.trim() == inputTrimmed ||
+                    (normInputPhone.isNotBlank() && normalizePhone(it.phone) == normInputPhone)
                 }
-                if (localProf != null && !localProf.email.isBlank()) {
-                    resolvedEmail = localProf.email
+                if (localProf != null && localProf.email.isNotBlank()) {
+                    resolvedEmail = localProf.email.trim()
                 } else {
                     // Fetch from remote profiles table using phone query
-                    val remoteProfs = com.example.data.network.SupabaseClient.api.getProfilesByPhone(phoneFilter = "eq.$cleanPhoneNum")
+                    var remoteProfs = com.example.data.network.SupabaseClient.api.getProfilesByPhone(phoneFilter = "eq.$inputTrimmed")
+                    if (remoteProfs.isEmpty() && normInputPhone.isNotBlank()) {
+                        remoteProfs = com.example.data.network.SupabaseClient.api.getProfilesByPhone(phoneFilter = "eq.0$normInputPhone")
+                    }
+                    if (remoteProfs.isEmpty() && normInputPhone.isNotBlank()) {
+                        remoteProfs = com.example.data.network.SupabaseClient.api.getProfilesByPhone(phoneFilter = "eq.+249$normInputPhone")
+                    }
                     if (remoteProfs.isNotEmpty()) {
                         val pEmail = remoteProfs.first().email
                         if (!pEmail.isNullOrBlank()) {
-                            resolvedEmail = pEmail
+                            resolvedEmail = pEmail.trim()
                         }
                     }
                 }
@@ -543,12 +561,13 @@ class MajarahRepository(
             }
         }
 
-        // Fallback: Check if they can log in locally in the SQLite profiles (e.g., if reconfigured, offline or password was reset)
+        // Fast Local check: if user password matches locally in Room DB (for offline or post-update consistency)
         try {
             val localProfiles = profileDao.getAllProfiles()
             val matchedLocal = localProfiles.find { 
-                (it.email.trim().equals(resolvedEmail, ignoreCase = true) || 
-                 it.phone.trim() == resolvedEmail) && it.password == password 
+                val isEmailMatch = it.email.trim().equals(resolvedEmail, ignoreCase = true) || it.email.trim().equals(inputTrimmed, ignoreCase = true)
+                val isPhoneMatch = (normInputPhone.isNotBlank() && normalizePhone(it.phone) == normInputPhone) || it.phone.trim() == inputTrimmed
+                (isEmailMatch || isPhoneMatch) && it.password == password 
             }
             if (matchedLocal != null) {
                 profileDao.insertProfile(matchedLocal)
@@ -563,7 +582,9 @@ class MajarahRepository(
         try {
             localBackup = profileDao.getAllProfiles().find {
                 it.email.trim().equals(resolvedEmail, ignoreCase = true) ||
-                (!it.phone.isNullOrBlank() && it.phone.trim() == resolvedEmail)
+                it.email.trim().equals(inputTrimmed, ignoreCase = true) ||
+                (normInputPhone.isNotBlank() && normalizePhone(it.phone) == normInputPhone) ||
+                (!it.phone.isNullOrBlank() && it.phone.trim() == inputTrimmed)
             }
         } catch (e: Exception) {
             e.printStackTrace()

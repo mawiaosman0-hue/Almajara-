@@ -153,6 +153,8 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
     val showUpdateDialog = MutableStateFlow(false)
     val isUpdateMandatory = MutableStateFlow(false)
     val daysRemaining = MutableStateFlow(15L)
+    val isGooglePlayUpdateAvailable = MutableStateFlow(false)
+    var playAppUpdateInfo: com.google.android.play.core.appupdate.AppUpdateInfo? = null
 
     // Current Search Query State
     private val _searchQuery = MutableStateFlow("")
@@ -2248,6 +2250,76 @@ $couponMessage---------------------------
             } catch (e: Exception) {
                 refreshAllProfiles()
                 onResult(e.localizedMessage)
+            }
+        }
+    }
+
+    fun checkForGooglePlayUpdate(context: android.content.Context, onCheckFinished: ((Boolean) -> Unit)? = null) {
+        try {
+            val appUpdateManager = com.google.android.play.core.appupdate.AppUpdateManagerFactory.create(context)
+            val appUpdateInfoTask = appUpdateManager.appUpdateInfo
+            appUpdateInfoTask.addOnSuccessListener { appUpdateInfo ->
+                val isAvailable = appUpdateInfo.updateAvailability() == com.google.android.play.core.install.model.UpdateAvailability.UPDATE_AVAILABLE
+                val inProgress = appUpdateInfo.updateAvailability() == com.google.android.play.core.install.model.UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS
+                
+                if (isAvailable || inProgress) {
+                    playAppUpdateInfo = appUpdateInfo
+                    isGooglePlayUpdateAvailable.value = true
+                    latestVersionCode.value = appUpdateInfo.availableVersionCode()
+                    latestVersionName.value = "PlayStore v${appUpdateInfo.availableVersionCode()}"
+                    showUpdateDialog.value = true
+                    onCheckFinished?.invoke(true)
+                } else {
+                    isGooglePlayUpdateAvailable.value = false
+                    onCheckFinished?.invoke(false)
+                }
+            }.addOnFailureListener { e ->
+                isGooglePlayUpdateAvailable.value = false
+                onCheckFinished?.invoke(false)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            isGooglePlayUpdateAvailable.value = false
+            onCheckFinished?.invoke(false)
+        }
+    }
+
+    fun startGooglePlayUpdate(context: android.content.Context) {
+        val activity = context as? android.app.Activity
+        val info = playAppUpdateInfo
+        if (activity != null && info != null) {
+            try {
+                val appUpdateManager = com.google.android.play.core.appupdate.AppUpdateManagerFactory.create(context)
+                appUpdateManager.startUpdateFlowForResult(
+                    info,
+                    com.google.android.play.core.install.model.AppUpdateType.IMMEDIATE,
+                    activity,
+                    1001
+                )
+                return
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        // Fallback: Launch official Google Play Store page
+        val packageName = context.packageName
+        val marketIntent = android.content.Intent(
+            android.content.Intent.ACTION_VIEW,
+            android.net.Uri.parse("market://details?id=$packageName")
+        ).apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) }
+
+        try {
+            context.startActivity(marketIntent)
+        } catch (e: Exception) {
+            val webIntent = android.content.Intent(
+                android.content.Intent.ACTION_VIEW,
+                android.net.Uri.parse("https://play.google.com/store/apps/details?id=$packageName")
+            ).apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) }
+            try {
+                context.startActivity(webIntent)
+            } catch (ex: Exception) {
+                ex.printStackTrace()
             }
         }
     }

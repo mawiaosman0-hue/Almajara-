@@ -301,7 +301,12 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
     val isUpdateForcedState by viewModel.isUpdateMandatory.collectAsStateWithLifecycle()
     val daysRemainingState by viewModel.daysRemaining.collectAsStateWithLifecycle()
     val latestVersionNameState by viewModel.latestVersionName.collectAsStateWithLifecycle()
+    val isGooglePlayUpdateAvailableState by viewModel.isGooglePlayUpdateAvailable.collectAsStateWithLifecycle()
     var dismissedUpdateDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        viewModel.checkForGooglePlayUpdate(context)
+    }
 
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
 
@@ -1558,6 +1563,8 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                             Text(
                                 text = if (isUpdateForcedState) {
                                     viewModel.t("تحديث إجباري مطلوب الآن! 🛰️⚠️", "Forced Update Required Now! 🛰️⚠️")
+                                } else if (isGooglePlayUpdateAvailableState) {
+                                    viewModel.t("تحديث حقيقي متوفر في قوقل بلاي! 🛍️🚀", "Real Google Play Update Available! 🛍️🚀")
                                 } else {
                                     viewModel.t("تحديث جديد متوفر للتطبيق! 🛰️🚀", "New Update Available! 🛰️🚀")
                                 },
@@ -1576,17 +1583,24 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                                 text = if (isUpdateForcedState) {
                                     viewModel.t(
                                         "⚠️ انتهت المهلة المتاحة للتأجيل (15 يوماً).\n\n" +
-                                        "يجب تحديث تطبيق مجرة السودان الآن إلى الإصدار الأخير (v$latestVersionNameState) لمتابعة استخدامه والاتصال بقاعدة البيانات الآمنة بنجاح.",
+                                        "يجب تحديث تطبيق مجرة السودان الآن إلى الإصدار الأخير ($latestVersionNameState) لمتابعة استخدامه والاتصال بقاعدة البيانات الآمنة بنجاح.",
                                         "⚠️ The postponement period (15 days) has ended.\n\n" +
-                                        "You must update Majarah Sudan to the latest version (v$latestVersionNameState) now to continue using it and securely connect to the database."
+                                        "You must update Majarah Sudan to the latest version ($latestVersionNameState) now to continue using it and securely connect to the database."
+                                    )
+                                } else if (isGooglePlayUpdateAvailableState) {
+                                    viewModel.t(
+                                        "🛍️ يتوفر تحديث رسمي وحقيقي لتطبيق مجرة السودان في متجر Google Play ($latestVersionNameState).\n\n" +
+                                        "💡 يضمن هذا التحديث أحدث الميزات الأمنية والسرعة الفائقة في المزامنة وتتبع الطلبات والشحنات عبر قوقل بلاي.",
+                                        "🛍️ An official real update for Majarah Sudan is available on Google Play ($latestVersionNameState).\n\n" +
+                                        "💡 This update ensures the latest security features and ultra-fast real-time synchronization via Google Play."
                                     )
                                 } else {
                                     viewModel.t(
-                                        "يتوفر إصدار تحديث أمني وسريع جديد (v$latestVersionNameState) لتطبيق مجرة السودان في المتجر.\n\n" +
-                                        "💡 يضمن هذا التحديث الربط المباشر والآمن لحسابات Google والمزامنة الفورية لكل الميزات والطلبات مع قاعدة بيانات السحابة دون أي عوائق.\n\n" +
+                                        "يتوفر إصدار تحديث أمني وسريع جديد ($latestVersionNameState) لتطبيق مجرة السودان في متجر Google Play.\n\n" +
+                                        "💡 يضمن هذا التحديث الربط المباشر والآمن والمزامنة الفورية لكل الميزات والطلبات مع قاعدة بيانات السحابة دون أي عوائق.\n\n" +
                                         "⏳ يمكنك تأجيل التحديث ومتابعة الاستخدام مؤقتاً (متبقي $daysRemainingState يوم لتأجيل التحديث قبل الإيقاف الإجباري).",
-                                        "A new secure and high-speed update (v$latestVersionNameState) is available for Majarah Sudan in the store.\n\n" +
-                                        "💡 This update ensures direct and secure Google accounts linking and instant real-time synchronization of all features with the remote cloud database.\n\n" +
+                                        "A new secure and high-speed update ($latestVersionNameState) is available for Majarah Sudan on Google Play.\n\n" +
+                                        "💡 This update ensures direct and secure accounts linking and instant real-time synchronization of all features with the remote cloud database.\n\n" +
                                         "⏳ You can postpone this update temporarily (Remaining $daysRemainingState days left before forced postponement)."
                                     )
                                 },
@@ -1600,26 +1614,16 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                     confirmButton = {
                         Button(
                             onClick = {
-                                Toast.makeText(context, "جاري فتح صفحة التحديث الآمن لمجرة السودان... 🌠", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, "جاري الانتقال للتحديث عبر متجر Google Play... 🛍️", Toast.LENGTH_LONG).show()
                                 if (!isUpdateForcedState) {
                                     dismissedUpdateDialog = true
                                 }
-                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=com.aistudio.majarah"))
-                                try {
-                                    context.startActivity(intent)
-                                } catch (e: Exception) {
-                                    val fallbackIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://supabase.com"))
-                                    try {
-                                        context.startActivity(fallbackIntent)
-                                    } catch (ex: Exception) {
-                                        // Silent fallback if no activity handles web link
-                                    }
-                                }
+                                viewModel.startGooglePlayUpdate(context)
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
                             shape = RoundedCornerShape(10.dp)
                         ) {
-                            Text(viewModel.t("تحديث", "Update"), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Text(viewModel.t("تحديث الآن عبر Google Play 🛍️", "Update via Google Play 🛍️"), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                         }
                     },
                     dismissButton = {
@@ -11640,6 +11644,29 @@ fun AdminSystemManagementSection(viewModel: MajarahViewModel) {
                         Text("نشر ومحاكاة التحديث الآن 🚀🛰️", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                     
+                    Spacer(modifier = Modifier.height(6.dp))
+                    
+                    Button(
+                        onClick = {
+                            Toast.makeText(context, "جاري الاستعلام عن تحديثات Google Play الحقيقية... 🔍", Toast.LENGTH_SHORT).show()
+                            viewModel.checkForGooglePlayUpdate(context) { hasUpdate ->
+                                if (hasUpdate) {
+                                    Toast.makeText(context, "تم العثور على تحديث حقيقي بمتجر قوقل بلاي! 🛍️✨", Toast.LENGTH_LONG).show()
+                                } else {
+                                    Toast.makeText(context, "لا يوجد تحديث حقيقي جديد متاح بمتجر قوقل بلاي حالياً (أنت على أحدث إصدار) 💚", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = CosmicDeepSpace, contentColor = CosmicSecondary),
+                        border = BorderStroke(1.dp, CosmicSecondary.copy(0.5f)),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth().height(42.dp)
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("فحص وجود تحديث حقيقي بمتجر قوقل بلاي 🛍️🔍", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    }
+
                     Spacer(modifier = Modifier.height(6.dp))
                     
                     TextButton(
