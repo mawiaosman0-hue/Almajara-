@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
 
 import com.example.data.db.ProfileDao
 import com.example.data.db.ProfileEntity
@@ -90,24 +91,26 @@ class MajarahRepository(
 
     suspend fun insertRestaurantOrder(order: com.example.data.db.RestaurantOrderEntity): Long {
         val id = restaurantOrderDao.insertOrder(order)
-        try {
-            val sup = com.example.data.network.SupabaseRestaurantOrder(
-                id = if (id == 0L) null else id.toInt(),
-                restaurantName = order.restaurantName,
-                restaurantPhone = order.restaurantPhone,
-                customerName = order.customerName,
-                customerPhone = order.customerPhone,
-                itemsAndNotes = order.itemsAndNotes,
-                paymentMethod = order.paymentMethod,
-                deliveryFee = order.deliveryFee,
-                status = order.status,
-                courierName = order.courierName,
-                courierPhone = order.courierPhone,
-                createdAt = order.createdAt
-            )
-            com.example.data.network.SupabaseClient.api.insertRestaurantOrders(listOf(sup))
-        } catch (e: Exception) {
-            e.printStackTrace()
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            try {
+                val sup = com.example.data.network.SupabaseRestaurantOrder(
+                    id = if (id == 0L) null else id.toInt(),
+                    restaurantName = order.restaurantName,
+                    restaurantPhone = order.restaurantPhone,
+                    customerName = order.customerName,
+                    customerPhone = order.customerPhone,
+                    itemsAndNotes = order.itemsAndNotes,
+                    paymentMethod = order.paymentMethod,
+                    deliveryFee = order.deliveryFee,
+                    status = order.status,
+                    courierName = order.courierName,
+                    courierPhone = order.courierPhone,
+                    createdAt = order.createdAt
+                )
+                com.example.data.network.SupabaseClient.api.insertRestaurantOrders(listOf(sup))
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
         return id
     }
@@ -316,24 +319,26 @@ class MajarahRepository(
 
     suspend fun insertPharmacyOrder(order: com.example.data.db.PharmacyOrderEntity): Long {
         val id = pharmacyOrderDao.insertOrder(order)
-        try {
-            val sup = com.example.data.network.SupabasePharmacyOrder(
-                id = if (id == 0L) null else id.toInt(),
-                pharmacyId = order.pharmacyId,
-                pharmacyName = "",
-                customerName = order.customerName,
-                customerPhone = order.customerPhone,
-                itemsAndNotes = order.deliveryLocation,
-                paymentMethod = "كاش",
-                deliveryFee = 0.0,
-                status = order.status,
-                courierName = "",
-                courierPhone = "",
-                createdAt = order.createdAt
-            )
-            com.example.data.network.SupabaseClient.api.insertPharmacyOrders(listOf(sup))
-        } catch (e: Exception) {
-            e.printStackTrace()
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            try {
+                val sup = com.example.data.network.SupabasePharmacyOrder(
+                    id = if (id == 0L) null else id.toInt(),
+                    pharmacyId = order.pharmacyId,
+                    pharmacyName = "",
+                    customerName = order.customerName,
+                    customerPhone = order.customerPhone,
+                    itemsAndNotes = order.deliveryLocation,
+                    paymentMethod = "كاش",
+                    deliveryFee = 0.0,
+                    status = order.status,
+                    courierName = "",
+                    courierPhone = "",
+                    createdAt = order.createdAt
+                )
+                com.example.data.network.SupabaseClient.api.insertPharmacyOrders(listOf(sup))
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
         return id
     }
@@ -1179,26 +1184,29 @@ class MajarahRepository(
     suspend fun syncRemoteRestaurantOrdersToLocal(): String? {
         return try {
             val remote = com.example.data.network.SupabaseClient.api.getRestaurantOrders()
+            val localList = restaurantOrderDao.getAllRestaurantOrdersSnapshot()
             val roomOrders = remote.map { r ->
+                val rId = r.id ?: 0
+                val existing = localList.find { it.id == rId }
                 com.example.data.db.RestaurantOrderEntity(
-                    id = r.id ?: 0,
-                    restaurantId = 0,
-                    restaurantName = r.restaurantName ?: "مطعم بالمجرة",
-                    restaurantPhone = r.restaurantPhone ?: "",
-                    customerName = r.customerName ?: "عميل",
-                    customerEmail = "",
-                    customerPhone = r.customerPhone ?: "",
-                    itemsAndNotes = r.itemsAndNotes ?: "[]",
-                    status = r.status ?: "معلق",
-                    paymentMethod = r.paymentMethod ?: "كاش",
-                    foodPrice = 0.0,
-                    deliveryFee = r.deliveryFee ?: 0.0,
-                    bankReceiptImageUri = null,
-                    courierName = r.courierName ?: "",
-                    courierPhone = r.courierPhone ?: "",
-                    createdAt = r.createdAt ?: System.currentTimeMillis(),
-                    deliveryLocation = "",
-                    detailedPrice = ""
+                    id = rId,
+                    restaurantId = existing?.restaurantId ?: 0,
+                    restaurantName = r.restaurantName ?: existing?.restaurantName ?: "مطعم بالمجرة",
+                    restaurantPhone = r.restaurantPhone ?: existing?.restaurantPhone ?: "",
+                    customerName = r.customerName ?: existing?.customerName ?: "عميل",
+                    customerEmail = existing?.customerEmail ?: "",
+                    customerPhone = r.customerPhone ?: existing?.customerPhone ?: "",
+                    itemsAndNotes = if (r.itemsAndNotes.isNullOrBlank()) (existing?.itemsAndNotes ?: "") else r.itemsAndNotes,
+                    status = r.status ?: existing?.status ?: "معلق",
+                    paymentMethod = r.paymentMethod ?: existing?.paymentMethod ?: "كاش",
+                    foodPrice = existing?.foodPrice ?: 0.0,
+                    deliveryFee = r.deliveryFee ?: existing?.deliveryFee ?: 0.0,
+                    bankReceiptImageUri = existing?.bankReceiptImageUri,
+                    courierName = r.courierName ?: existing?.courierName ?: "",
+                    courierPhone = r.courierPhone ?: existing?.courierPhone ?: "",
+                    createdAt = r.createdAt ?: existing?.createdAt ?: System.currentTimeMillis(),
+                    deliveryLocation = existing?.deliveryLocation ?: "",
+                    detailedPrice = existing?.detailedPrice ?: ""
                 )
             }
             restaurantOrderDao.syncOrdersTransaction(roomOrders)
@@ -1214,24 +1222,27 @@ class MajarahRepository(
     suspend fun syncRemotePharmacyOrdersToLocal(): String? {
         return try {
             val remote = com.example.data.network.SupabaseClient.api.getPharmacyOrders()
+            val localList = pharmacyOrderDao.getAllPharmacyOrdersSnapshot()
             val roomOrders = remote.map { r ->
+                val rId = r.id ?: 0
+                val existing = localList.find { it.id == rId }
                 com.example.data.db.PharmacyOrderEntity(
-                    id = r.id ?: 0,
-                    pharmacyId = r.pharmacyId ?: 0,
-                    customerName = r.customerName ?: "عميل",
-                    customerPhone = r.customerPhone ?: "",
-                    customerEmail = "",
-                    prescriptionImageBase64 = "",
-                    medicinesJson = "",
-                    medicinePrice = 0.0,
-                    deliveryFee = r.deliveryFee ?: 0.0,
-                    courierName = r.courierName ?: "",
-                    courierPhone = r.courierPhone ?: "",
-                    status = r.status ?: "بانتظار الصيدلي",
-                    paymentMethod = r.paymentMethod ?: "كاش",
-                    bankReceiptImageUri = null,
-                    createdAt = r.createdAt ?: System.currentTimeMillis(),
-                    deliveryLocation = r.itemsAndNotes ?: ""
+                    id = rId,
+                    pharmacyId = if ((r.pharmacyId ?: 0) != 0) (r.pharmacyId ?: 0) else (existing?.pharmacyId ?: 0),
+                    customerName = r.customerName ?: existing?.customerName ?: "عميل",
+                    customerPhone = r.customerPhone ?: existing?.customerPhone ?: "",
+                    customerEmail = existing?.customerEmail ?: "",
+                    prescriptionImageBase64 = existing?.prescriptionImageBase64 ?: "",
+                    medicinesJson = existing?.medicinesJson ?: "",
+                    medicinePrice = existing?.medicinePrice ?: 0.0,
+                    deliveryFee = r.deliveryFee ?: existing?.deliveryFee ?: 0.0,
+                    courierName = r.courierName ?: existing?.courierName ?: "",
+                    courierPhone = r.courierPhone ?: existing?.courierPhone ?: "",
+                    status = r.status ?: existing?.status ?: "بانتظار الصيدلي",
+                    paymentMethod = r.paymentMethod ?: existing?.paymentMethod ?: "كاش",
+                    bankReceiptImageUri = existing?.bankReceiptImageUri,
+                    createdAt = r.createdAt ?: existing?.createdAt ?: System.currentTimeMillis(),
+                    deliveryLocation = if (r.itemsAndNotes.isNullOrBlank()) (existing?.deliveryLocation ?: "") else r.itemsAndNotes
                 )
             }
             pharmacyOrderDao.syncOrdersTransaction(roomOrders)

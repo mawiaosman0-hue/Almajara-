@@ -105,11 +105,7 @@ interface PharmacyOrderDao {
     @androidx.room.Transaction
     suspend fun syncOrdersTransaction(orders: List<PharmacyOrderEntity>) {
         if (orders.isNotEmpty()) {
-            val remoteIds = orders.map { it.id }.distinct()
-            deleteOrdersNotIn(remoteIds)
             insertOrders(orders)
-        } else {
-            clearOrders()
         }
     }
 }

@@ -1614,6 +1614,10 @@ $couponMessage---------------------------
         emptyList()
     )
 
+    val myPlacedPharmacyOrderIds = MutableStateFlow<Set<Int>>(emptySet())
+    val myPlacedRestaurantOrderIds = MutableStateFlow<Set<Int>>(emptySet())
+    val myPlacedPhones = MutableStateFlow<Set<String>>(emptySet())
+
     val isPharmacist: StateFlow<Boolean> = combine(activeProfile, _isLoggedIn, allPharmacies) { profile, loggedIn, pharmacies ->
         if (!loggedIn || profile == null) {
             false
@@ -1761,7 +1765,6 @@ $couponMessage---------------------------
     }
 
     fun addPharmacyOrder(pharmacyId: Int, customerName: String, customerPhone: String, customerEmail: String, prescriptionBase64: String, deliveryLocation: String = "", onComplete: (String?) -> Unit) {
-        isGlobalLoading.value = true
         viewModelScope.launch {
             var error: String? = null
             try {
@@ -1774,11 +1777,16 @@ $couponMessage---------------------------
                     status = "بانتظار الصيدلي",
                     deliveryLocation = deliveryLocation
                 )
-                repository.insertPharmacyOrder(ord)
+                val newId = repository.insertPharmacyOrder(ord)
+                if (newId > 0) {
+                    myPlacedPharmacyOrderIds.value = myPlacedPharmacyOrderIds.value + newId.toInt()
+                }
+                if (customerPhone.isNotBlank()) {
+                    myPlacedPhones.value = myPlacedPhones.value + customerPhone.trim()
+                }
             } catch (e: Exception) {
                 error = e.localizedMessage ?: "حدث خطأ أثناء تقديم الروشتة"
             } finally {
-                isGlobalLoading.value = false
                 onComplete(error)
             }
         }
@@ -1918,7 +1926,6 @@ $couponMessage---------------------------
         bankReceiptImageUri: String?,
         onComplete: (String?, com.example.data.db.RestaurantOrderEntity?) -> Unit
     ) {
-        isGlobalLoading.value = true
         viewModelScope.launch {
             var error: String? = null
             var savedOrder: com.example.data.db.RestaurantOrderEntity? = null
@@ -1937,11 +1944,16 @@ $couponMessage---------------------------
                     bankReceiptImageUri = bankReceiptImageUri
                 )
                 val newId = repository.insertRestaurantOrder(order)
-                savedOrder = order.copy(id = newId.toInt())
+                if (newId > 0) {
+                    savedOrder = order.copy(id = newId.toInt())
+                    myPlacedRestaurantOrderIds.value = myPlacedRestaurantOrderIds.value + newId.toInt()
+                }
+                if (customerPhone.isNotBlank()) {
+                    myPlacedPhones.value = myPlacedPhones.value + customerPhone.trim()
+                }
             } catch (e: Exception) {
                 error = e.localizedMessage
             } finally {
-                isGlobalLoading.value = false
                 onComplete(error, savedOrder)
             }
         }

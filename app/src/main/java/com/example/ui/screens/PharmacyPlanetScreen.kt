@@ -1527,18 +1527,22 @@ fun CustomerPharmacyView(
     var showPrescriptionFormForPharmacy by remember { mutableStateOf<PharmacyEntity?>(null) }
     var activeSubTab by remember { mutableStateOf(0) } // 0: Pharmacies, 1: My Prescriptions
 
-    val myPharmacyOrders = remember(allOrders, activeProfile) {
+    val placedIds by viewModel.myPlacedPharmacyOrderIds.collectAsStateWithLifecycle()
+    val placedPhones by viewModel.myPlacedPhones.collectAsStateWithLifecycle()
+    val myPharmacyOrders = remember(allOrders, activeProfile, placedIds, placedPhones) {
         val email = activeProfile?.email?.trim()?.lowercase() ?: ""
         val phone = activeProfile?.phone?.trim() ?: ""
         val name = activeProfile?.name?.trim()?.lowercase() ?: ""
-        if (email.isBlank() && phone.isBlank() && name.isBlank()) {
+        if (email.isBlank() && phone.isBlank() && name.isBlank() && placedIds.isEmpty() && placedPhones.isEmpty()) {
             allOrders
         } else {
-            allOrders.filter {
-                (email.isNotBlank() && it.customerEmail.trim().lowercase() == email) ||
-                (phone.isNotBlank() && isPhoneMatchPharm(it.customerPhone, phone)) ||
-                (name.isNotBlank() && it.customerName.trim().lowercase() == name) ||
-                (it.customerPhone.isBlank() && it.customerName.isBlank())
+            allOrders.filter { order ->
+                order.id in placedIds ||
+                (email.isNotBlank() && order.customerEmail.trim().lowercase() == email) ||
+                (phone.isNotBlank() && isPhoneMatchPharm(order.customerPhone, phone)) ||
+                (name.isNotBlank() && order.customerName.trim().lowercase() == name) ||
+                placedPhones.any { p -> isPhoneMatchPharm(order.customerPhone, p) } ||
+                (order.customerPhone.isBlank() && order.customerName.isBlank())
             }
         }
     }

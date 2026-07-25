@@ -69,11 +69,7 @@ interface RestaurantOrderDao {
     @androidx.room.Transaction
     suspend fun syncOrdersTransaction(orders: List<RestaurantOrderEntity>) {
         if (orders.isNotEmpty()) {
-            val remoteIds = orders.map { it.id }.distinct()
-            deleteOrdersNotIn(remoteIds)
             insertOrders(orders)
-        } else {
-            clearOrders()
         }
     }
 }

@@ -93,11 +93,7 @@ interface OrderDao {
     @androidx.room.Transaction
     suspend fun syncOrdersTransaction(orders: List<OrderEntity>) {
         if (orders.isNotEmpty()) {
-            val remoteOrderIds = orders.map { it.orderId }.distinct()
-            deleteOrdersNotIn(remoteOrderIds)
             insertOrders(orders)
-        } else {
-            clearOrderHistory()
         }
     }
 

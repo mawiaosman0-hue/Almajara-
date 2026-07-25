@@ -121,18 +121,22 @@ fun RestaurantsPlanetSection(
     }
 
     // Filter my past orders as a customer
-    val myCustomerOrders = remember(orders, profile) {
-        if (profile == null) {
+    val placedIds by viewModel.myPlacedRestaurantOrderIds.collectAsStateWithLifecycle()
+    val placedPhones by viewModel.myPlacedPhones.collectAsStateWithLifecycle()
+    val myCustomerOrders = remember(orders, profile, placedIds, placedPhones) {
+        if (profile == null && placedIds.isEmpty() && placedPhones.isEmpty()) {
             orders
         } else {
-            val pPhone = profile.phone.trim()
-            val pEmail = profile.email.trim().lowercase()
-            val pName = profile.name.trim().lowercase()
-            orders.filter {
-                isPhoneMatch(it.customerPhone, pPhone) ||
-                (pEmail.isNotEmpty() && it.customerEmail.trim().lowercase() == pEmail) ||
-                (pName.isNotEmpty() && it.customerName.trim().lowercase() == pName) ||
-                (it.customerPhone.isBlank() && it.customerName.isBlank())
+            val pPhone = profile?.phone?.trim() ?: ""
+            val pEmail = profile?.email?.trim()?.lowercase() ?: ""
+            val pName = profile?.name?.trim()?.lowercase() ?: ""
+            orders.filter { order ->
+                order.id in placedIds ||
+                (pPhone.isNotEmpty() && isPhoneMatch(order.customerPhone, pPhone)) ||
+                (pEmail.isNotEmpty() && order.customerEmail.trim().lowercase() == pEmail) ||
+                (pName.isNotEmpty() && order.customerName.trim().lowercase() == pName) ||
+                placedPhones.any { p -> isPhoneMatch(order.customerPhone, p) } ||
+                (order.customerPhone.isBlank() && order.customerName.isBlank())
             }
         }
     }
