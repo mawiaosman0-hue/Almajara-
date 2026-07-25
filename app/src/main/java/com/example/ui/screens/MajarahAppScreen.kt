@@ -13719,7 +13719,7 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
     if (showDeliveryPaymentDialogForRestaurantId != null) {
         val targetRestOrderId = showDeliveryPaymentDialogForRestaurantId!!
         val rOrder = allRestaurantOrders.find { it.id == targetRestOrderId }
-        val totalAmount = rOrder?.deliveryFee ?: 0.0
+        val totalAmount = (rOrder?.foodPrice ?: 0.0) + (rOrder?.deliveryFee ?: 0.0)
         
         AlertDialog(
             onDismissRequest = { showDeliveryPaymentDialogForRestaurantId = null },
@@ -14109,7 +14109,7 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                 }
 
                 val filteredPharmacyOrders = myAssignedPharmacyOrders.filter { order ->
-                    val isActuallyCompleted = order.status.startsWith("تم التسليم") || order.status == "تم التوصيل"
+                    val isActuallyCompleted = (order.status.startsWith("تم التسليم") || order.status == "تم التوصيل" || order.status.contains("إغلاق") || order.status.contains("تسليم العميل")) && !order.status.contains("المندوب") && !order.status.contains("للمندوب")
                     val isCancelled = order.status.contains("ملغ") || order.status.contains("ملغي")
                     when (courierOrdersTab) {
                         0 -> !isActuallyCompleted && !isCancelled
@@ -14485,7 +14485,7 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                                         Spacer(modifier = Modifier.height(8.dp))
                                         Text("تفاصيل الوجبات والطلبات:\n${order.itemsAndNotes}", fontSize = 11.sp, color = Color.White.copy(0.8f), modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Right)
                                         Spacer(modifier = Modifier.height(10.dp))
-                                        Text("سعر التوصيل المقدر: ${viewModel.formatPrice(order.deliveryFee)} SDG", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = CosmicSecondary, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Right)
+                                        Text("سعر الوجبات 🍔: ${viewModel.formatPrice(order.foodPrice)} SDG\nسعر التوصيل للمطعم 🚚: ${viewModel.formatPrice(order.deliveryFee)} SDG\nالمبلغ الإجمالي المطلـوب: ${viewModel.formatPrice(order.foodPrice + order.deliveryFee)} SDG", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CosmicSecondary, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Right)
                                         
                                         Spacer(modifier = Modifier.height(12.dp))
                                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -14630,7 +14630,7 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                             }
                         } else {
                             items(filteredPharmacyOrders) { order ->
-                                val isCompleted = order.status.contains("تم التوصيل") || order.status.contains("تم تسليم")
+                                val isCompleted = (order.status.contains("تم التوصيل") || order.status.contains("تم التسليم") || order.status.contains("إغلاق")) && !order.status.contains("المندوب") && !order.status.contains("للمندوب")
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
                                     colors = CardDefaults.cardColors(containerColor = CosmicSurface),
@@ -14655,7 +14655,8 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                                         Spacer(modifier = Modifier.height(8.dp))
                                         Text("الأدوية المطلوبة:\n${order.medicinesJson}", fontSize = 11.sp, color = Color.White.copy(0.8f), modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Right)
                                         Spacer(modifier = Modifier.height(10.dp))
-                                        Text("قيمة الدواء 💊: ${viewModel.formatPrice(order.medicinePrice)} SDG\nرسوم التوصيل 🚚: توصيل مجان\nالمجموع الكلي: ${viewModel.formatPrice(order.medicinePrice)} SDG", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = CosmicSecondary, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Right)
+                                        val delFee = order.deliveryFee
+                                        Text("سعر الأدوية 💊: ${viewModel.formatPrice(order.medicinePrice)} SDG\nرسوم التوصيل 🚚: ${if (delFee > 0) viewModel.formatPrice(delFee) + " SDG" else "توصيل مجان 🌸"}\nالمبلغ الإجمالي المطلـوب: ${viewModel.formatPrice(order.medicinePrice + delFee)} SDG", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CosmicSecondary, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Right)
                                         
                                         Spacer(modifier = Modifier.height(12.dp))
                                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {

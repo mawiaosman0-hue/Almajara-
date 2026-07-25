@@ -2532,7 +2532,40 @@ fun AdminPharmacyPortal(
         EnlargeImageDialog(showEnlargeForImage!!) { showEnlargeForImage = null }
     }
 
-    var activeSubTab by remember { mutableStateOf(0) } // 0: Pharmacies, 1: Products, 2: Orders
+    var activeSubTab by remember { mutableStateOf(2) } // 2: Active Orders, 3: Completed Orders, 1: Products, 0: Pharmacies
+
+    val activePharmacyOrders = remember(orders) {
+        orders.filter {
+            val st = it.status
+            !st.contains("إغلاق") && st != "تم تسليم العميل وإغلاق الفاتورة ✅" && !st.contains("مغلقة") && !st.contains("ملغي")
+        }
+    }
+
+    val completedPharmacyOrders = remember(orders) {
+        orders.filter {
+            val st = it.status
+            st.contains("إغلاق") || st == "تم تسليم العميل وإغلاق الفاتورة ✅" || st.contains("مغلقة") ||
+            ((st.startsWith("تم التسليم") || st.startsWith("تم التوصيل")) && !st.contains("المندوب") && !st.contains("للمندوب"))
+        }
+    }
+
+    val pendingPharmaciesCount = remember(pharmacies) {
+        pharmacies.count { !it.isApproved }
+    }
+
+    var lastActivePharmacyOrdersCount by remember { mutableStateOf(activePharmacyOrders.size) }
+    LaunchedEffect(activePharmacyOrders.size) {
+        if (activePharmacyOrders.size > lastActivePharmacyOrdersCount) {
+            try {
+                val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+                val r = android.media.RingtoneManager.getRingtone(context, alertUri)
+                r?.play()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        lastActivePharmacyOrdersCount = activePharmacyOrders.size
+    }
 
     Column(
         modifier = modifier
@@ -2543,12 +2576,13 @@ fun AdminPharmacyPortal(
         // Sub tabs
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             val subTabs = listOf(
-                "طلبات الروشتات من الصيدلي للتوصيل 📥" to 2,
-                "الأدوية والمنتجات 🧪" to 1,
-                "توثيق الصيدليات 🏥" to 0
+                "طلبات منفذة (${completedPharmacyOrders.size}) 📋" to 3,
+                "روشتات نشطة (${activePharmacyOrders.size}) 📥" to 2,
+                "منتجات (${products.size}) 🧪" to 1,
+                "صيدليات (${pendingPharmaciesCount}) 🏥" to 0
             )
             subTabs.forEach { (label, index) ->
                 val isSelected = activeSubTab == index
@@ -2564,8 +2598,9 @@ fun AdminPharmacyPortal(
                     Text(
                         label,
                         color = if (isSelected) Color.Black else Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
                     )
                 }
             }
@@ -2581,7 +2616,7 @@ fun AdminPharmacyPortal(
                         Text("لا توجد صيدليات مسجلة بالمجرة بعد 🏥", color = MediumContrastTextDark, fontSize = 12.sp)
                     }
                 } else {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp)) {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().weight(1f, fill = false)) {
                         itemsIndexed(pharmacies) { index, pharmacy ->
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
@@ -2685,7 +2720,7 @@ fun AdminPharmacyPortal(
                         Text("لا توجد منتجات صيدلية معروضة بعد 🧪", color = MediumContrastTextDark, fontSize = 12.sp)
                     }
                 } else {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp)) {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().weight(1f, fill = false)) {
                         items(products) { prod ->
                             val pharm = pharmacies.find { it.id == prod.pharmacyId }
                             Card(
@@ -2764,17 +2799,18 @@ fun AdminPharmacyPortal(
                     }
                 }
             }
-            2 -> {
-                // Orders (prescription) management
-                if (orders.isEmpty()) {
+            2, 3 -> {
+                // Orders (prescription) management: 2 -> Active, 3 -> Completed
+                val currentOrdersList = if (activeSubTab == 2) activePharmacyOrders else completedPharmacyOrders
+                if (currentOrdersList.isEmpty()) {
                     Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                        Text("لا توجد طلبيات أو روشتات مضافة حالياً 📥", color = MediumContrastTextDark, fontSize = 12.sp)
+                        Text(if (activeSubTab == 2) "لا توجد طلبات أو روشتات نشطة حالياً 📥" else "لا توجد طلبات صيدلية منفذة بعد 📋", color = MediumContrastTextDark, fontSize = 12.sp)
                     }
                 } else {
                     var selectedOrderForApprove by remember { mutableStateOf<PharmacyOrderEntity?>(null) }
 
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp)) {
-                        itemsIndexed(orders.sortedByDescending { it.createdAt }) { index, order ->
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().weight(1f, fill = false)) {
+                        itemsIndexed(currentOrdersList.sortedByDescending { it.createdAt }) { index, order ->
                             val pharm = pharmacies.find { it.id == order.pharmacyId }
                             Card(
                                 modifier = Modifier.fillMaxWidth(),

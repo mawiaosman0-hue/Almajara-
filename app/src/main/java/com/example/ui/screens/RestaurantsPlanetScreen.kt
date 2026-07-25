@@ -988,15 +988,50 @@ fun RestaurantsPlanetSection(
                     }
                 } else {
                     // Admin Portal
-                    var adminSubSection by remember { mutableStateOf(0) } // 0: Orders, 1: Restaurant Verification
+                    var adminSubSection by remember { mutableStateOf(0) } // 0: Active Orders to Assign Courier, 1: Executed Orders, 2: Verification
+
+                    val activeAdminRestaurantOrders = remember(orders) {
+                        orders.filter {
+                            val st = it.status
+                            !st.contains("إغلاق") && st != "تم تسليم العميل وإغلاق الفاتورة ✅" && !st.contains("مغلقة") && !st.contains("ملغي")
+                        }
+                    }
+
+                    val completedAdminRestaurantOrders = remember(orders) {
+                        orders.filter {
+                            val st = it.status
+                            st.contains("إغلاق") || st == "تم تسليم العميل وإغلاق الفاتورة ✅" || st.contains("مغلقة") ||
+                            ((st.startsWith("تم التسليم") || st.startsWith("تم التوصيل")) && !st.contains("المندوب") && !st.contains("للمندوب"))
+                        }
+                    }
+
+                    val pendingRestaurantsCount = remember(restaurants) {
+                        restaurants.count { !it.isApproved }
+                    }
+
+                    var lastActiveAdminRestOrdersCount by remember { mutableStateOf(activeAdminRestaurantOrders.size) }
+                    LaunchedEffect(activeAdminRestaurantOrders.size) {
+                        if (activeAdminRestaurantOrders.size > lastActiveAdminRestOrdersCount) {
+                            try {
+                                val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+                                val r = android.media.RingtoneManager.getRingtone(context, alertUri)
+                                r?.play()
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+                        lastActiveAdminRestOrdersCount = activeAdminRestaurantOrders.size
+                    }
+
                     Column(modifier = Modifier.fillMaxSize()) {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             val subSections = listOf(
-                                "توثيق المطاعم الجديدة 🏪" to 1,
-                                "طلبات زبائن المطاعم 🍔" to 0
+                                "توثيق المطاعم (${pendingRestaurantsCount}) 🏪" to 2,
+                                "طلبات منفذة (${completedAdminRestaurantOrders.size}) 📋" to 1,
+                                "مطاعم نشطة (${activeAdminRestaurantOrders.size}) 🍔" to 0
                             )
                             subSections.forEach { (label, index) ->
                                 val isSelected = adminSubSection == index
@@ -1012,8 +1047,9 @@ fun RestaurantsPlanetSection(
                                     Text(
                                         label,
                                         color = if (isSelected) Color.Black else Color.White,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center
                                     )
                                 }
                             }
@@ -1021,7 +1057,8 @@ fun RestaurantsPlanetSection(
                         
                         Spacer(modifier = Modifier.height(12.dp))
                         
-                        if (adminSubSection == 0) {
+                        if (adminSubSection == 0 || adminSubSection == 1) {
+                            val displayOrdersList = if (adminSubSection == 0) activeAdminRestaurantOrders else completedAdminRestaurantOrders
                             LazyColumn(
                                 modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
                                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -1041,25 +1078,25 @@ fun RestaurantsPlanetSection(
 
                                 item {
                                     Text(
-                                        "طلبات المطاعم الواردة للمجرة 🌌",
+                                        if (adminSubSection == 0) "طلبات المطاعم النشطة لتعيين مندوب 🍔 ($activeAdminRestaurantOrders.size)" else "طلبات المطاعم المنفذة لجميع المطاعم 📋 ($completedAdminRestaurantOrders.size)",
                                         color = CosmicSecondary,
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 15.sp,
+                                        fontSize = 14.sp,
                                         modifier = Modifier.padding(top = 8.dp)
                                     )
                                 }
 
-                                if (orders.isEmpty()) {
+                                if (displayOrdersList.isEmpty()) {
                                     item {
                                         Box(
                                             modifier = Modifier.fillMaxWidth().padding(24.dp),
                                             contentAlignment = Alignment.Center
                                         ) {
-                                            Text("لا توجد طلبات مطاعم حالياً 🍔", color = Color.Gray, fontSize = 13.sp)
+                                            Text(if (adminSubSection == 0) "لا توجد طلبات مطاعم نشطة حالياً 🍔" else "لا توجد طلبات مطاعم منفذة بعد 📋", color = Color.Gray, fontSize = 13.sp)
                                         }
                                     }
                                 } else {
-                                    items(orders) { ord ->
+                                    items(displayOrdersList) { ord ->
                                         RestaurantOrderCard(
                                             order = ord,
                                             onShowInvoice = { selectedOrderForInvoice = ord },
