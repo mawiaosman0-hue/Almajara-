@@ -354,7 +354,7 @@ fun RestaurantsPlanetSection(
     LaunchedEffect(activeDeliveredOverlayOrderId) {
         if (activeDeliveredOverlayOrderId != null) {
             val orderId = activeDeliveredOverlayOrderId!!
-            kotlinx.coroutines.delay(10000) // 10 seconds as requested
+            kotlinx.coroutines.delay(5000) // 5 seconds as requested
             viewModel.updateRestaurantOrderStatus(orderId, "تم تسليم العميل وإغلاق الفاتورة ✅") { err ->
                 activeDeliveredOverlayOrderId = null
             }
@@ -3098,26 +3098,27 @@ fun AddRestaurantDialog(
 @Composable
 fun RestaurantOrderTrackingPipeline(status: String, modifier: Modifier = Modifier) {
     // Steps:
-    // 1. قيد التحضير بالمطعم 🍳 (Active: "معلق", "قيد التحضير". Done: "جاهز للتوصيل" or higher)
-    // 2. تم تسليم المندوب 🚴 (Active: contains "المندوب" or "التوصيل" or "تأكيد". Done: "تم التسليم" or higher)
-    // 3. تم التسليم ✅ (Active/Done: contains "تم التسليم" or is "تم تسليم العميل وإغلاق الفاتورة ✅")
+    // 1. قيد التحضير بالمطعم 🍳
+    // 2. تم تسليم المندوب 🚴
+    // 3. تم التسليم ✅
+    
+    val isFinalDelivered = (status.startsWith("تم التسليم") || status.contains("إغلاق") || status.contains("تسليم العميل") || status == "تم التوصيل") &&
+            !status.contains("المندوب") && !status.contains("للمندوب")
     
     val step1State = when {
-        status == "معلق" || status.contains("التحضير") -> StepState.ACTIVE
-        status.contains("جاهز") || status.contains("المندوب") || status.contains("التسليم") || status.contains("تأكيد") || status.contains("إغلاق") -> StepState.DONE
+        status == "معلق" || status.contains("التحضير") || status.contains("تجهيز") -> StepState.ACTIVE
+        status.contains("جاهز") || status.contains("المندوب") || isFinalDelivered || status.contains("تأكيد") -> StepState.DONE
         else -> StepState.AWAITING
     }
     
     val step2State = when {
-        status.contains("المندوب") || status.contains("التوصيل") || status.contains("تأكيد") -> {
-            if (status.contains("تم التسليم") || status.contains("إغلاق") || status.contains("تسليم العميل")) StepState.DONE else StepState.ACTIVE
-        }
-        status.contains("تم التسليم") || status.contains("إغلاق") || status.contains("تسليم العميل") -> StepState.DONE
+        isFinalDelivered -> StepState.DONE
+        status.contains("المندوب") || status.contains("التوصيل") || status.contains("تأكيد") -> StepState.ACTIVE
         else -> StepState.AWAITING
     }
     
     val step3State = when {
-        status.contains("تم التسليم") || status.contains("إغلاق") || status.contains("تسليم العميل") -> StepState.DONE
+        isFinalDelivered -> StepState.DONE
         else -> StepState.AWAITING
     }
     

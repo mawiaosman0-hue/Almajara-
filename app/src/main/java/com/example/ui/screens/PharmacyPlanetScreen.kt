@@ -1595,6 +1595,7 @@ fun CustomerPharmacyView(
                     activeWellWishesOrder = ord
                     coroutineScope.launch {
                         kotlinx.coroutines.delay(5000)
+                        viewModel.updatePharmacyOrderStatus(ord.id, "تم تسليم العميل وإغلاق الفاتورة ✅") { _ -> }
                         activeWellWishesOrder = null
                         orderForRatingByCustomer = null
                     }
@@ -3357,9 +3358,11 @@ fun EditPharmacyDialog(
 @Composable
 fun PharmacyOrderTracker(status: String) {
     val steps = listOf("تجهيز الدواء 💊", "تم تسليم المندوب 🚴", "تم التسليم ✅")
+    val isFinalDelivered = (status.startsWith("تم التسليم") || status == "تم التوصيل" || status.contains("إغلاق") || status.contains("تسليم العميل")) &&
+            !status.contains("المندوب") && !status.contains("للمندوب")
     val currentStepIndex = when {
-        status.contains("تم التسليم") || status.contains("تم التوصيل") || status.contains("إغلاق") -> 2
-        status.contains("المندوب") || status.contains("توصيل") || status.contains("جاهز") -> 1
+        isFinalDelivered -> 2
+        status.contains("المندوب") || status.contains("توصيل") || status.contains("جاهز") || status.contains("تسليم") -> 1
         else -> 0
     }
     Row(
