@@ -259,8 +259,28 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
     val isSeller by viewModel.isSeller.collectAsStateWithLifecycle()
     val isPharmacist by viewModel.isPharmacist.collectAsStateWithLifecycle()
     val isRestaurant by viewModel.isRestaurant.collectAsStateWithLifecycle()
+    val isAdministrativeManager by viewModel.isAdministrativeManager.collectAsStateWithLifecycle()
     val isEnglish by viewModel.isEnglish.collectAsStateWithLifecycle()
     val isInternetAvailable by viewModel.isInternetAvailable.collectAsStateWithLifecycle()
+
+    val activeProfile by viewModel.activeProfile.collectAsStateWithLifecycle()
+
+    // Auto-redirect registered role users (Pharmacist, Restaurant, Admin Manager, Courier, Seller) directly to their portal
+    LaunchedEffect(isLoggedIn, activeProfile, isPharmacist, isRestaurant, isAdministrativeManager, isAdmin, isGeneralAdmin, isCourier, isSeller) {
+        if (isLoggedIn && activeProfile != null && (currentScreen is Screen.Home || currentScreen is Screen.Categories)) {
+            if (isGeneralAdmin || isAdministrativeManager || isAdmin) {
+                viewModel.navigateTo(Screen.Admin)
+            } else if (isPharmacist) {
+                viewModel.navigateTo(Screen.Pharmacist)
+            } else if (isRestaurant) {
+                viewModel.navigateTo(Screen.Restaurant)
+            } else if (isCourier) {
+                viewModel.navigateTo(Screen.Courier)
+            } else if (isSeller) {
+                viewModel.navigateTo(Screen.Seller)
+            }
+        }
+    }
 
     val phoneState by viewModel.checkoutPhone.collectAsStateWithLifecycle()
     val addressState by viewModel.checkoutAddress.collectAsStateWithLifecycle()
@@ -312,7 +332,6 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
 
     var pendingNotificationMsg by remember { mutableStateOf<String?>(null) }
     var notifiedOrderIds by remember { mutableStateOf(setOf<String>()) }
-    val activeProfile by viewModel.activeProfile.collectAsStateWithLifecycle()
     val allOrders by viewModel.allOrdersFlow.collectAsStateWithLifecycle()
     val allPharmacyOrders by viewModel.allPharmacyOrders.collectAsStateWithLifecycle()
 

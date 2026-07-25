@@ -367,22 +367,37 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                     val matchesSeller = database.sellerDao().getAllSellersSnapshot().any { s ->
                         s.email.trim().lowercase() == profileEntity.email.trim().lowercase()
                     }
+                    val matchesPharmacist = database.pharmacyDao().getAllPharmaciesSnapshot().any { pharm ->
+                        (pharm.pharmacistEmail.isNotBlank() && pharm.pharmacistEmail.trim().lowercase() == profileEntity.email.trim().lowercase()) ||
+                        (pharm.phone.isNotBlank() && isPhoneMatchHelper(pharm.phone, profileEntity.phone)) ||
+                        (pharm.doctorName.isNotBlank() && pharm.doctorName.trim().lowercase() == profileEntity.name.trim().lowercase())
+                    }
+                    val matchesRestaurant = database.restaurantDao().getAllRestaurantsSnapshot().any { rest ->
+                        (rest.phone.isNotBlank() && isPhoneMatchHelper(rest.phone, profileEntity.phone)) ||
+                        (rest.name.isNotBlank() && rest.name.trim().lowercase() == profileEntity.name.trim().lowercase())
+                    }
+                    val matchesAdminManager = database.adminManagerDao().getAllAdminManagersSnapshot().any { m ->
+                        (m.email.isNotBlank() && m.email.trim().lowercase() == profileEntity.email.trim().lowercase()) ||
+                        (m.phone.isNotBlank() && isPhoneMatchHelper(m.phone, profileEntity.phone))
+                    }
+
                     val role = sharedPrefs.getString("user_role_${profileEntity.email.trim().lowercase()}", "")
-                    val isPharmacistUser = role == "pharmacist" || profileEntity.role == "pharmacist"
-                    val isRestaurantUser = role == "restaurant" || profileEntity.role == "restaurant"
-                    val isAdminUser = (profileEntity.email.trim().lowercase() == "mawiaosman0@gmail.com" && !isPharmacistUser && !isRestaurantUser) || role == "admin" || profileEntity.role == "admin"
+                    val isPharmacistUser = role == "pharmacist" || profileEntity.role == "pharmacist" || matchesPharmacist
+                    val isRestaurantUser = role == "restaurant" || profileEntity.role == "restaurant" || matchesRestaurant
+                    val isManagerUser = role == "admin" || profileEntity.role == "admin" || matchesAdminManager
+                    val isAdminUser = (profileEntity.email.trim().lowercase() == "mawiaosman0@gmail.com") || isManagerUser
 
                     if (isAdminUser) {
                         _currentScreen.value = Screen.Admin
-                    } else if (matchesCourier) {
-                        _currentScreen.value = Screen.Courier
-                    } else if (matchesSeller) {
-                        _currentScreen.value = Screen.Seller
                     } else if (isPharmacistUser) {
                         _currentScreen.value = Screen.Pharmacist
                     } else if (isRestaurantUser) {
                         _selectedCategory.value = "restaurant"
                         _currentScreen.value = Screen.Restaurant
+                    } else if (matchesCourier || role == "courier") {
+                        _currentScreen.value = Screen.Courier
+                    } else if (matchesSeller || role == "seller") {
+                        _currentScreen.value = Screen.Seller
                     } else {
                         _selectedCategory.value = ""
                         _currentScreen.value = Screen.Home
@@ -480,21 +495,36 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                             val matchesSeller = database.sellerDao().getAllSellersSnapshot().any { s ->
                                 s.email.trim().lowercase() == p.email.trim().lowercase()
                             }
-                            val isPharmacistUser = role == "pharmacist" || sharedPrefs.getString("user_role_${p.email.trim().lowercase()}", "") == "pharmacist" || p.role == "pharmacist"
-                            val isRestaurantUser = role == "restaurant" || sharedPrefs.getString("user_role_${p.email.trim().lowercase()}", "") == "restaurant" || p.role == "restaurant"
-                            val isAdminUser = (p.email.trim().lowercase() == "mawiaosman0@gmail.com" && !isPharmacistUser && !isRestaurantUser) || role == "admin" || sharedPrefs.getString("user_role_${p.email.trim().lowercase()}", "") == "admin" || p.role == "admin"
+                            val matchesPharmacist = database.pharmacyDao().getAllPharmaciesSnapshot().any { pharm ->
+                                (pharm.pharmacistEmail.isNotBlank() && pharm.pharmacistEmail.trim().lowercase() == p.email.trim().lowercase()) ||
+                                (pharm.phone.isNotBlank() && isPhoneMatchHelper(pharm.phone, p.phone)) ||
+                                (pharm.doctorName.isNotBlank() && pharm.doctorName.trim().lowercase() == p.name.trim().lowercase())
+                            }
+                            val matchesRestaurant = database.restaurantDao().getAllRestaurantsSnapshot().any { rest ->
+                                (rest.phone.isNotBlank() && isPhoneMatchHelper(rest.phone, p.phone)) ||
+                                (rest.name.isNotBlank() && rest.name.trim().lowercase() == p.name.trim().lowercase())
+                            }
+                            val matchesAdminManager = database.adminManagerDao().getAllAdminManagersSnapshot().any { m ->
+                                (m.email.isNotBlank() && m.email.trim().lowercase() == p.email.trim().lowercase()) ||
+                                (m.phone.isNotBlank() && isPhoneMatchHelper(m.phone, p.phone))
+                            }
+
+                            val isPharmacistUser = role == "pharmacist" || sharedPrefs.getString("user_role_${p.email.trim().lowercase()}", "") == "pharmacist" || p.role == "pharmacist" || matchesPharmacist
+                            val isRestaurantUser = role == "restaurant" || sharedPrefs.getString("user_role_${p.email.trim().lowercase()}", "") == "restaurant" || p.role == "restaurant" || matchesRestaurant
+                            val isManagerUser = role == "admin" || sharedPrefs.getString("user_role_${p.email.trim().lowercase()}", "") == "admin" || p.role == "admin" || matchesAdminManager
+                            val isAdminUser = (p.email.trim().lowercase() == "mawiaosman0@gmail.com") || isManagerUser
 
                             if (isAdminUser) {
                                 _currentScreen.value = Screen.Admin
-                            } else if (role == "courier" || matchesCourier) {
-                                _currentScreen.value = Screen.Courier
-                            } else if (role == "seller" || matchesSeller) {
-                                _currentScreen.value = Screen.Seller
                             } else if (isPharmacistUser) {
                                 _currentScreen.value = Screen.Pharmacist
                             } else if (isRestaurantUser) {
                                 _selectedCategory.value = "restaurant"
                                 _currentScreen.value = Screen.Restaurant
+                            } else if (role == "courier" || matchesCourier) {
+                                _currentScreen.value = Screen.Courier
+                            } else if (role == "seller" || matchesSeller) {
+                                _currentScreen.value = Screen.Seller
                             } else {
                                 _selectedCategory.value = ""
                                 _currentScreen.value = Screen.Home
@@ -916,20 +946,36 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                 val matchesSeller = database.sellerDao().getAllSellersSnapshot().any { s ->
                     s.email.trim().lowercase() == p.email.trim().lowercase()
                 }
-                val isPharmacistUser = p.role == "pharmacist" || sharedPrefs.getString("user_role_${p.email.trim().lowercase()}", "") == "pharmacist"
-                val isRestaurantUser = p.role == "restaurant" || sharedPrefs.getString("user_role_${p.email.trim().lowercase()}", "") == "restaurant"
+                val matchesPharmacist = database.pharmacyDao().getAllPharmaciesSnapshot().any { pharm ->
+                    (pharm.pharmacistEmail.isNotBlank() && pharm.pharmacistEmail.trim().lowercase() == p.email.trim().lowercase()) ||
+                    (pharm.phone.isNotBlank() && isPhoneMatchHelper(pharm.phone, p.phone)) ||
+                    (pharm.doctorName.isNotBlank() && pharm.doctorName.trim().lowercase() == p.name.trim().lowercase())
+                }
+                val matchesRestaurant = database.restaurantDao().getAllRestaurantsSnapshot().any { rest ->
+                    (rest.phone.isNotBlank() && isPhoneMatchHelper(rest.phone, p.phone)) ||
+                    (rest.name.isNotBlank() && rest.name.trim().lowercase() == p.name.trim().lowercase())
+                }
+                val matchesAdminManager = database.adminManagerDao().getAllAdminManagersSnapshot().any { m ->
+                    (m.email.isNotBlank() && m.email.trim().lowercase() == p.email.trim().lowercase()) ||
+                    (m.phone.isNotBlank() && isPhoneMatchHelper(m.phone, p.phone))
+                }
 
-                if (p.email.trim().lowercase() == "mawiaosman0@gmail.com" && !isPharmacistUser && !isRestaurantUser) {
+                val isPharmacistUser = p.role == "pharmacist" || sharedPrefs.getString("user_role_${p.email.trim().lowercase()}", "") == "pharmacist" || matchesPharmacist
+                val isRestaurantUser = p.role == "restaurant" || sharedPrefs.getString("user_role_${p.email.trim().lowercase()}", "") == "restaurant" || matchesRestaurant
+                val isManagerUser = p.role == "admin" || sharedPrefs.getString("user_role_${p.email.trim().lowercase()}", "") == "admin" || matchesAdminManager
+                val isAdminUser = (p.email.trim().lowercase() == "mawiaosman0@gmail.com") || isManagerUser
+
+                if (isAdminUser) {
                     _currentScreen.value = Screen.Admin
-                } else if (matchesCourier) {
-                    _currentScreen.value = Screen.Courier
-                } else if (matchesSeller) {
-                    _currentScreen.value = Screen.Seller
                 } else if (isPharmacistUser) {
                     _currentScreen.value = Screen.Pharmacist
                 } else if (isRestaurantUser) {
                     _selectedCategory.value = "restaurant"
                     _currentScreen.value = Screen.Restaurant
+                } else if (matchesCourier || p.role == "courier") {
+                    _currentScreen.value = Screen.Courier
+                } else if (matchesSeller || p.role == "seller") {
+                    _currentScreen.value = Screen.Seller
                 } else {
                     _selectedCategory.value = ""
                     _currentScreen.value = Screen.Home
@@ -2403,5 +2449,11 @@ $couponMessage---------------------------
                 onResult(e.localizedMessage)
             }
         }
+    }
+
+    private fun isPhoneMatchHelper(p1: String, p2: String): Boolean {
+        val clean1 = p1.trim().replace("+", "").replace(" ", "").removePrefix("249").removePrefix("0")
+        val clean2 = p2.trim().replace("+", "").replace(" ", "").removePrefix("249").removePrefix("0")
+        return clean1.isNotBlank() && clean2.isNotBlank() && (clean1 == clean2 || clean1.contains(clean2) || clean2.contains(clean1))
     }
 }
