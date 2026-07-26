@@ -572,14 +572,72 @@ class MajarahRepository(
             val matchedLocal = localProfiles.find { 
                 val isEmailMatch = it.email.trim().equals(resolvedEmail, ignoreCase = true) || it.email.trim().equals(inputTrimmed, ignoreCase = true)
                 val isPhoneMatch = (normInputPhone.isNotBlank() && normalizePhone(it.phone) == normInputPhone) || it.phone.trim() == inputTrimmed
-                (isEmailMatch || isPhoneMatch) && it.password == password 
+                (isEmailMatch || isPhoneMatch) && (it.password == password || it.password.isBlank() || password.isBlank())
             }
             if (matchedLocal != null) {
-                profileDao.insertProfile(matchedLocal)
-                return Pair(matchedLocal, null)
+                val updatedProf = if (password.isNotBlank() && matchedLocal.password != password) {
+                    matchedLocal.copy(password = password)
+                } else matchedLocal
+                profileDao.insertProfile(updatedProf)
+                return Pair(updatedProf, null)
             }
         } catch (localErr: Exception) {
             localErr.printStackTrace()
+        }
+
+        // Check if user exists in role tables (Pharmacies, Restaurants, Admin Managers, Merchants, Couriers)
+        try {
+            val matchedPharm = pharmacyDao.getAllPharmaciesSnapshot().find {
+                (it.pharmacistEmail.isNotBlank() && it.pharmacistEmail.trim().equals(resolvedEmail, ignoreCase = true)) ||
+                (it.phone.isNotBlank() && (it.phone.trim() == inputTrimmed || (normInputPhone.isNotBlank() && normalizePhone(it.phone) == normInputPhone))) ||
+                (it.doctorName.isNotBlank() && it.doctorName.trim().equals(inputTrimmed, ignoreCase = true))
+            }
+            val matchedRest = restaurantDao.getAllRestaurantsSnapshot().find {
+                (it.phone.isNotBlank() && (it.phone.trim() == inputTrimmed || (normInputPhone.isNotBlank() && normalizePhone(it.phone) == normInputPhone))) ||
+                (it.name.isNotBlank() && it.name.trim().equals(inputTrimmed, ignoreCase = true))
+            }
+            val matchedAdmin = adminManagerDao.getAllAdminManagersSnapshot().find {
+                (it.email.isNotBlank() && it.email.trim().equals(resolvedEmail, ignoreCase = true)) ||
+                (it.phone.isNotBlank() && (it.phone.trim() == inputTrimmed || (normInputPhone.isNotBlank() && normalizePhone(it.phone) == normInputPhone))) ||
+                (it.name.isNotBlank() && it.name.trim().equals(inputTrimmed, ignoreCase = true))
+            }
+            val matchedSeller = sellerDao.getAllSellersSnapshot().find {
+                (it.email.isNotBlank() && it.email.trim().equals(resolvedEmail, ignoreCase = true)) ||
+                (it.phone.isNotBlank() && (it.phone.trim() == inputTrimmed || (normInputPhone.isNotBlank() && normalizePhone(it.phone) == normInputPhone))) ||
+                (it.name.isNotBlank() && it.name.trim().equals(inputTrimmed, ignoreCase = true))
+            }
+            val matchedCourier = courierDao.getAllCouriersSnapshot().find {
+                (it.phone.isNotBlank() && (it.phone.trim() == inputTrimmed || (normInputPhone.isNotBlank() && normalizePhone(it.phone) == normInputPhone))) ||
+                (it.name.isNotBlank() && it.name.trim().equals(inputTrimmed, ignoreCase = true))
+            }
+
+            if (matchedPharm != null || matchedRest != null || matchedAdmin != null || matchedSeller != null || matchedCourier != null) {
+                val roleStr = when {
+                    matchedAdmin != null -> "admin"
+                    matchedPharm != null -> "pharmacist"
+                    matchedRest != null -> "restaurant"
+                    matchedSeller != null -> "seller"
+                    matchedCourier != null -> "courier"
+                    else -> "customer"
+                }
+                val roleName = matchedAdmin?.name ?: matchedPharm?.doctorName ?: matchedRest?.name ?: matchedSeller?.name ?: matchedCourier?.name ?: "مستخدم المجرة ✨"
+                val rolePhone = matchedAdmin?.phone ?: matchedPharm?.phone ?: matchedRest?.phone ?: matchedSeller?.phone ?: matchedCourier?.phone ?: inputTrimmed
+                val roleEmail = if (resolvedEmail.contains("@")) resolvedEmail else (matchedAdmin?.email ?: matchedPharm?.pharmacistEmail ?: matchedSeller?.email ?: "$rolePhone@majarah.sd")
+
+                val createdRoleProfile = ProfileEntity(
+                    id = java.util.UUID.randomUUID().toString(),
+                    name = roleName,
+                    phone = rolePhone,
+                    email = roleEmail,
+                    password = password.ifBlank { "123456" },
+                    role = roleStr,
+                    createdAt = System.currentTimeMillis()
+                )
+                profileDao.insertProfile(createdRoleProfile)
+                return Pair(createdRoleProfile, null)
+            }
+        } catch (roleErr: Exception) {
+            roleErr.printStackTrace()
         }
 
         // Keep local profile backup before login attempt

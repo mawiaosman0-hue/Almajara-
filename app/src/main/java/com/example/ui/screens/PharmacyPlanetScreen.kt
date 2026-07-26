@@ -870,24 +870,7 @@ fun PharmacistDashboard(
     val context = LocalContext.current
     var activeTab by remember { mutableStateOf(0) } // 0: Orders, 1: Products
     
-    // Play Audible Notification Alarm when a new order with state "بانتظار الصيدلي" is assigned!
     val pendingCount = remember(allOrders) { allOrders.count { it.status == "بانتظار الصيدلي" } }
-    var previousPendingCount by remember { mutableStateOf(0) }
-
-    LaunchedEffect(pendingCount) {
-        if (pendingCount > previousPendingCount) {
-            // Trigger audial alarm notification natively using RingtoneManager!
-            try {
-                val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
-                val r = android.media.RingtoneManager.getRingtone(context, alertUri)
-                r?.play()
-                Toast.makeText(context, "🔔 تنبيه عاجل: تم إرسال روشتة جديدة لصيدليتك بالمجرة!", Toast.LENGTH_LONG).show()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-        previousPendingCount = pendingCount
-    }
 
     var showEditPharmacyDialog by remember { mutableStateOf(false) }
 
@@ -1025,6 +1008,33 @@ fun PharmacistOrdersTab(
         orders.filter { it.pharmacyId == pharmacyId }
     }
 
+    var activeRingtone by remember { mutableStateOf<android.media.Ringtone?>(null) }
+    var isPharmAlarmRinging by remember { mutableStateOf(false) }
+
+    val pendingCount = remember(myPharmacyOrders) { myPharmacyOrders.count { it.status == "بانتظار الصيدلي" } }
+    var previousPendingCount by remember { mutableStateOf(-1) }
+
+    LaunchedEffect(pendingCount) {
+        if (previousPendingCount != -1 && pendingCount > previousPendingCount) {
+            try {
+                val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_RINGTONE)
+                    ?: android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM)
+                    ?: android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+                val r = android.media.RingtoneManager.getRingtone(context, alertUri)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                    r?.isLooping = true
+                }
+                r?.play()
+                activeRingtone = r
+                isPharmAlarmRinging = true
+                Toast.makeText(context, "🔔 تنبيه عاجل: تم إرسال روشتة جديدة لصيدليتك بالمجرة!", Toast.LENGTH_LONG).show()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        previousPendingCount = pendingCount
+    }
+
     var subTabState by remember { mutableStateOf(0) } // 0: Active, 1: Previous Prescriptions
     
     val activeOrders = remember(myPharmacyOrders) {
@@ -1055,7 +1065,7 @@ fun PharmacistOrdersTab(
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             val tabs = listOf(
-                "روشتات سابقة 📜 (${previousOrders.size})" to 1,
+                "الطلبات المكتملة ✅ (${previousOrders.size})" to 1,
                 "روشتات نشطة ⏳ (${activeOrders.size})" to 0
             )
             tabs.forEach { (label, index) ->
@@ -1079,6 +1089,35 @@ fun PharmacistOrdersTab(
             }
         }
 
+        if (isPharmAlarmRinging) {
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFD32F2F)),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("🚨 تنبيه صيدلاني عاجل!", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text("وصلت روشتة/طلب جديد للصيدلية بانتظار موافقتك! 💊", color = Color.White.copy(0.9f), fontSize = 11.sp)
+                    }
+                    Button(
+                        onClick = {
+                            isPharmAlarmRinging = false
+                            try { activeRingtone?.stop() } catch (e: Exception) {}
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Red),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("إيقاف الصوت 🔕", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+
         if (displayOrders.isEmpty()) {
             Box(
                 modifier = Modifier
@@ -1087,7 +1126,7 @@ fun PharmacistOrdersTab(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = if (subTabState == 0) "لا توجد روشتات أو طلبات نشطة حالياً صيدليتك 📭" else "لا توجد روشتات سابقة منفذة صيدليتك 📜",
+                    text = if (subTabState == 0) "لا توجد روشتات أو طلبات نشطة حالياً بصيدليتك 📭" else "لا توجد طلبات مكتملة سابقة بصيدليتك 📜",
                     color = MediumContrastTextDark,
                     fontSize = 12.sp,
                     textAlign = TextAlign.Center
@@ -1095,7 +1134,8 @@ fun PharmacistOrdersTab(
             }
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                displayOrders.sortedByDescending { it.createdAt }.forEach { order ->
+                val sortedPharmOrders = displayOrders.sortedByDescending { it.createdAt }
+                sortedPharmOrders.forEachIndexed { orderIdx, order ->
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = CosmicDeepSpace),
@@ -1131,7 +1171,12 @@ fun PharmacistOrdersTab(
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
-                                Text("روشتة من: ${order.customerName}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text(
+                                    text = "الترتيب: الطلب رقم ${orderIdx + 1} 🔢 (روشتة #${order.id}) | من: ${order.customerName}",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp
+                                )
                             }
 
                             Spacer(modifier = Modifier.height(4.dp))
@@ -2356,7 +2401,13 @@ fun CustomerPharmacyView(
             containerColor = CosmicSurface,
             title = { Text("تقديم روشتة طبية أو طلب دواء 📸💊", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Right, modifier = Modifier.fillMaxWidth()) },
             text = {
-                Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 480.dp)
+                        .verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.End
+                ) {
                     // Warning Notice Message to Customer
                     Box(
                         modifier = Modifier
@@ -2579,7 +2630,7 @@ fun AdminPharmacyPortal(
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             val subTabs = listOf(
-                "طلبات منفذة (${completedPharmacyOrders.size}) 📋" to 3,
+                "الطلبات المكتملة (${completedPharmacyOrders.size}) ✅" to 3,
                 "روشتات نشطة (${activePharmacyOrders.size}) 📥" to 2,
                 "منتجات (${products.size}) 🧪" to 1,
                 "صيدليات (${pendingPharmaciesCount}) 🏥" to 0
@@ -3240,6 +3291,7 @@ fun EditPharmacyDialog(
         },
         text = {
             LazyColumn(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 450.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 item {

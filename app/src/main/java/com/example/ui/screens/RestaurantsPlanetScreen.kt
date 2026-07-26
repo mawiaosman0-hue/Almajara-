@@ -101,14 +101,25 @@ fun RestaurantsPlanetSection(
         else orders.filter { it.restaurantId == myRestaurant.id }
     }
 
-    // Play sound on new order received
+    // Play continuous sound alarm on new order received
+    var activeRestaurantRingtone by remember { mutableStateOf<android.media.Ringtone?>(null) }
+    var isRestAlarmRinging by remember { mutableStateOf(false) }
     var lastSeenOrderCount by remember { mutableStateOf(-1) }
+
     LaunchedEffect(myRestaurantOrders) {
         if (lastSeenOrderCount != -1 && myRestaurantOrders.size > lastSeenOrderCount) {
             try {
-                val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+                val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_RINGTONE)
+                    ?: android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM)
+                    ?: android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
                 val r = android.media.RingtoneManager.getRingtone(context, alertUri)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                    r?.isLooping = true
+                }
                 r?.play()
+                activeRestaurantRingtone = r
+                isRestAlarmRinging = true
+                Toast.makeText(context, "🔔 تنبيه عاجل: وصل طلب طعام جديد لمطعمك بالمجرة!", Toast.LENGTH_LONG).show()
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -550,6 +561,35 @@ fun RestaurantsPlanetSection(
                         val displayedOrders = if (restaurantOwnerOrdersSubTab == 0) activeRestaurantOrders else completedRestaurantOrders
 
                         Column(modifier = Modifier.fillMaxSize()) {
+                            if (isRestAlarmRinging) {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFFD32F2F)),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text("🚨 تنبيه مطعم عاجل!", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                            Text("وصل طلب طعام جديد لمطعمك الآن! 🍔🍕", color = Color.White.copy(0.9f), fontSize = 11.sp)
+                                        }
+                                        Button(
+                                            onClick = {
+                                                isRestAlarmRinging = false
+                                                try { activeRestaurantRingtone?.stop() } catch (e: Exception) {}
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Red),
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Text("إيقاف الصوت 🔕", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                        }
+                                    }
+                                }
+                            }
+
                             // Owner Orders Tabs
                             Row(
                                 modifier = Modifier
@@ -2230,6 +2270,18 @@ fun RestaurantOrderCard(
                     text = "العميل: ${order.customerName}",
                     color = Color.White.copy(0.6f),
                     fontSize = 11.sp
+                )
+            }
+
+            if (order.deliveryLocation.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "📍 موقع التوصيل: ${order.deliveryLocation}",
+                    color = CosmicSecondary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Right
                 )
             }
 

@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -3892,7 +3893,7 @@ fun HistoryScreenBody(
                             ),
                             shape = RoundedCornerShape(10.dp)
                         ) {
-                            Text("السجل والمكتملة 📜 ($totalCompletedCount)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("الطلبات المكتملة ✅ ($totalCompletedCount)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
 
@@ -5303,9 +5304,15 @@ fun LoginScreenBody(
     val isGlobalLoading by viewModel.isGlobalLoading.collectAsStateWithLifecycle()
     val isCurrentlyLoading = isCheckingEmail || isLoginLoading || isGlobalLoading
     val adminManagers by viewModel.allAdminManagers.collectAsStateWithLifecycle()
+    val allPharmacies by viewModel.allPharmacies.collectAsStateWithLifecycle()
+    val allRestaurants by viewModel.allRestaurants.collectAsStateWithLifecycle()
     val allProfiles by viewModel.allProfilesFlow.collectAsStateWithLifecycle()
 
     var remotePasswordCheckResult by remember { mutableStateOf<Boolean?>(null) }
+
+    var adminPassword by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    var adminPassVisible by remember { mutableStateOf(false) }
 
     val logoScale = remember { Animatable(0.2f) }
     val logoAlpha = remember { Animatable(0f) }
@@ -5739,9 +5746,69 @@ fun LoginScreenBody(
                         null
                     }
 
+                    val matchingPharmacy = if (email.trim().isNotEmpty()) {
+                        allPharmacies.firstOrNull { pharm ->
+                            val cleanInput = email.trim().lowercase()
+                            pharm.pharmacistEmail.trim().lowercase() == cleanInput || pharm.phone.trim() == cleanInput || pharm.doctorName.trim().lowercase() == cleanInput
+                        }
+                    } else null
+
+                    val matchingRestaurant = if (email.trim().isNotEmpty()) {
+                        allRestaurants.firstOrNull { rest ->
+                            val cleanInput = email.trim().lowercase()
+                            rest.phone.trim() == cleanInput || rest.name.trim().lowercase() == cleanInput
+                        }
+                    } else null
+
                     val hasAlreadySetPassword = (matchingAdminManager != null && (allProfiles.any { profile ->
                         profile.email.trim().lowercase() == matchingAdminManager.email.trim().lowercase() && !profile.password.isNullOrBlank()
                     } || remotePasswordCheckResult == true))
+
+                    if (isRegister && (matchingPharmacy != null || matchingRestaurant != null || (matchingAdminManager != null && hasAlreadySetPassword))) {
+                        item {
+                            Card(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                colors = CardDefaults.cardColors(containerColor = CosmicSecondary.copy(alpha = 0.2f)),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, CosmicSecondary),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = viewModel.t("حسابك مسجل مسبقاً بالمجرة! 🌟🟢", "Your account is already registered in Almajra! 🌟🟢"),
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    val roleText = when {
+                                        matchingPharmacy != null -> "صيدلية (${matchingPharmacy.name})"
+                                        matchingRestaurant != null -> "مطعم (${matchingRestaurant.name})"
+                                        else -> "مدير إداري (${matchingAdminManager?.name})"
+                                    }
+                                    Text(
+                                        text = viewModel.t("تم العثور على بياناتك كـ $roleText. لا تحتاج لإنشاء حساب جديد، فقط أدخل كلمة السر والدخول المباشر لصفحتك الخاصّة.", "Found your account as $roleText. No need to re-register, just enter password for direct access."),
+                                        color = CosmicSecondary,
+                                        fontSize = 11.sp,
+                                        textAlign = TextAlign.Center,
+                                        lineHeight = 15.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Button(
+                                        onClick = { viewModel.isRegisterMode.value = false },
+                                        colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(viewModel.t("الانتقال لتسجيل الدخول المباشر 🔑", "Switch to Direct Login 🔑"), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     if (matchingAdminManager != null && !hasAlreadySetPassword) {
                         item {
@@ -5773,9 +5840,6 @@ fun LoginScreenBody(
                                     
                                     Spacer(modifier = Modifier.height(10.dp))
                                     
-                                    var adminPassword by remember { mutableStateOf("") }
-                                    var confirmPassword by remember { mutableStateOf("") }
-                                    var adminPassVisible by remember { mutableStateOf(false) }
                                     
                                     OutlinedTextField(
                                         value = adminPassword,
@@ -12940,9 +13004,10 @@ fun SellerDashboardScreenBody(viewModel: MajarahViewModel) {
                                                 )
 
                                                 Text(
-                                                    " السعر: ",
-                                                    color = Color.Gray,
-                                                    fontSize = 10.sp
+                                                    " سعرك الأصلي (التاجر): ",
+                                                    color = CosmicSecondary,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold
                                                 )
                                             }
                                         }
@@ -14168,7 +14233,7 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         if (courierMainCategoryTab == 0) {
-                            items(filteredGroupedOrders.entries.toList()) { (orderId, itemsList) ->
+                            itemsIndexed(filteredGroupedOrders.entries.toList()) { orderIdx, (orderId, itemsList) ->
                                 val parent = itemsList.firstOrNull()
                                 val totalPrice = itemsList.sumOf { it.priceAtOrder * it.quantity }
                                 val isCompleted = parent?.statusArabic?.let { status ->
@@ -14198,10 +14263,11 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                                                 color = if (isCompleted) Color.Green else CosmicSecondary
                                             )
                                             Text(
-                                                text = "طلب #${orderId.take(10)}\nالتاريخ: " + java.text.SimpleDateFormat("yyyy/MM/dd HH:mm", java.util.Locale.US).format(java.util.Date(parent?.orderDate ?: System.currentTimeMillis())),
+                                                text = "الترتيب: الطلب رقم ${orderIdx + 1} 🔢 (طلب #${orderId.take(10)})\nالتاريخ: " + java.text.SimpleDateFormat("yyyy/MM/dd HH:mm", java.util.Locale.US).format(java.util.Date(parent?.orderDate ?: System.currentTimeMillis())),
                                                 fontSize = 11.sp,
                                                 color = CosmicSecondary,
-                                                fontWeight = FontWeight.Bold
+                                                fontWeight = FontWeight.Bold,
+                                                textAlign = TextAlign.Right
                                             )
                                         }
                                         Spacer(modifier = Modifier.height(8.dp))
@@ -14210,7 +14276,7 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                                         Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
                                             Text("الزبون: ${parent?.customerName}", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Right)
                                             Text("رقم الهاتف: ${parent?.customerPhone}", fontSize = 10.sp, color = Color.White.copy(0.8f), textAlign = TextAlign.Right)
-                                            Text("عنوان التسليم: ${parent?.customerAddress}", fontSize = 10.sp, color = Color.White.copy(0.8f), textAlign = TextAlign.Right)
+                                            Text("📍 موقع/عنوان التسليم: ${parent?.customerAddress}", fontSize = 11.sp, color = CosmicSecondary, fontWeight = FontWeight.Bold, textAlign = TextAlign.Right)
                                         }
 
                                         Spacer(modifier = Modifier.height(8.dp))
@@ -14458,7 +14524,7 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                                 }
                             }
                         } else if (courierMainCategoryTab == 1) {
-                            items(filteredRestaurantOrders) { order ->
+                            itemsIndexed(filteredRestaurantOrders) { orderIdx, order ->
                                 val isCompleted = (order.status.startsWith("تم التسليم") || order.status.contains("إغلاق") || order.status.contains("تسليم العميل")) && !order.status.contains("المندوب")
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
@@ -14472,12 +14538,13 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Text(order.status, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isCompleted) Color.Green else CosmicSecondary)
-                                            Text("طلب مطعم #${order.id}\n${order.restaurantName}", fontSize = 11.sp, color = CosmicSecondary, fontWeight = FontWeight.Bold, textAlign = TextAlign.Right)
+                                            Text("الترتيب: الطلب رقم ${orderIdx + 1} 🔢 (طلب مطعم #${order.id})\nالمطعم: ${order.restaurantName}", fontSize = 11.sp, color = CosmicSecondary, fontWeight = FontWeight.Bold, textAlign = TextAlign.Right)
                                         }
                                         Spacer(modifier = Modifier.height(8.dp))
                                         Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
                                             Text("الزبون: ${order.customerName}", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Right)
                                             Text("رقم الهاتف: ${order.customerPhone}", fontSize = 10.sp, color = Color.White.copy(0.8f), textAlign = TextAlign.Right)
+                                            Text("📍 موقع/عنوان التوصيل: ${order.deliveryLocation.ifBlank { "السودان" }}", fontSize = 11.sp, color = CosmicSecondary, fontWeight = FontWeight.Bold, textAlign = TextAlign.Right)
                                             Text("المطعم: ${order.restaurantName} (${order.restaurantPhone})", fontSize = 10.sp, color = Color.White.copy(0.8f), textAlign = TextAlign.Right)
                                         }
                                         Spacer(modifier = Modifier.height(8.dp))
@@ -14629,7 +14696,7 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                                 }
                             }
                         } else {
-                            items(filteredPharmacyOrders) { order ->
+                            itemsIndexed(filteredPharmacyOrders) { orderIdx, order ->
                                 val isCompleted = (order.status.contains("تم التوصيل") || order.status.contains("تم التسليم") || order.status.contains("إغلاق")) && !order.status.contains("المندوب") && !order.status.contains("للمندوب")
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
@@ -14643,12 +14710,15 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Text(order.status, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isCompleted) Color.Green else Color(0xFF64B5F6))
-                                            Text("طلب صيدلية #${order.id}", fontSize = 11.sp, color = CosmicSecondary, fontWeight = FontWeight.Bold)
+                                            Text("الترتيب: الطلب رقم ${orderIdx + 1} 🔢 (روشتة صيدلية #${order.id})", fontSize = 11.sp, color = CosmicSecondary, fontWeight = FontWeight.Bold)
                                         }
                                         Spacer(modifier = Modifier.height(8.dp))
                                         Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
                                             Text("المريض/الزبون: ${order.customerName}", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Right)
                                             Text("رقم الهاتف: ${order.customerPhone}", fontSize = 10.sp, color = Color.White.copy(0.8f), textAlign = TextAlign.Right)
+                                            if (order.deliveryLocation.isNotBlank()) {
+                                                Text("📍 موقع/عنوان التوصيل: ${order.deliveryLocation}", fontSize = 11.sp, color = Color(0xFF64B5F6), fontWeight = FontWeight.Bold, textAlign = TextAlign.Right)
+                                            }
                                         }
                                         Spacer(modifier = Modifier.height(8.dp))
                                         HorizontalDivider(color = Color.White.copy(0.1f))

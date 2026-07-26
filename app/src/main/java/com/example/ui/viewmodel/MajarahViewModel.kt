@@ -604,23 +604,47 @@ class MajarahViewModel(application: Application) : AndroidViewModel(application)
                             c.phone.trim().replace("+", "").replace(" ", "") == cleanP || c.phone.trim() == pPhone.trim()
                         }
                         val matchesSeller = database.sellerDao().getAllSellersSnapshot().any { s ->
-                            s.email.trim().lowercase() == p?.email?.trim()?.lowercase()
+                            s.email.trim().lowercase() == p?.email?.trim()?.lowercase() || (cleanP.isNotBlank() && s.phone.trim() == pPhone.trim())
                         }
-                        val isPharmacistUser = sharedPrefs.getString("user_role_${p?.email?.trim()?.lowercase()}", "") == "pharmacist" || p?.role == "pharmacist"
-                        val isRestaurantUser = sharedPrefs.getString("user_role_${p?.email?.trim()?.lowercase()}", "") == "restaurant" || p?.role == "restaurant"
-                        val isAdminUser = (p?.email?.trim()?.lowercase() == "mawiaosman0@gmail.com" && !isPharmacistUser && !isRestaurantUser) || sharedPrefs.getString("user_role_${p?.email?.trim()?.lowercase()}", "") == "admin" || p?.role == "admin"
+                        val matchesPharmacist = database.pharmacyDao().getAllPharmaciesSnapshot().any { pharm ->
+                            (pharm.pharmacistEmail.isNotBlank() && pharm.pharmacistEmail.trim().lowercase() == p?.email?.trim()?.lowercase()) ||
+                            (pharm.phone.isNotBlank() && isPhoneMatchHelper(pharm.phone, pPhone)) ||
+                            (pharm.doctorName.isNotBlank() && pharm.doctorName.trim().lowercase() == p?.name?.trim()?.lowercase())
+                        }
+                        val matchesRestaurant = database.restaurantDao().getAllRestaurantsSnapshot().any { rest ->
+                            (rest.phone.isNotBlank() && isPhoneMatchHelper(rest.phone, pPhone)) ||
+                            (rest.name.isNotBlank() && rest.name.trim().lowercase() == p?.name?.trim()?.lowercase())
+                        }
+                        val matchesAdminManager = database.adminManagerDao().getAllAdminManagersSnapshot().any { m ->
+                            (m.email.isNotBlank() && m.email.trim().lowercase() == p?.email?.trim()?.lowercase()) ||
+                            (m.phone.isNotBlank() && isPhoneMatchHelper(m.phone, pPhone))
+                        }
+
+                        val savedRole = if (p != null) sharedPrefs.getString("user_role_${p.email.trim().lowercase()}", "") else ""
+                        val isPharmacistUser = savedRole == "pharmacist" || p?.role == "pharmacist" || matchesPharmacist
+                        val isRestaurantUser = savedRole == "restaurant" || p?.role == "restaurant" || matchesRestaurant
+                        val isManagerUser = savedRole == "admin" || p?.role == "admin" || matchesAdminManager
+                        val isAdminUser = (p?.email?.trim()?.lowercase() == "mawiaosman0@gmail.com") || isManagerUser
+
+                        if (isPharmacistUser && p != null) {
+                            sharedPrefs.edit().putString("user_role_${p.email.trim().lowercase()}", "pharmacist").apply()
+                        } else if (isRestaurantUser && p != null) {
+                            sharedPrefs.edit().putString("user_role_${p.email.trim().lowercase()}", "restaurant").apply()
+                        } else if (isManagerUser && p != null) {
+                            sharedPrefs.edit().putString("user_role_${p.email.trim().lowercase()}", "admin").apply()
+                        }
 
                         if (isAdminUser) {
                             _currentScreen.value = Screen.Admin
-                        } else if (matchesCourier) {
-                            _currentScreen.value = Screen.Courier
-                        } else if (matchesSeller) {
-                            _currentScreen.value = Screen.Seller
                         } else if (isPharmacistUser) {
                             _currentScreen.value = Screen.Pharmacist
                         } else if (isRestaurantUser) {
                             _selectedCategory.value = "restaurant"
                             _currentScreen.value = Screen.Restaurant
+                        } else if (matchesCourier || savedRole == "courier" || p?.role == "courier") {
+                            _currentScreen.value = Screen.Courier
+                        } else if (matchesSeller || savedRole == "seller" || p?.role == "seller") {
+                            _currentScreen.value = Screen.Seller
                         } else {
                             _selectedCategory.value = ""
                             _currentScreen.value = Screen.Home
