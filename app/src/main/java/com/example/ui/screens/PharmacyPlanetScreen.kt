@@ -1017,13 +1017,8 @@ fun PharmacistOrdersTab(
     LaunchedEffect(pendingCount) {
         if (previousPendingCount != -1 && pendingCount > previousPendingCount) {
             try {
-                val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_RINGTONE)
-                    ?: android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM)
-                    ?: android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+                val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
                 val r = android.media.RingtoneManager.getRingtone(context, alertUri)
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                    r?.isLooping = true
-                }
                 r?.play()
                 activeRingtone = r
                 isPharmAlarmRinging = true

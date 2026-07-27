@@ -7380,29 +7380,28 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
         allRestaurantOrders.count { it.status == "معلق" } + restaurants.count { !it.isApproved }
     }
 
+    val pendingSellersCount = remember(sellers) {
+        sellers.size
+    }
+
     var lastPendingCourierOrdersCount by remember { mutableStateOf(pendingCourierOrdersCount) }
     var lastPendingProductsCount by remember { mutableStateOf(pendingProductsCount) }
     var lastPendingPharmacyCount by remember { mutableStateOf(pendingPharmacyCount) }
     var lastPendingRestaurantOrdersCount by remember { mutableStateOf(pendingRestaurantOrdersCount) }
+    var lastPendingSellersCount by remember { mutableStateOf(pendingSellersCount) }
 
-    LaunchedEffect(pendingCourierOrdersCount, pendingProductsCount, pendingPharmacyCount, pendingRestaurantOrdersCount) {
+    LaunchedEffect(pendingCourierOrdersCount, pendingProductsCount, pendingPharmacyCount, pendingRestaurantOrdersCount, pendingSellersCount) {
         if (pendingCourierOrdersCount > lastPendingCourierOrdersCount ||
             pendingProductsCount > lastPendingProductsCount ||
             pendingPharmacyCount > lastPendingPharmacyCount ||
-            pendingRestaurantOrdersCount > lastPendingRestaurantOrdersCount
+            pendingRestaurantOrdersCount > lastPendingRestaurantOrdersCount ||
+            pendingSellersCount > lastPendingSellersCount
         ) {
             // Enable sound notifications for General Manager and Administrative Manager with the system message tone
             try {
                 val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
                 val r = android.media.RingtoneManager.getRingtone(context, alertUri)
                 r?.play()
-                
-                try {
-                    val tg = android.media.ToneGenerator(android.media.AudioManager.STREAM_ALARM, 100)
-                    tg.startTone(android.media.ToneGenerator.TONE_PROP_BEEP2, 1000)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
             } catch (e: Exception) {
                 // Fallback
             }
@@ -7411,6 +7410,7 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
         lastPendingProductsCount = pendingProductsCount
         lastPendingPharmacyCount = pendingPharmacyCount
         lastPendingRestaurantOrdersCount = pendingRestaurantOrdersCount
+        lastPendingSellersCount = pendingSellersCount
     }
 
     if (activeDetailDialog != null) {
@@ -13594,13 +13594,6 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                     val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
                     val r = android.media.RingtoneManager.getRingtone(context, alertUri)
                     r?.play()
-                    
-                    try {
-                        val tg = android.media.ToneGenerator(android.media.AudioManager.STREAM_ALARM, 100)
-                        tg.startTone(android.media.ToneGenerator.TONE_PROP_BEEP2, 1000)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
 
                     val totalActive = activeProductsCount + activeRestaurantsCount + activePharmacyCount
                     Toast.makeText(context, "🌌 تم إسناد مهمة جديدة لك! إجمالي المهام النشطة حالياً: $totalActive 🚴✨", Toast.LENGTH_LONG).show()
