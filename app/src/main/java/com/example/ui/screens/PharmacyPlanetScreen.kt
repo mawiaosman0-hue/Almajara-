@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import com.example.util.WhatsAppUtils
 import android.app.Application
 import android.media.AudioManager
 import android.media.ToneGenerator
@@ -1829,15 +1830,7 @@ fun CustomerPharmacyView(
 
                                     OutlinedButton(
                                         onClick = {
-                                            try {
-                                                val cleanNum = pharmacy.phone.trim().replace(" ", "").replace("+", "")
-                                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
-                                                    data = android.net.Uri.parse("https://api.whatsapp.com/send?phone=$cleanNum")
-                                                }
-                                                context.startActivity(intent)
-                                            } catch (e: Exception) {
-                                                Toast.makeText(context, "الرقم غير صالح لـ WhatsApp: ${pharmacy.phone}", Toast.LENGTH_SHORT).show()
-                                            }
+                                            WhatsAppUtils.sendWhatsAppMessage(context, pharmacy.phone, "")
                                         },
                                         modifier = Modifier.weight(1f),
                                         shape = RoundedCornerShape(8.dp),
@@ -2049,18 +2042,7 @@ fun CustomerPharmacyView(
                                                     بالشفاء العاجل والشفاء التام إن شاء الله 🤲🩺
                                                 """.trimIndent()
                                                 
-                                                try {
-                                                    val intent = android.content.Intent(
-                                                        android.content.Intent.ACTION_VIEW,
-                                                        android.net.Uri.parse("https://api.whatsapp.com/send?phone=$cleanPhone&text=${android.net.Uri.encode(shareMsg)}")
-                                                     )
-                                                     context.startActivity(intent)
-                                                } catch (e: Exception) {
-                                                     val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                                     val clip = android.content.ClipData.newPlainText("Majarah Pharmacy Invoice", shareMsg)
-                                                     clipboard.setPrimaryClip(clip)
-                                                     Toast.makeText(context, "تم نسخ تفاصيل الفاتورة! شاركها مع المندوب يدوياً 📋", Toast.LENGTH_LONG).show()
-                                                }
+                                                WhatsAppUtils.sendWhatsAppMessage(context, order.customerPhone, shareMsg)
                                             },
                                             colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary.copy(0.12f), contentColor = CosmicSecondary),
                                             border = BorderStroke(1.dp, CosmicSecondary),
@@ -2186,18 +2168,7 @@ fun CustomerPharmacyView(
                                                                 حالة الفاتورة: تم تأكيد الدفع ومطابقتها من العميل بنجاح مغلق 🔒✅
                                                             """.trimIndent()
                                                             
-                                                            try {
-                                                                val intent = android.content.Intent(
-                                                                    android.content.Intent.ACTION_VIEW,
-                                                                    android.net.Uri.parse("https://api.whatsapp.com/send?phone=$cleanPhone&text=${android.net.Uri.encode(shareMsg)}")
-                                                                )
-                                                                localContext.startActivity(intent)
-                                                            } catch (e: Exception) {
-                                                                val clipboard = localContext.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                                                val clip = android.content.ClipData.newPlainText("Majarah Pharmacy Invoice", shareMsg)
-                                                                clipboard.setPrimaryClip(clip)
-                                                                android.widget.Toast.makeText(localContext, "تم نسخ تفاصيل الفاتورة! شاركها مع المندوب يدوياً 📋", android.widget.Toast.LENGTH_LONG).show()
-                                                            }
+                                                            WhatsAppUtils.sendWhatsAppMessage(localContext, order.courierPhone, shareMsg)
                                                         },
                                                         colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
                                                         shape = RoundedCornerShape(8.dp),
@@ -2938,14 +2909,7 @@ fun AdminPharmacyPortal(
                                             // WhatsApp button
                                             Button(
                                                 onClick = {
-                                                    try {
-                                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
-                                                            data = android.net.Uri.parse("https://api.whatsapp.com/send?phone=${pharm.phone.trim()}")
-                                                        }
-                                                        context.startActivity(intent)
-                                                    } catch (e: Exception) {
-                                                        e.printStackTrace()
-                                                    }
+                                                    WhatsAppUtils.sendWhatsAppMessage(context, pharm.phone, "")
                                                 },
                                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366).copy(0.2f), contentColor = Color(0xFF25D366)),
                                                 shape = RoundedCornerShape(8.dp)

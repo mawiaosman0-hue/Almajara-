@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import com.example.util.WhatsAppUtils
 import android.widget.Toast
 import android.content.Intent
 import kotlinx.coroutines.launch
@@ -140,6 +141,14 @@ fun CosmicMajarahLoader(
             modifier = Modifier.size(logoSize)
         )
     }
+}
+
+fun formatWhatsAppPhone(phone: String): String {
+    return WhatsAppUtils.formatWhatsAppPhone(phone)
+}
+
+fun openWhatsAppDirectly(context: android.content.Context, phone: String, message: String = "") {
+    WhatsAppUtils.sendWhatsAppMessage(context, phone, message)
 }
 
 @Composable
@@ -4486,13 +4495,7 @@ fun StandardOrderCardItem(
                             🔒 *حالة الفاتورة:* $orderStatus
                         """.trimIndent()
                         
-                        try {
-                            val url = "https://api.whatsapp.com/send?phone=$targetPhone&text=${android.net.Uri.encode(invoiceMsg)}"
-                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                            context.startActivity(intent)
-                        } catch (e: Exception) {
-                            android.widget.Toast.makeText(context, "الرجاء تثبيت واتساب لمشاركة الفاتورة مباشرة مع المندوب 💬", android.widget.Toast.LENGTH_SHORT).show()
-                        }
+                        openWhatsAppDirectly(context, targetPhone, invoiceMsg)
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366), contentColor = Color.White),
                     shape = RoundedCornerShape(10.dp),
@@ -4628,13 +4631,7 @@ fun RestaurantCustomerOrderCard(
                                     🔒 *حالة الفاتورة:* ${order.status}
                                 """.trimIndent()
                                 
-                                try {
-                                    val url = "https://api.whatsapp.com/send?phone=$targetPhone&text=${android.net.Uri.encode(invoiceMsg)}"
-                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                                    context.startActivity(intent)
-                                } catch (e: Exception) {
-                                    android.widget.Toast.makeText(context, "الرجاء تثبيت واتساب لمشاركة الفاتورة مباشرة مع المندوب 💬", android.widget.Toast.LENGTH_SHORT).show()
-                                }
+                                WhatsAppUtils.sendWhatsAppMessage(context, targetPhone, invoiceMsg)
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366), contentColor = Color.White),
                             shape = RoundedCornerShape(8.dp),
@@ -4912,13 +4909,7 @@ fun PharmacyCustomerOrderCard(
                                     🔒 *حالة الفاتورة:* ${order.status}
                                 """.trimIndent()
                                 
-                                try {
-                                    val url = "https://api.whatsapp.com/send?phone=$targetPhone&text=${android.net.Uri.encode(invoiceMsg)}"
-                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                                    context.startActivity(intent)
-                                } catch (e: Exception) {
-                                    android.widget.Toast.makeText(context, "الرجاء تثبيت واتساب لمشاركة الفاتورة مباشرة مع المندوب 💬", android.widget.Toast.LENGTH_SHORT).show()
-                                }
+                                WhatsAppUtils.sendWhatsAppMessage(context, targetPhone, invoiceMsg)
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366), contentColor = Color.White),
                             shape = RoundedCornerShape(8.dp),
@@ -8763,15 +8754,8 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                                     ) {
                                                         TextButton(
                                                             onClick = {
-                                                                val cleanPhone = productSeller.phone.trim().replace("+", "").replace(" ", "")
                                                                 val msg = "مرحباً يا ${productSeller.name} 🪐، تم شراء منتجك (${item.productName}) بالكمية (${item.quantity}) بقيمة ${item.priceAtOrder * item.quantity} SDG من قبل العميل (${parent?.customerName ?: "عميل المجرة"}). يرجى تجهيزه للتسليم للمندوب فوراً."
-                                                                val url = "https://api.whatsapp.com/send?phone=$cleanPhone&text=${android.net.Uri.encode(msg)}"
-                                                                try {
-                                                                    val waIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                                                                    context.startActivity(waIntent)
-                                                                } catch (e: Exception) {
-                                                                    Toast.makeText(context, "لم نتمكن من فتح واتساب تلقائياً! الرقم: ${productSeller.phone}", Toast.LENGTH_LONG).show()
-                                                                }
+                                                                openWhatsAppDirectly(context, productSeller.phone, msg)
                                                             },
                                                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                                                         ) {
@@ -9396,15 +9380,8 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                                                     // WhatsApp Client
                                                                     OutlinedButton(
                                                                         onClick = {
-                                                                            val phoneClean = parentOrder?.customerPhone?.trim()?.replace("+", "")?.replace(" ", "") ?: ""
                                                                             val msg = "مرحباً يا ${parentOrder?.customerName ?: "زبوننا الكريم"}، معك مندوب المجرة للتسوق للتسوق. نود تتبع واستلام طلبك رقم #${orderId.take(8)}."
-                                                                            try {
-                                                                                val url = "https://wa.me/249$phoneClean?text=" + java.net.URLEncoder.encode(msg, "UTF-8")
-                                                                                val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                                                                                context.startActivity(intent)
-                                                                            } catch (e: Exception) {
-                                                                                Toast.makeText(context, "الرجاء تثبيت واتساب أولاً", Toast.LENGTH_SHORT).show()
-                                                                            }
+                                                                            WhatsAppUtils.sendWhatsAppMessage(context, parentOrder?.customerPhone, msg)
                                                                         },
                                                                         border = BorderStroke(1.dp, Color.Green.copy(0.4f)),
                                                                         contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
@@ -9795,27 +9772,8 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
                                                                     Button(
                                                                         onClick = {
                                                                             parentOrder?.customerPhone?.let { phoneNum ->
-                                                                                val rawPhone = phoneNum.trim().replace("+", "").replace(" ", "")
-                                                     val cleanPhone = if (rawPhone.startsWith("0")) {
-                                                         "249" + rawPhone.substring(1)
-                                                     } else if (!rawPhone.startsWith("249") && (rawPhone.startsWith("9") || rawPhone.startsWith("1"))) {
-                                                         "249" + rawPhone
-                                                     } else {
-                                                         rawPhone
-                                                     }
                                                                                 val msg = "🌌 مرحباً يا ${parentOrder.customerName}! معكم المندوب ${curSim.name} من تطبيق مجرة السودان. أنا متكفل بتسليم طلبيتكم الآن رقم (#${orderId.take(5)}) وقيمتها ${viewModel.formatPrice(totalPriceSumInSim)} SDG. هل أنتم متواجدون بالعنوان: ${parentOrder.customerAddress} لتسليمها؟"
-                                                                                val url = "https://api.whatsapp.com/send?phone=$cleanPhone&text=${android.net.Uri.encode(msg)}"
-                                                                                Toast.makeText(context, "جاري توجيه رسالة واتساب للزبون...", Toast.LENGTH_SHORT).show()
-                                                                                try {
-                                                                                    val waIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                                                                                    context.startActivity(waIntent)
-                                                                                } catch (e: Exception) {
-                                                                                    val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                                                                        type = "text/plain"
-                                                                                        putExtra(android.content.Intent.EXTRA_TEXT, "$phoneNum: $msg")
-                                                                                    }
-                                                                                    context.startActivity(android.content.Intent.createChooser(shareIntent, "إرسال التفاصيل"))
-                                                                                }
+                                                                                WhatsAppUtils.sendWhatsAppMessage(context, phoneNum, msg)
                                                                             }
                                                                         },
                                                                         modifier = Modifier.weight(1.2f),
@@ -10980,10 +10938,7 @@ CREATE POLICY "Allow update app_coupons" ON public.app_coupons FOR UPDATE USING 
                                                             invoiceText.append("💵 *المبلغ المستحق لك بالكامل (دون عمولة التطبيق):* ${viewModel.formatPrice(sellerNet)}\n\n")
                                                             invoiceText.append("🚀 *تمت الفوترة والتصدير تلقائياً عبر نظام المجرة الذكي بنجاح!*")
 
-                                                            val encoded = java.net.URLEncoder.encode(invoiceText.toString(), "UTF-8")
-                                                            val url = "https://wa.me/${seller.phone}?text=$encoded"
-                                                            val waIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                                                            context.startActivity(waIntent)
+                                                            WhatsAppUtils.sendWhatsAppMessage(context, seller.phone, invoiceText.toString())
                                                         },
                                                         modifier = Modifier.weight(1.5f),
                                                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
@@ -13305,9 +13260,7 @@ fun SellerDashboardScreenBody(viewModel: MajarahViewModel) {
                                 // WhatsApp direct button
                                 Button(
                                     onClick = {
-                                        val url = "https://wa.me/249912111111?text=" + java.net.URLEncoder.encode("مرحباً يا مدير مجرة السودان للتسوق، أنا التاجر الشريك وعندي طلب تسوية أو استفسار بخصوص المتجر.", "UTF-8")
-                                        val waIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                                        context.startActivity(waIntent)
+                                        WhatsAppUtils.sendWhatsAppMessage(context, "249912111111", "مرحباً يا مدير مجرة السودان للتسوق، أنا التاجر الشريك وعندي طلب تسوية أو استفسار بخصوص المتجر.")
                                     },
                                     modifier = Modifier.fillMaxWidth(),
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366), contentColor = Color.White)
@@ -14343,27 +14296,8 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                                             Button(
                                                 onClick = {
                                                     parent?.customerPhone?.let { phoneNum ->
-                                                        val rawPhone = phoneNum.trim().replace("+", "").replace(" ", "")
-                                                        val cleanPhone = if (rawPhone.startsWith("0")) {
-                                                            "249" + rawPhone.substring(1)
-                                                        } else if (!rawPhone.startsWith("249") && (rawPhone.startsWith("9") || rawPhone.startsWith("1"))) {
-                                                            "249" + rawPhone
-                                                        } else {
-                                                            rawPhone
-                                                        }
                                                         val msg = "🌌 مرحباً يا ${parent.customerName}! معكم المندوب ${myCourierInfo?.name ?: "مندوب مجرة"} من تطبيق مجرة السودان. أنا متكفل بتسليم طلبيتكم الآن رقم (#${orderId.take(5)}) وقيمة المشتريات ${viewModel.formatPrice(totalPrice)} SDG + سعر التوصيل ${viewModel.formatPrice(parent?.deliveryFee ?: 0.0)} SDG (الإجمالي الكلي للتحصيل: ${viewModel.formatPrice(totalPrice + (parent?.deliveryFee ?: 0.0))} SDG). هل أنتم متواجدون لتسليمها؟"
-                                                        val url = "https://api.whatsapp.com/send?phone=$cleanPhone&text=${android.net.Uri.encode(msg)}"
-                                                        Toast.makeText(context, "جاري فتح واتساب للزبون...", Toast.LENGTH_SHORT).show()
-                                                        try {
-                                                            val waIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                                                            context.startActivity(waIntent)
-                                                        } catch (e: Exception) {
-                                                            val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                                                type = "text/plain"
-                                                                putExtra(android.content.Intent.EXTRA_TEXT, "$phoneNum: $msg")
-                                                            }
-                                                            context.startActivity(android.content.Intent.createChooser(shareIntent, "إرسال التفاصيل"))
-                                                        }
+                                                        WhatsAppUtils.sendWhatsAppMessage(context, phoneNum, msg)
                                                     }
                                                 },
                                                 modifier = Modifier.weight(1.1f),
@@ -14489,19 +14423,7 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
  شكراً لثقتكم بمجرة التسوق الإلكتروني 🌌⚡
 """.trimIndent()
                                                     
-                                                    val realManagerPhone = "249910074223"
-                                                    val url = "https://api.whatsapp.com/send?phone=$realManagerPhone&text=${android.net.Uri.encode(invoiceMsg)}"
-                                                    Toast.makeText(context, "جاري فتح واتساب مع المدير لإرسال الفاتورة... 💬", Toast.LENGTH_SHORT).show()
-                                                    try {
-                                                        val waIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                                                        context.startActivity(waIntent)
-                                                    } catch (e: Exception) {
-                                                        val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                                            type = "text/plain"
-                                                            putExtra(android.content.Intent.EXTRA_TEXT, invoiceMsg)
-                                                        }
-                                                        context.startActivity(android.content.Intent.createChooser(shareIntent, "مشاركة الفاتورة"))
-                                                    }
+                                                    WhatsAppUtils.sendWhatsAppMessage(context, "249910074223", invoiceMsg)
                                                 },
                                                 modifier = Modifier.fillMaxWidth(),
                                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
@@ -14569,11 +14491,8 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                                             // WhatsApp
                                             Button(
                                                 onClick = {
-                                                    val rawPhone = order.customerPhone.trim().replace("+", "").replace(" ", "")
-                                                    val cleanPhone = if (rawPhone.startsWith("0")) "249" + rawPhone.substring(1) else "249" + rawPhone
                                                     val msg = "مرحباً يا ${order.customerName}! معكم المندوب ${myCourierInfo?.name} لتوصيل طلبكم من مطعم ${order.restaurantName}. رسوم التوصيل هي ${viewModel.formatPrice(order.deliveryFee)} SDG. هل أنتم متواجدون لتسليم الطلب؟"
-                                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://api.whatsapp.com/send?phone=$cleanPhone&text=${android.net.Uri.encode(msg)}"))
-                                                    context.startActivity(intent)
+                                                    WhatsAppUtils.sendWhatsAppMessage(context, order.customerPhone, msg)
                                                 },
                                                 modifier = Modifier.weight(1.1f),
                                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF43A047)),
@@ -14661,19 +14580,7 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
  تم تسليم الشحنة بنجاح من قبل مندوب التوصيل المعتمد.
  شكراً لثقتكم بمجرة التسوق الإلكتروني 🌌⚡
 """.trimIndent()
-                                                    val realManagerPhone = "249910074223"
-                                                    val url = "https://api.whatsapp.com/send?phone=$realManagerPhone&text=${android.net.Uri.encode(invoiceMsg)}"
-                                                    Toast.makeText(context, "جاري فتح واتساب مع المدير لإرسال الفاتورة... 💬", Toast.LENGTH_SHORT).show()
-                                                    try {
-                                                        val waIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                                                        context.startActivity(waIntent)
-                                                    } catch (e: Exception) {
-                                                        val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                                            type = "text/plain"
-                                                            putExtra(android.content.Intent.EXTRA_TEXT, invoiceMsg)
-                                                        }
-                                                        context.startActivity(android.content.Intent.createChooser(shareIntent, "مشاركة الفاتورة"))
-                                                    }
+                                                    WhatsAppUtils.sendWhatsAppMessage(context, "249910074223", invoiceMsg)
                                                 },
                                                 modifier = Modifier.fillMaxWidth(),
                                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
@@ -14743,11 +14650,8 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
                                             // WhatsApp
                                             Button(
                                                 onClick = {
-                                                    val rawPhone = order.customerPhone.trim().replace("+", "").replace(" ", "")
-                                                    val cleanPhone = if (rawPhone.startsWith("0")) "249" + rawPhone.substring(1) else "249" + rawPhone
                                                     val msg = "مرحباً يا ${order.customerName}! معكم المندوب ${myCourierInfo?.name} لتوصيل أدويتكم من صيدلية المجرة. قيمة الدواء هي ${viewModel.formatPrice(order.medicinePrice)} SDG وتوصيل الدواء مجان. هل أنتم متواجدون للاستلام؟"
-                                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://api.whatsapp.com/send?phone=$cleanPhone&text=${android.net.Uri.encode(msg)}"))
-                                                    context.startActivity(intent)
+                                                    WhatsAppUtils.sendWhatsAppMessage(context, order.customerPhone, msg)
                                                 },
                                                 modifier = Modifier.weight(1.1f),
                                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF43A047)),
@@ -14833,19 +14737,7 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
  تم تسليم الأدوية بنجاح من قبل مندوب التوصيل المعتمد. بالشفاء العاجل إن شاء الله.
  شكراً لثقتكم بمجرة التسوق الإلكتروني 🌌⚡
 """.trimIndent()
-                                                    val realManagerPhone = "249910074223"
-                                                    val url = "https://api.whatsapp.com/send?phone=$realManagerPhone&text=${android.net.Uri.encode(invoiceMsg)}"
-                                                    Toast.makeText(context, "جاري فتح واتساب مع المدير لإرسال الفاتورة... 💬", Toast.LENGTH_SHORT).show()
-                                                    try {
-                                                        val waIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                                                        context.startActivity(waIntent)
-                                                    } catch (e: Exception) {
-                                                        val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                                            type = "text/plain"
-                                                            putExtra(android.content.Intent.EXTRA_TEXT, invoiceMsg)
-                                                        }
-                                                        context.startActivity(android.content.Intent.createChooser(shareIntent, "مشاركة الفاتورة"))
-                                                    }
+                                                    WhatsAppUtils.sendWhatsAppMessage(context, "249910074223", invoiceMsg)
                                                 },
                                                 modifier = Modifier.fillMaxWidth(),
                                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),

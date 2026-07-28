@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import com.example.util.WhatsAppUtils
 import android.content.Context
 import android.content.Intent
 import kotlinx.coroutines.launch
@@ -1346,22 +1347,7 @@ fun RestaurantsPlanetSection(
                     💡 *تم الترتيب وتأكيد الفاتورة بواسطة تطبيق المجرة الكوني.*
                 """.trimIndent()
                 
-                try {
-                    val urlEncoded = URLEncoder.encode(message, "UTF-8")
-                    // Format phone number to international Sudan +249
-                    var targetPhone = selectedOrderForInvoice!!.restaurantPhone.trim()
-                    if (targetPhone.startsWith("0")) {
-                        targetPhone = "249" + targetPhone.substring(1)
-                    } else if (!targetPhone.startsWith("249")) {
-                        targetPhone = "249" + targetPhone
-                    }
-                    val intent = Intent(Intent.ACTION_VIEW).apply {
-                        data = Uri.parse("https://api.whatsapp.com/send?phone=$targetPhone&text=$urlEncoded")
-                    }
-                    context.startActivity(intent)
-                } catch (e: Exception) {
-                    Toast.makeText(context, "الرجاء تثبيت واتساب لإرسال الفاتورة 💬", Toast.LENGTH_SHORT).show()
-                }
+                WhatsAppUtils.sendWhatsAppMessage(context, selectedOrderForInvoice!!.restaurantPhone, message)
             }
         )
     }
@@ -2356,23 +2342,7 @@ ${order.itemsAndNotes}
 شكراً لتعاملكم مع تطبيق المجرة للتسوق 🪐✨
                         """.trimIndent()
                         
-                        try {
-                            var targetPhone = order.courierPhone.trim().replace("+", "").replace(" ", "")
-                            if (targetPhone.startsWith("0")) targetPhone = "249" + targetPhone.substring(1)
-                            else if (!targetPhone.startsWith("249")) targetPhone = "249" + targetPhone
-                            
-                            val urlEncoded = java.net.URLEncoder.encode(fullInvoiceMsg, "UTF-8")
-                            val intent = Intent(Intent.ACTION_VIEW).apply {
-                                data = Uri.parse("https://api.whatsapp.com/send?phone=$targetPhone&text=$urlEncoded")
-                            }
-                            context.startActivity(intent)
-                        } catch (e: Exception) {
-                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, fullInvoiceMsg)
-                            }
-                            context.startActivity(Intent.createChooser(shareIntent, "مشاركة الفاتورة مع المندوب"))
-                        }
+                        WhatsAppUtils.sendWhatsAppMessage(context, order.courierPhone, fullInvoiceMsg)
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = CosmicSecondary, contentColor = Color.Black),
                     shape = RoundedCornerShape(8.dp),
@@ -2424,16 +2394,7 @@ ${order.itemsAndNotes}
 
                     IconButton(
                         onClick = {
-                            try {
-                                var wp = order.restaurantPhone.trim()
-                                if (wp.startsWith("0")) wp = "249" + wp.substring(1)
-                                val intent = Intent(Intent.ACTION_VIEW).apply {
-                                    data = Uri.parse("https://api.whatsapp.com/send?phone=$wp&text=مرحباً، بخصوص طلب المجرة #${order.id}")
-                                }
-                                context.startActivity(intent)
-                            } catch (e: Exception) {
-                                Toast.makeText(context, "الرجاء تثبيت واتساب", Toast.LENGTH_SHORT).show()
-                            }
+                            WhatsAppUtils.sendWhatsAppMessage(context, order.restaurantPhone, "مرحباً، بخصوص طلب المجرة #${order.id}")
                         },
                         modifier = Modifier
                             .background(Color.White.copy(0.08f), CircleShape)
@@ -2839,19 +2800,7 @@ $detailedText---------------------------
                         if (order.courierPhone.isNotBlank()) {
                             Button(
                                 onClick = {
-                                    try {
-                                        var phone = order.courierPhone.trim().replace("+", "").replace(" ", "")
-                                        if (phone.startsWith("0")) {
-                                            phone = "249" + phone.substring(1)
-                                        } else if (!phone.startsWith("249")) {
-                                            phone = "249" + phone
-                                        }
-                                        val url = "https://api.whatsapp.com/send?phone=$phone&text=${java.net.URLEncoder.encode(fullInvoiceMsg, "UTF-8")}"
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                        context.startActivity(intent)
-                                    } catch (e: Exception) {
-                                        Toast.makeText(context, "الرجاء تثبيت واتساب لمشاركة الفاتورة", Toast.LENGTH_SHORT).show()
-                                    }
+                                    WhatsAppUtils.sendWhatsAppMessage(context, order.courierPhone, fullInvoiceMsg)
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2), contentColor = Color.White),
                                 shape = RoundedCornerShape(8.dp),
