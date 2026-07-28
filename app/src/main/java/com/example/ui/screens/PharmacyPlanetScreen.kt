@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import com.example.util.WhatsAppUtils
+import com.example.util.NotificationSoundUtils
 import android.app.Application
 import android.media.AudioManager
 import android.media.ToneGenerator
@@ -1009,24 +1010,13 @@ fun PharmacistOrdersTab(
         orders.filter { it.pharmacyId == pharmacyId }
     }
 
-    var activeRingtone by remember { mutableStateOf<android.media.Ringtone?>(null) }
-    var isPharmAlarmRinging by remember { mutableStateOf(false) }
-
     val pendingCount = remember(myPharmacyOrders) { myPharmacyOrders.count { it.status == "بانتظار الصيدلي" } }
     var previousPendingCount by remember { mutableStateOf(-1) }
 
     LaunchedEffect(pendingCount) {
         if (previousPendingCount != -1 && pendingCount > previousPendingCount) {
-            try {
-                val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
-                val r = android.media.RingtoneManager.getRingtone(context, alertUri)
-                r?.play()
-                activeRingtone = r
-                isPharmAlarmRinging = true
-                Toast.makeText(context, "🔔 تنبيه عاجل: تم إرسال روشتة جديدة لصيدليتك بالمجرة!", Toast.LENGTH_LONG).show()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            NotificationSoundUtils.playNotificationSound(context)
+            Toast.makeText(context, "🔔 تنبيه عاجل: تم إرسال روشتة جديدة لصيدليتك بالمجرة!", Toast.LENGTH_LONG).show()
         }
         previousPendingCount = pendingCount
     }
@@ -1081,35 +1071,6 @@ fun PharmacistOrdersTab(
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )
-                }
-            }
-        }
-
-        if (isPharmAlarmRinging) {
-            Card(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFD32F2F)),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp).fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("🚨 تنبيه صيدلاني عاجل!", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        Text("وصلت روشتة/طلب جديد للصيدلية بانتظار موافقتك! 💊", color = Color.White.copy(0.9f), fontSize = 11.sp)
-                    }
-                    Button(
-                        onClick = {
-                            isPharmAlarmRinging = false
-                            try { activeRingtone?.stop() } catch (e: Exception) {}
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Red),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("إيقاف الصوت 🔕", fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                    }
                 }
             }
         }
@@ -2573,13 +2534,7 @@ fun AdminPharmacyPortal(
     var lastActivePharmacyOrdersCount by remember { mutableStateOf(activePharmacyOrders.size) }
     LaunchedEffect(activePharmacyOrders.size) {
         if (activePharmacyOrders.size > lastActivePharmacyOrdersCount) {
-            try {
-                val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
-                val r = android.media.RingtoneManager.getRingtone(context, alertUri)
-                r?.play()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            NotificationSoundUtils.playNotificationSound(context)
         }
         lastActivePharmacyOrdersCount = activePharmacyOrders.size
     }

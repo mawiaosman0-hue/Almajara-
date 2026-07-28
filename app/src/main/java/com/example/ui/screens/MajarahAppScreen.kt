@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import com.example.util.WhatsAppUtils
+import com.example.util.NotificationSoundUtils
 import android.widget.Toast
 import android.content.Intent
 import kotlinx.coroutines.launch
@@ -412,7 +413,7 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
         }
     }
 
-    LaunchedEffect(isCourier, activeProfile, allOrders, allPharmacyOrders) {
+    LaunchedEffect(isCourier, activeProfile, allOrders, allPharmacyOrders, allRestaurantOrders) {
         if (isCourier && activeProfile != null) {
             val courierPhone = activeProfile?.phone?.trim()?.replace("+", "")?.replace(" ", "") ?: ""
             val courierName = activeProfile?.name?.trim()?.lowercase() ?: ""
@@ -431,7 +432,14 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                 isMatching && !po.status.contains("تم توصيل") && !po.status.contains("ملغي")
             }.map { "pharm_${it.id}" }
 
-            val allAssignedActive = activeStandardAssigned + activePharmacyAssigned
+            val activeRestaurantAssigned = allRestaurantOrders.filter { ro ->
+                val roPhone = ro.courierPhone.trim().replace("+", "").replace(" ", "")
+                val roName = ro.courierName.trim().lowercase()
+                val isMatching = (courierPhone.isNotEmpty() && roPhone == courierPhone) || (courierName.isNotEmpty() && roName == courierName)
+                isMatching && !ro.status.contains("تم توصيل") && !ro.status.contains("تم تسليم العميل") && !ro.status.contains("إغلاق") && !ro.status.contains("ملغي")
+            }.map { "rest_${it.id}" }
+
+            val allAssignedActive = activeStandardAssigned + activePharmacyAssigned + activeRestaurantAssigned
             
             // If we found any new assigned order that we haven't notified yet
             val newUnnotified = allAssignedActive.filter { it !in notifiedOrderIds }
@@ -439,14 +447,7 @@ fun MajarahAppScreen(viewModel: MajarahViewModel) {
                 pendingNotificationMsg = "مرحباً ${activeProfile?.name}! تم إسناد مهمة توصيل جديدة لك بنجاح 🚴📦 اضغط هنا لمباشرتها."
                 notifiedOrderIds = notifiedOrderIds + allAssignedActive
                 
-                // Play notification alert sound
-                try {
-                    val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
-                    val r = android.media.RingtoneManager.getRingtone(context, alertUri)
-                    r?.play()
-                } catch (e: Exception) {
-                    // Fallback
-                }
+                NotificationSoundUtils.playNotificationSound(context)
             }
         }
     }
@@ -7389,13 +7390,7 @@ fun AdminDashboardScreenBody(viewModel: MajarahViewModel) {
             pendingSellersCount > lastPendingSellersCount
         ) {
             // Enable sound notifications for General Manager and Administrative Manager with the system message tone
-            try {
-                val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
-                val r = android.media.RingtoneManager.getRingtone(context, alertUri)
-                r?.play()
-            } catch (e: Exception) {
-                // Fallback
-            }
+            NotificationSoundUtils.playNotificationSound(context)
         }
         lastPendingCourierOrdersCount = pendingCourierOrdersCount
         lastPendingProductsCount = pendingProductsCount
@@ -12732,13 +12727,7 @@ fun SellerDashboardScreenBody(viewModel: MajarahViewModel) {
 
         LaunchedEffect(myActiveOrdersCount) {
             if (myActiveOrdersCount > previousSellerActiveOrdersCount) {
-                try {
-                    val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
-                    val r = android.media.RingtoneManager.getRingtone(context, alertUri)
-                    r?.play()
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+                NotificationSoundUtils.playNotificationSound(context)
             }
             previousSellerActiveOrdersCount = myActiveOrdersCount
         }
@@ -13543,16 +13532,10 @@ fun CourierDashboardScreenBody(viewModel: MajarahViewModel) {
         if (previousAssignedOrderIds.isNotEmpty()) {
             val newlyAdded = currentAssignedKeys - previousAssignedOrderIds
             if (newlyAdded.isNotEmpty()) {
-                try {
-                    val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
-                    val r = android.media.RingtoneManager.getRingtone(context, alertUri)
-                    r?.play()
+                NotificationSoundUtils.playNotificationSound(context)
 
-                    val totalActive = activeProductsCount + activeRestaurantsCount + activePharmacyCount
-                    Toast.makeText(context, "🌌 تم إسناد مهمة جديدة لك! إجمالي المهام النشطة حالياً: $totalActive 🚴✨", Toast.LENGTH_LONG).show()
-                } catch (e: Exception) {
-                    // Fallback
-                }
+                val totalActive = activeProductsCount + activeRestaurantsCount + activePharmacyCount
+                Toast.makeText(context, "🌌 تم إسناد مهمة جديدة لك! إجمالي المهام النشطة حالياً: $totalActive 🚴✨", Toast.LENGTH_LONG).show()
             }
         }
         previousAssignedOrderIds = currentAssignedKeys

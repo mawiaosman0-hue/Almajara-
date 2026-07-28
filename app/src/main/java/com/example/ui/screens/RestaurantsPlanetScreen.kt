@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import com.example.util.WhatsAppUtils
+import com.example.util.NotificationSoundUtils
 import android.content.Context
 import android.content.Intent
 import kotlinx.coroutines.launch
@@ -102,23 +103,13 @@ fun RestaurantsPlanetSection(
         else orders.filter { it.restaurantId == myRestaurant.id }
     }
 
-    // Play continuous sound alarm on new order received
-    var activeRestaurantRingtone by remember { mutableStateOf<android.media.Ringtone?>(null) }
-    var isRestAlarmRinging by remember { mutableStateOf(false) }
+    // Play official notification sound once on new order received
     var lastSeenOrderCount by remember { mutableStateOf(-1) }
 
     LaunchedEffect(myRestaurantOrders) {
         if (lastSeenOrderCount != -1 && myRestaurantOrders.size > lastSeenOrderCount) {
-            try {
-                val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
-                val r = android.media.RingtoneManager.getRingtone(context, alertUri)
-                r?.play()
-                activeRestaurantRingtone = r
-                isRestAlarmRinging = true
-                Toast.makeText(context, "🔔 تنبيه عاجل: وصل طلب طعام جديد لمطعمك بالمجرة!", Toast.LENGTH_LONG).show()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            NotificationSoundUtils.playNotificationSound(context)
+            Toast.makeText(context, "🔔 تنبيه عاجل: وصل طلب طعام جديد لمطعمك بالمجرة!", Toast.LENGTH_LONG).show()
         }
         if (myRestaurantOrders.isNotEmpty()) {
             lastSeenOrderCount = myRestaurantOrders.size
@@ -557,34 +548,6 @@ fun RestaurantsPlanetSection(
                         val displayedOrders = if (restaurantOwnerOrdersSubTab == 0) activeRestaurantOrders else completedRestaurantOrders
 
                         Column(modifier = Modifier.fillMaxSize()) {
-                            if (isRestAlarmRinging) {
-                                Card(
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
-                                    colors = CardDefaults.cardColors(containerColor = Color(0xFFD32F2F)),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(12.dp).fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text("🚨 تنبيه مطعم عاجل!", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                            Text("وصل طلب طعام جديد لمطعمك الآن! 🍔🍕", color = Color.White.copy(0.9f), fontSize = 11.sp)
-                                        }
-                                        Button(
-                                            onClick = {
-                                                isRestAlarmRinging = false
-                                                try { activeRestaurantRingtone?.stop() } catch (e: Exception) {}
-                                            },
-                                            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Red),
-                                            shape = RoundedCornerShape(8.dp)
-                                        ) {
-                                            Text("إيقاف الصوت 🔕", fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                                        }
-                                    }
-                                }
-                            }
 
                             // Owner Orders Tabs
                             Row(
@@ -1048,13 +1011,7 @@ fun RestaurantsPlanetSection(
                     var lastActiveAdminRestOrdersCount by remember { mutableStateOf(activeAdminRestaurantOrders.size) }
                     LaunchedEffect(activeAdminRestaurantOrders.size) {
                         if (activeAdminRestaurantOrders.size > lastActiveAdminRestOrdersCount) {
-                            try {
-                                val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
-                                val r = android.media.RingtoneManager.getRingtone(context, alertUri)
-                                r?.play()
-                            } catch (e: Exception) {
-                                e.printStackTrace()
-                            }
+                            NotificationSoundUtils.playNotificationSound(context)
                         }
                         lastActiveAdminRestOrdersCount = activeAdminRestaurantOrders.size
                     }
@@ -1367,13 +1324,7 @@ fun RestaurantsPlanetSection(
                     logoImageUri = logoImageBase64
                 ) { err ->
                     if (err == null) {
-                        try {
-                            val alertUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
-                            val r = android.media.RingtoneManager.getRingtone(context, alertUri)
-                            r?.play()
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
+                        NotificationSoundUtils.playNotificationSound(context)
                         if (isGeneral) {
                             // Find and approve restaurant
                             scope.launch {
