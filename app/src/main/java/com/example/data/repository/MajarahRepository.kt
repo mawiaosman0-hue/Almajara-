@@ -91,26 +91,31 @@ class MajarahRepository(
 
     suspend fun insertRestaurantOrder(order: com.example.data.db.RestaurantOrderEntity): Long {
         val id = restaurantOrderDao.insertOrder(order)
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-            try {
-                val sup = com.example.data.network.SupabaseRestaurantOrder(
-                    id = if (id == 0L) null else id.toInt(),
-                    restaurantName = order.restaurantName,
-                    restaurantPhone = order.restaurantPhone,
-                    customerName = order.customerName,
-                    customerPhone = order.customerPhone,
-                    itemsAndNotes = order.itemsAndNotes,
-                    paymentMethod = order.paymentMethod,
-                    deliveryFee = order.deliveryFee,
-                    status = order.status,
-                    courierName = order.courierName,
-                    courierPhone = order.courierPhone,
-                    createdAt = order.createdAt
-                )
-                com.example.data.network.SupabaseClient.api.insertRestaurantOrders(listOf(sup))
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+        try {
+            val sup = com.example.data.network.SupabaseRestaurantOrder(
+                id = if (id == 0L) null else id.toInt(),
+                restaurantId = order.restaurantId,
+                restaurantName = order.restaurantName,
+                restaurantPhone = order.restaurantPhone,
+                customerName = order.customerName,
+                customerEmail = order.customerEmail,
+                customerPhone = order.customerPhone,
+                itemsAndNotes = order.itemsAndNotes,
+                paymentMethod = order.paymentMethod,
+                foodPrice = order.foodPrice,
+                deliveryFee = order.deliveryFee,
+                bankReceiptImageUri = order.bankReceiptImageUri,
+                status = order.status,
+                courierName = order.courierName,
+                courierPhone = order.courierPhone,
+                deliveryLocation = order.deliveryLocation,
+                detailedPrice = order.detailedPrice,
+                createdAt = order.createdAt
+            )
+            com.example.data.network.SupabaseClient.api.insertRestaurantOrders(listOf(sup))
+        } catch (e: Exception) {
+            e.printStackTrace()
+            android.util.Log.e("MajarahRepository", "Failed to insert restaurant order to Supabase: ${e.message}")
         }
         return id
     }
@@ -118,7 +123,7 @@ class MajarahRepository(
     suspend fun updateRestaurantOrderStatus(id: Int, status: String) {
         restaurantOrderDao.updateOrderStatus(id, status)
         try {
-            val fields = mapOf("status" to status)
+            val fields = mapOf<String, Any>("status" to status)
             com.example.data.network.SupabaseClient.api.updateRestaurantOrder("eq.$id", fields)
         } catch (e: Exception) {
             e.printStackTrace()
@@ -134,7 +139,8 @@ class MajarahRepository(
                 phone = restaurant.phone,
                 isApproved = restaurant.isApproved,
                 logoImageUri = restaurant.logoImageUri,
-                menuImageUri = restaurant.menuImageUri
+                menuImageUri = restaurant.menuImageUri,
+                createdAt = restaurant.createdAt
             )
             com.example.data.network.SupabaseClient.api.updateRestaurant("eq.${restaurant.id}", sup)
         } catch (e: Exception) {
@@ -145,9 +151,9 @@ class MajarahRepository(
     suspend fun updateRestaurantOrderPriceAndStatus(id: Int, status: String, foodPrice: Double, detailedPrice: String) {
         restaurantOrderDao.updateRestaurantOrderPriceAndStatus(id, status, foodPrice, detailedPrice)
         try {
-            val fields = mapOf(
+            val fields = mapOf<String, Any>(
                 "status" to status,
-                "items_and_notes" to "السعر المعدل للطعام: $foodPrice",
+                "food_price" to foodPrice,
                 "detailed_price" to detailedPrice
             )
             com.example.data.network.SupabaseClient.api.updateRestaurantOrder("eq.$id", fields)
@@ -159,9 +165,9 @@ class MajarahRepository(
     suspend fun updateRestaurantOrderPayment(id: Int, paymentMethod: String, bankReceiptImageUri: String?) {
         restaurantOrderDao.updateRestaurantOrderPayment(id, paymentMethod, bankReceiptImageUri)
         try {
-            val fields = mapOf(
+            val fields = mapOf<String, Any>(
                 "payment_method" to paymentMethod,
-                "items_and_notes" to "تم تحديث الدفع: $paymentMethod - إشعار: ${bankReceiptImageUri ?: "لا يوجد"}"
+                "bank_receipt_image_uri" to (bankReceiptImageUri ?: "")
             )
             com.example.data.network.SupabaseClient.api.updateRestaurantOrder("eq.$id", fields)
         } catch (e: Exception) {
@@ -172,11 +178,11 @@ class MajarahRepository(
     suspend fun assignCourierToRestaurantOrder(id: Int, status: String, courierName: String, courierPhone: String, deliveryFee: Double) {
         restaurantOrderDao.assignCourierToRestaurantOrder(id, status, courierName, courierPhone, deliveryFee)
         try {
-            val fields = mapOf(
+            val fields = mapOf<String, Any>(
                 "status" to status,
                 "courier_name" to courierName,
                 "courier_phone" to courierPhone,
-                "delivery_fee" to deliveryFee.toString()
+                "delivery_fee" to deliveryFee
             )
             com.example.data.network.SupabaseClient.api.updateRestaurantOrder("eq.$id", fields)
         } catch (e: Exception) {
@@ -275,22 +281,30 @@ class MajarahRepository(
             val sup = com.example.data.network.SupabasePharmacyProduct(
                 id = if (id == 0L) null else id.toInt(),
                 pharmacyId = product.pharmacyId,
+                type = product.type,
                 name = product.name,
-                description = product.company,
+                company = product.company,
                 price = product.price,
-                category = product.type,
-                isAvailable = product.isApproved,
-                imageBase64 = product.imageBase64
+                imageBase64 = product.imageBase64,
+                isApproved = product.isApproved,
+                createdAt = product.createdAt
             )
             com.example.data.network.SupabaseClient.api.insertPharmacyProducts(listOf(sup))
         } catch (e: Exception) {
             e.printStackTrace()
+            android.util.Log.e("MajarahRepository", "Failed to insert pharmacy product to Supabase: ${e.message}")
         }
         return id
     }
 
     suspend fun updatePharmacyProductApproval(id: Int, isApproved: Boolean) {
         pharmacyProductDao.updateProductApproval(id, isApproved)
+        try {
+            val fields = mapOf<String, Any>("is_approved" to isApproved)
+            com.example.data.network.SupabaseClient.api.updatePharmacyProduct("eq.$id", fields)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     suspend fun deletePharmacyProduct(id: Int) {
@@ -319,26 +333,29 @@ class MajarahRepository(
 
     suspend fun insertPharmacyOrder(order: com.example.data.db.PharmacyOrderEntity): Long {
         val id = pharmacyOrderDao.insertOrder(order)
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-            try {
-                val sup = com.example.data.network.SupabasePharmacyOrder(
-                    id = if (id == 0L) null else id.toInt(),
-                    pharmacyId = order.pharmacyId,
-                    pharmacyName = "",
-                    customerName = order.customerName,
-                    customerPhone = order.customerPhone,
-                    itemsAndNotes = order.deliveryLocation,
-                    paymentMethod = "كاش",
-                    deliveryFee = 0.0,
-                    status = order.status,
-                    courierName = "",
-                    courierPhone = "",
-                    createdAt = order.createdAt
-                )
-                com.example.data.network.SupabaseClient.api.insertPharmacyOrders(listOf(sup))
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+        try {
+            val sup = com.example.data.network.SupabasePharmacyOrder(
+                id = if (id == 0L) null else id.toInt(),
+                pharmacyId = order.pharmacyId,
+                customerName = order.customerName,
+                customerPhone = order.customerPhone,
+                customerEmail = order.customerEmail,
+                prescriptionImageBase64 = order.prescriptionImageBase64,
+                medicinesJson = order.medicinesJson,
+                medicinePrice = order.medicinePrice,
+                deliveryFee = order.deliveryFee,
+                courierName = order.courierName,
+                courierPhone = order.courierPhone,
+                status = order.status,
+                paymentMethod = order.paymentMethod,
+                bankReceiptImageUri = order.bankReceiptImageUri,
+                deliveryLocation = order.deliveryLocation,
+                createdAt = order.createdAt
+            )
+            com.example.data.network.SupabaseClient.api.insertPharmacyOrders(listOf(sup))
+        } catch (e: Exception) {
+            e.printStackTrace()
+            android.util.Log.e("MajarahRepository", "Failed to insert pharmacy order to Supabase: ${e.message}")
         }
         return id
     }
@@ -346,9 +363,10 @@ class MajarahRepository(
     suspend fun updatePharmacyOrderPriceAndStatus(id: Int, status: String, price: Double, medicinesJson: String) {
         pharmacyOrderDao.updateOrderPriceAndStatus(id, status, price, medicinesJson)
         try {
-            val fields = mapOf(
+            val fields = mapOf<String, Any>(
                 "status" to status,
-                "items_and_notes" to "السعر: $price - الأدوية: $medicinesJson"
+                "medicine_price" to price,
+                "medicines_json" to medicinesJson
             )
             com.example.data.network.SupabaseClient.api.updatePharmacyOrder("eq.$id", fields)
         } catch (e: Exception) {
@@ -359,11 +377,11 @@ class MajarahRepository(
     suspend fun assignPharmacyOrderCourierAndDeliveryFee(id: Int, status: String, courierName: String, courierPhone: String, deliveryFee: Double) {
         pharmacyOrderDao.assignOrderCourierAndDeliveryFee(id, status, courierName, courierPhone, deliveryFee)
         try {
-            val fields = mapOf(
+            val fields = mapOf<String, Any>(
                 "status" to status,
                 "courier_name" to courierName,
                 "courier_phone" to courierPhone,
-                "delivery_fee" to deliveryFee.toString()
+                "delivery_fee" to deliveryFee
             )
             com.example.data.network.SupabaseClient.api.updatePharmacyOrder("eq.$id", fields)
         } catch (e: Exception) {
@@ -374,7 +392,20 @@ class MajarahRepository(
     suspend fun updatePharmacyOrderStatus(id: Int, status: String) {
         pharmacyOrderDao.updateOrderStatus(id, status)
         try {
-            val fields = mapOf("status" to status)
+            val fields = mapOf<String, Any>("status" to status)
+            com.example.data.network.SupabaseClient.api.updatePharmacyOrder("eq.$id", fields)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    suspend fun updatePharmacyOrderPayment(id: Int, paymentMethod: String, bankReceiptImageUri: String?) {
+        pharmacyOrderDao.updatePharmacyOrderPayment(id, paymentMethod, bankReceiptImageUri)
+        try {
+            val fields = mapOf<String, Any>(
+                "payment_method" to paymentMethod,
+                "bank_receipt_image_uri" to (bankReceiptImageUri ?: "")
+            )
             com.example.data.network.SupabaseClient.api.updatePharmacyOrder("eq.$id", fields)
         } catch (e: Exception) {
             e.printStackTrace()
@@ -1248,23 +1279,23 @@ class MajarahRepository(
                 val existing = localList.find { it.id == rId }
                 com.example.data.db.RestaurantOrderEntity(
                     id = rId,
-                    restaurantId = existing?.restaurantId ?: 0,
+                    restaurantId = r.restaurantId ?: existing?.restaurantId ?: 0,
                     restaurantName = r.restaurantName ?: existing?.restaurantName ?: "مطعم بالمجرة",
                     restaurantPhone = r.restaurantPhone ?: existing?.restaurantPhone ?: "",
                     customerName = r.customerName ?: existing?.customerName ?: "عميل",
-                    customerEmail = existing?.customerEmail ?: "",
+                    customerEmail = r.customerEmail ?: existing?.customerEmail ?: "",
                     customerPhone = r.customerPhone ?: existing?.customerPhone ?: "",
-                    itemsAndNotes = if (r.itemsAndNotes.isNullOrBlank()) (existing?.itemsAndNotes ?: "") else r.itemsAndNotes,
+                    itemsAndNotes = r.itemsAndNotes ?: existing?.itemsAndNotes ?: "",
                     status = r.status ?: existing?.status ?: "معلق",
                     paymentMethod = r.paymentMethod ?: existing?.paymentMethod ?: "كاش",
-                    foodPrice = existing?.foodPrice ?: 0.0,
+                    foodPrice = r.foodPrice ?: existing?.foodPrice ?: 0.0,
                     deliveryFee = r.deliveryFee ?: existing?.deliveryFee ?: 0.0,
-                    bankReceiptImageUri = existing?.bankReceiptImageUri,
+                    bankReceiptImageUri = r.bankReceiptImageUri ?: existing?.bankReceiptImageUri,
                     courierName = r.courierName ?: existing?.courierName ?: "",
                     courierPhone = r.courierPhone ?: existing?.courierPhone ?: "",
                     createdAt = r.createdAt ?: existing?.createdAt ?: System.currentTimeMillis(),
-                    deliveryLocation = existing?.deliveryLocation ?: "",
-                    detailedPrice = existing?.detailedPrice ?: ""
+                    deliveryLocation = r.deliveryLocation ?: existing?.deliveryLocation ?: "",
+                    detailedPrice = r.detailedPrice ?: existing?.detailedPrice ?: ""
                 )
             }
             restaurantOrderDao.syncOrdersTransaction(roomOrders)
@@ -1286,21 +1317,21 @@ class MajarahRepository(
                 val existing = localList.find { it.id == rId }
                 com.example.data.db.PharmacyOrderEntity(
                     id = rId,
-                    pharmacyId = if ((r.pharmacyId ?: 0) != 0) (r.pharmacyId ?: 0) else (existing?.pharmacyId ?: 0),
+                    pharmacyId = r.pharmacyId ?: existing?.pharmacyId ?: 0,
                     customerName = r.customerName ?: existing?.customerName ?: "عميل",
                     customerPhone = r.customerPhone ?: existing?.customerPhone ?: "",
-                    customerEmail = existing?.customerEmail ?: "",
-                    prescriptionImageBase64 = existing?.prescriptionImageBase64 ?: "",
-                    medicinesJson = existing?.medicinesJson ?: "",
-                    medicinePrice = existing?.medicinePrice ?: 0.0,
+                    customerEmail = r.customerEmail ?: existing?.customerEmail ?: "",
+                    prescriptionImageBase64 = r.prescriptionImageBase64 ?: existing?.prescriptionImageBase64 ?: "",
+                    medicinesJson = r.medicinesJson ?: existing?.medicinesJson ?: "",
+                    medicinePrice = r.medicinePrice ?: existing?.medicinePrice ?: 0.0,
                     deliveryFee = r.deliveryFee ?: existing?.deliveryFee ?: 0.0,
                     courierName = r.courierName ?: existing?.courierName ?: "",
                     courierPhone = r.courierPhone ?: existing?.courierPhone ?: "",
                     status = r.status ?: existing?.status ?: "بانتظار الصيدلي",
                     paymentMethod = r.paymentMethod ?: existing?.paymentMethod ?: "كاش",
-                    bankReceiptImageUri = existing?.bankReceiptImageUri,
+                    bankReceiptImageUri = r.bankReceiptImageUri ?: existing?.bankReceiptImageUri,
                     createdAt = r.createdAt ?: existing?.createdAt ?: System.currentTimeMillis(),
-                    deliveryLocation = if (r.itemsAndNotes.isNullOrBlank()) (existing?.deliveryLocation ?: "") else r.itemsAndNotes
+                    deliveryLocation = r.deliveryLocation ?: existing?.deliveryLocation ?: ""
                 )
             }
             pharmacyOrderDao.syncOrdersTransaction(roomOrders)
@@ -1309,6 +1340,89 @@ class MajarahRepository(
             e.printStackTrace()
             val parsedError = com.example.data.network.SupabaseClient.parseError(e)
             Log.e("MajarahRepository", "Failed to sync remote pharmacy orders: $parsedError")
+            parsedError
+        }
+    }
+
+    suspend fun syncRemotePharmacyProductsToLocal(): String? {
+        return try {
+            val remote = com.example.data.network.SupabaseClient.api.getPharmacyProducts()
+            if (remote.isNotEmpty()) {
+                val roomProducts = remote.map { p ->
+                    com.example.data.db.PharmacyProductEntity(
+                        id = p.id ?: 0,
+                        pharmacyId = p.pharmacyId ?: 0,
+                        type = p.type ?: "دواء",
+                        name = p.name ?: "",
+                        company = p.company ?: "",
+                        price = p.price ?: 0.0,
+                        imageBase64 = p.imageBase64 ?: "",
+                        isApproved = p.isApproved ?: false,
+                        createdAt = p.createdAt ?: System.currentTimeMillis()
+                    )
+                }
+                pharmacyProductDao.insertProducts(roomProducts)
+            }
+            null
+        } catch (e: Exception) {
+            e.printStackTrace()
+            val parsedError = com.example.data.network.SupabaseClient.parseError(e)
+            Log.e("MajarahRepository", "Failed to sync remote pharmacy products: $parsedError")
+            parsedError
+        }
+    }
+
+    suspend fun syncRemotePharmaciesToLocal(): String? {
+        return try {
+            val remote = com.example.data.network.SupabaseClient.api.getPharmacies()
+            if (remote.isNotEmpty()) {
+                val roomPharmacies = remote.map { p ->
+                    com.example.data.db.PharmacyEntity(
+                        id = p.id ?: 0,
+                        name = p.name ?: "",
+                        doctorName = p.doctorName ?: "",
+                        phone = p.phone ?: "",
+                        location = p.location ?: "",
+                        pharmacistEmail = p.pharmacistEmail ?: "",
+                        isApproved = p.isApproved ?: false,
+                        imageBase64 = p.imageBase64 ?: "",
+                        hasCosmetics = p.hasCosmetics ?: false,
+                        createdAt = p.createdAt ?: System.currentTimeMillis()
+                    )
+                }
+                pharmacyDao.insertPharmacies(roomPharmacies)
+            }
+            null
+        } catch (e: Exception) {
+            e.printStackTrace()
+            val parsedError = com.example.data.network.SupabaseClient.parseError(e)
+            Log.e("MajarahRepository", "Failed to sync remote pharmacies: $parsedError")
+            parsedError
+        }
+    }
+
+    suspend fun syncRemoteRestaurantsToLocal(): String? {
+        return try {
+            val remote = com.example.data.network.SupabaseClient.api.getRestaurants()
+            if (remote.isNotEmpty()) {
+                val roomRestaurants = remote.map { r ->
+                    com.example.data.db.RestaurantEntity(
+                        id = r.id ?: 0,
+                        name = r.name ?: "",
+                        phone = r.phone ?: "",
+                        menuImageUri = r.menuImageUri,
+                        logoImageUri = r.logoImageUri,
+                        isApproved = r.isApproved ?: false,
+                        createdAt = r.createdAt ?: System.currentTimeMillis()
+                    )
+                }
+                restaurantDao.insertRestaurants(roomRestaurants)
+            }
+            null
+        } catch (e: Exception) {
+            e.printStackTrace()
+            val parsedError = com.example.data.network.SupabaseClient.parseError(e)
+            Log.e("MajarahRepository", "Failed to sync remote restaurants: $parsedError")
             parsedError
         }
     }

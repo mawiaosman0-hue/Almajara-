@@ -24,6 +24,9 @@ interface PharmacyDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPharmacy(pharmacy: PharmacyEntity): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPharmacies(pharmacies: List<PharmacyEntity>)
+
     @Update
     suspend fun updatePharmacy(pharmacy: PharmacyEntity)
 
@@ -50,6 +53,9 @@ interface PharmacyProductDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertProduct(product: PharmacyProductEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertProducts(products: List<PharmacyProductEntity>)
 
     @Query("UPDATE pharmacy_products SET isApproved = :isApproved WHERE id = :id")
     suspend fun updateProductApproval(id: Int, isApproved: Boolean)

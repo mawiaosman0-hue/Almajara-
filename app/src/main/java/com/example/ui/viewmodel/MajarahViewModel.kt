@@ -1245,6 +1245,24 @@ $couponMessage---------------------------
             } catch (e: Exception) {
                 android.util.Log.e("MajarahViewModel", "Failed to sync pharmacy orders: ${e.message}")
             }
+
+            try {
+                repository.syncRemotePharmacyProductsToLocal()
+            } catch (e: Exception) {
+                android.util.Log.e("MajarahViewModel", "Failed to sync pharmacy products: ${e.message}")
+            }
+
+            try {
+                repository.syncRemotePharmaciesToLocal()
+            } catch (e: Exception) {
+                android.util.Log.e("MajarahViewModel", "Failed to sync pharmacies: ${e.message}")
+            }
+
+            try {
+                repository.syncRemoteRestaurantsToLocal()
+            } catch (e: Exception) {
+                android.util.Log.e("MajarahViewModel", "Failed to sync restaurants: ${e.message}")
+            }
             
             // Sync remote ratings to local Room
             try {
@@ -1600,7 +1618,7 @@ $couponMessage---------------------------
     fun updateRestaurantOrderPayment(id: Int, paymentMethod: String, receiptBase64: String?, onComplete: (String?) -> Unit) {
         viewModelScope.launch {
             try {
-                database.restaurantOrderDao().updateRestaurantOrderPayment(id, paymentMethod, receiptBase64)
+                repository.updateRestaurantOrderPayment(id, paymentMethod, receiptBase64)
                 onComplete(null)
             } catch (e: Exception) {
                 onComplete(e.localizedMessage ?: e.toString())
@@ -1611,7 +1629,7 @@ $couponMessage---------------------------
     fun updatePharmacyOrderPayment(id: Int, paymentMethod: String, receiptBase64: String?, onComplete: (String?) -> Unit) {
         viewModelScope.launch {
             try {
-                database.pharmacyOrderDao().updatePharmacyOrderPayment(id, paymentMethod, receiptBase64)
+                repository.updatePharmacyOrderPayment(id, paymentMethod, receiptBase64)
                 onComplete(null)
             } catch (e: Exception) {
                 onComplete(e.localizedMessage ?: e.toString())

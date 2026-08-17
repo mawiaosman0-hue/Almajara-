@@ -2036,10 +2036,10 @@ CREATE TABLE public.pharmacies (
 CREATE TABLE public.pharmacy_products (
     id SERIAL PRIMARY KEY,
     pharmacy_id INTEGER NOT NULL,
-    type TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'دواء',
     name TEXT NOT NULL,
-    company TEXT,
-    price DOUBLE PRECISION NOT NULL,
+    company TEXT DEFAULT '',
+    price DOUBLE PRECISION NOT NULL DEFAULT 0.0,
     image_base64 TEXT DEFAULT '',
     is_approved BOOLEAN DEFAULT false,
     created_at BIGINT
@@ -2048,9 +2048,9 @@ CREATE TABLE public.pharmacy_products (
 -- 8. إنشاء جدول طلبات الصيدليات والروشتات (pharmacy_orders)
 CREATE TABLE public.pharmacy_orders (
     id SERIAL PRIMARY KEY,
-    pharmacy_id INTEGER NOT NULL,
-    customer_name TEXT NOT NULL,
-    customer_phone TEXT NOT NULL,
+    pharmacy_id INTEGER NOT NULL DEFAULT 0,
+    customer_name TEXT NOT NULL DEFAULT '',
+    customer_phone TEXT NOT NULL DEFAULT '',
     customer_email TEXT DEFAULT '',
     prescription_image_base64 TEXT DEFAULT '',
     medicines_json TEXT DEFAULT '',
@@ -2061,8 +2061,10 @@ CREATE TABLE public.pharmacy_orders (
     status TEXT NOT NULL DEFAULT 'بانتظار الصيدلي',
     payment_method TEXT DEFAULT 'كاش',
     bank_receipt_image_uri TEXT DEFAULT '',
+    delivery_location TEXT DEFAULT '',
     created_at BIGINT
 );
+ALTER TABLE public.pharmacy_orders ADD COLUMN IF NOT EXISTS delivery_location TEXT DEFAULT '';
 
 -- 9. إنشاء جدول المطاعم (restaurants)
 CREATE TABLE public.restaurants (
@@ -2078,21 +2080,27 @@ CREATE TABLE public.restaurants (
 -- 10. إنشاء جدول طلبات المطاعم (restaurant_orders)
 CREATE TABLE public.restaurant_orders (
     id SERIAL PRIMARY KEY,
-    restaurant_id INTEGER NOT NULL,
-    restaurant_name TEXT NOT NULL,
-    restaurant_phone TEXT NOT NULL,
-    customer_name TEXT NOT NULL,
-    customer_email TEXT NOT NULL,
-    customer_phone TEXT NOT NULL,
-    items_and_notes TEXT NOT NULL,
+    restaurant_id INTEGER NOT NULL DEFAULT 0,
+    restaurant_name TEXT NOT NULL DEFAULT '',
+    restaurant_phone TEXT NOT NULL DEFAULT '',
+    customer_name TEXT NOT NULL DEFAULT '',
+    customer_email TEXT NOT NULL DEFAULT '',
+    customer_phone TEXT NOT NULL DEFAULT '',
+    items_and_notes TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'معلق',
     payment_method TEXT NOT NULL DEFAULT 'كاش',
+    food_price DOUBLE PRECISION DEFAULT 0.0,
     delivery_fee DOUBLE PRECISION DEFAULT 0.0,
     bank_receipt_image_uri TEXT DEFAULT '',
     courier_name TEXT DEFAULT '',
     courier_phone TEXT DEFAULT '',
+    delivery_location TEXT DEFAULT '',
+    detailed_price TEXT DEFAULT '',
     created_at BIGINT
 );
+ALTER TABLE public.restaurant_orders ADD COLUMN IF NOT EXISTS food_price DOUBLE PRECISION DEFAULT 0.0;
+ALTER TABLE public.restaurant_orders ADD COLUMN IF NOT EXISTS delivery_location TEXT DEFAULT '';
+ALTER TABLE public.restaurant_orders ADD COLUMN IF NOT EXISTS detailed_price TEXT DEFAULT '';
 
 -- 11. إنشاء جدول تقييمات التطبيق (app_ratings)
 CREATE TABLE public.app_ratings (
@@ -10325,10 +10333,10 @@ CREATE TABLE public.pharmacies (
 CREATE TABLE public.pharmacy_products (
     id SERIAL PRIMARY KEY,
     pharmacy_id INTEGER NOT NULL,
-    type TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'دواء',
     name TEXT NOT NULL,
-    company TEXT,
-    price DOUBLE PRECISION NOT NULL,
+    company TEXT DEFAULT '',
+    price DOUBLE PRECISION NOT NULL DEFAULT 0.0,
     image_base64 TEXT DEFAULT '',
     is_approved BOOLEAN DEFAULT false,
     created_at BIGINT
@@ -10337,9 +10345,9 @@ CREATE TABLE public.pharmacy_products (
 -- 8. إنشاء جدول طلبات الصيدليات والروشتات (pharmacy_orders)
 CREATE TABLE public.pharmacy_orders (
     id SERIAL PRIMARY KEY,
-    pharmacy_id INTEGER NOT NULL,
-    customer_name TEXT NOT NULL,
-    customer_phone TEXT NOT NULL,
+    pharmacy_id INTEGER NOT NULL DEFAULT 0,
+    customer_name TEXT NOT NULL DEFAULT '',
+    customer_phone TEXT NOT NULL DEFAULT '',
     customer_email TEXT DEFAULT '',
     prescription_image_base64 TEXT DEFAULT '',
     medicines_json TEXT DEFAULT '',
@@ -10350,8 +10358,10 @@ CREATE TABLE public.pharmacy_orders (
     status TEXT NOT NULL DEFAULT 'بانتظار الصيدلي',
     payment_method TEXT DEFAULT 'كاش',
     bank_receipt_image_uri TEXT DEFAULT '',
+    delivery_location TEXT DEFAULT '',
     created_at BIGINT
 );
+ALTER TABLE public.pharmacy_orders ADD COLUMN IF NOT EXISTS delivery_location TEXT DEFAULT '';
 
 -- 9. إنشاء جدول المطاعم (restaurants)
 CREATE TABLE public.restaurants (
@@ -10367,21 +10377,27 @@ CREATE TABLE public.restaurants (
 -- 10. إنشاء جدول طلبات المطاعم (restaurant_orders)
 CREATE TABLE public.restaurant_orders (
     id SERIAL PRIMARY KEY,
-    restaurant_id INTEGER NOT NULL,
-    restaurant_name TEXT NOT NULL,
-    restaurant_phone TEXT NOT NULL,
-    customer_name TEXT NOT NULL,
-    customer_email TEXT NOT NULL,
-    customer_phone TEXT NOT NULL,
-    items_and_notes TEXT NOT NULL,
+    restaurant_id INTEGER NOT NULL DEFAULT 0,
+    restaurant_name TEXT NOT NULL DEFAULT '',
+    restaurant_phone TEXT NOT NULL DEFAULT '',
+    customer_name TEXT NOT NULL DEFAULT '',
+    customer_email TEXT NOT NULL DEFAULT '',
+    customer_phone TEXT NOT NULL DEFAULT '',
+    items_and_notes TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'معلق',
     payment_method TEXT NOT NULL DEFAULT 'كاش',
+    food_price DOUBLE PRECISION DEFAULT 0.0,
     delivery_fee DOUBLE PRECISION DEFAULT 0.0,
     bank_receipt_image_uri TEXT DEFAULT '',
     courier_name TEXT DEFAULT '',
     courier_phone TEXT DEFAULT '',
+    delivery_location TEXT DEFAULT '',
+    detailed_price TEXT DEFAULT '',
     created_at BIGINT
 );
+ALTER TABLE public.restaurant_orders ADD COLUMN IF NOT EXISTS food_price DOUBLE PRECISION DEFAULT 0.0;
+ALTER TABLE public.restaurant_orders ADD COLUMN IF NOT EXISTS delivery_location TEXT DEFAULT '';
+ALTER TABLE public.restaurant_orders ADD COLUMN IF NOT EXISTS detailed_price TEXT DEFAULT '';
 
 -- 11. إنشاء جدول تقييمات التطبيق (app_ratings)
 CREATE TABLE public.app_ratings (

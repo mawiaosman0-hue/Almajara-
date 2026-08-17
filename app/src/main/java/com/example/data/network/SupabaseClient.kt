@@ -119,34 +119,40 @@ data class SupabasePharmacy(
     @Json(name = "pharmacist_email") val pharmacistEmail: String? = null,
     @Json(name = "is_approved") val isApproved: Boolean? = null,
     @Json(name = "image_base64") val imageBase64: String? = null,
-    @Json(name = "has_cosmetics") val hasCosmetics: Boolean? = null
+    @Json(name = "has_cosmetics") val hasCosmetics: Boolean? = null,
+    @Json(name = "created_at") val createdAt: Long? = null
 )
 
 @JsonClass(generateAdapter = true)
 data class SupabasePharmacyProduct(
     @Json(name = "id") val id: Int? = null,
     @Json(name = "pharmacy_id") val pharmacyId: Int? = null,
+    @Json(name = "type") val type: String? = null,
     @Json(name = "name") val name: String? = null,
-    @Json(name = "description") val description: String? = null,
+    @Json(name = "company") val company: String? = null,
     @Json(name = "price") val price: Double? = null,
-    @Json(name = "category") val category: String? = null,
-    @Json(name = "is_available") val isAvailable: Boolean? = null,
-    @Json(name = "image_base64") val imageBase64: String? = null
+    @Json(name = "image_base64") val imageBase64: String? = null,
+    @Json(name = "is_approved") val isApproved: Boolean? = null,
+    @Json(name = "created_at") val createdAt: Long? = null
 )
 
 @JsonClass(generateAdapter = true)
 data class SupabasePharmacyOrder(
     @Json(name = "id") val id: Int? = null,
     @Json(name = "pharmacy_id") val pharmacyId: Int? = null,
-    @Json(name = "pharmacy_name") val pharmacyName: String? = null,
     @Json(name = "customer_name") val customerName: String? = null,
     @Json(name = "customer_phone") val customerPhone: String? = null,
-    @Json(name = "items_and_notes") val itemsAndNotes: String? = null,
-    @Json(name = "payment_method") val paymentMethod: String? = null,
+    @Json(name = "customer_email") val customerEmail: String? = null,
+    @Json(name = "prescription_image_base64") val prescriptionImageBase64: String? = null,
+    @Json(name = "medicines_json") val medicinesJson: String? = null,
+    @Json(name = "medicine_price") val medicinePrice: Double? = null,
     @Json(name = "delivery_fee") val deliveryFee: Double? = null,
-    @Json(name = "status") val status: String? = null,
     @Json(name = "courier_name") val courierName: String? = null,
     @Json(name = "courier_phone") val courierPhone: String? = null,
+    @Json(name = "status") val status: String? = null,
+    @Json(name = "payment_method") val paymentMethod: String? = null,
+    @Json(name = "bank_receipt_image_uri") val bankReceiptImageUri: String? = null,
+    @Json(name = "delivery_location") val deliveryLocation: String? = null,
     @Json(name = "created_at") val createdAt: Long? = null
 )
 
@@ -157,22 +163,29 @@ data class SupabaseRestaurant(
     @Json(name = "phone") val phone: String? = null,
     @Json(name = "is_approved") val isApproved: Boolean? = null,
     @Json(name = "logo_image_uri") val logoImageUri: String? = null,
-    @Json(name = "menu_image_uri") val menuImageUri: String? = null
+    @Json(name = "menu_image_uri") val menuImageUri: String? = null,
+    @Json(name = "created_at") val createdAt: Long? = null
 )
 
 @JsonClass(generateAdapter = true)
 data class SupabaseRestaurantOrder(
     @Json(name = "id") val id: Int? = null,
+    @Json(name = "restaurant_id") val restaurantId: Int? = null,
     @Json(name = "restaurant_name") val restaurantName: String? = null,
     @Json(name = "restaurant_phone") val restaurantPhone: String? = null,
     @Json(name = "customer_name") val customerName: String? = null,
+    @Json(name = "customer_email") val customerEmail: String? = null,
     @Json(name = "customer_phone") val customerPhone: String? = null,
     @Json(name = "items_and_notes") val itemsAndNotes: String? = null,
-    @Json(name = "payment_method") val paymentMethod: String? = null,
-    @Json(name = "delivery_fee") val deliveryFee: Double? = null,
     @Json(name = "status") val status: String? = null,
+    @Json(name = "payment_method") val paymentMethod: String? = null,
+    @Json(name = "food_price") val foodPrice: Double? = null,
+    @Json(name = "delivery_fee") val deliveryFee: Double? = null,
+    @Json(name = "bank_receipt_image_uri") val bankReceiptImageUri: String? = null,
     @Json(name = "courier_name") val courierName: String? = null,
     @Json(name = "courier_phone") val courierPhone: String? = null,
+    @Json(name = "delivery_location") val deliveryLocation: String? = null,
+    @Json(name = "detailed_price") val detailedPrice: String? = null,
     @Json(name = "created_at") val createdAt: Long? = null
 )
 
@@ -408,6 +421,12 @@ interface SupabaseApi {
     @POST("rest/v1/pharmacy_products")
     suspend fun insertPharmacyProducts(@Body products: List<SupabasePharmacyProduct>): okhttp3.ResponseBody
 
+    @retrofit2.http.PATCH("rest/v1/pharmacy_products")
+    suspend fun updatePharmacyProduct(
+        @Query("id") idFilter: String,
+        @Body fields: Map<String, @JvmSuppressWildcards Any>
+    ): okhttp3.ResponseBody
+
     @retrofit2.http.DELETE("rest/v1/pharmacy_products")
     suspend fun deletePharmacyProduct(@Query("id") idFilter: String)
 
@@ -418,7 +437,10 @@ interface SupabaseApi {
     suspend fun insertPharmacyOrders(@Body orders: List<SupabasePharmacyOrder>): okhttp3.ResponseBody
 
     @retrofit2.http.PATCH("rest/v1/pharmacy_orders")
-    suspend fun updatePharmacyOrder(@Query("id") idFilter: String, @Body statusFields: Map<String, String>): List<SupabasePharmacyOrder>
+    suspend fun updatePharmacyOrder(
+        @Query("id") idFilter: String,
+        @Body fields: Map<String, @JvmSuppressWildcards Any>
+    ): okhttp3.ResponseBody
 
     @retrofit2.http.DELETE("rest/v1/pharmacy_orders")
     suspend fun deletePharmacyOrder(@Query("id") idFilter: String)
@@ -442,7 +464,10 @@ interface SupabaseApi {
     suspend fun insertRestaurantOrders(@Body orders: List<SupabaseRestaurantOrder>): okhttp3.ResponseBody
 
     @retrofit2.http.PATCH("rest/v1/restaurant_orders")
-    suspend fun updateRestaurantOrder(@Query("id") idFilter: String, @Body statusFields: Map<String, String>): List<SupabaseRestaurantOrder>
+    suspend fun updateRestaurantOrder(
+        @Query("id") idFilter: String,
+        @Body fields: Map<String, @JvmSuppressWildcards Any>
+    ): okhttp3.ResponseBody
 
     @retrofit2.http.DELETE("rest/v1/restaurant_orders")
     suspend fun deleteRestaurantOrder(@Query("id") idFilter: String)
